@@ -1,0 +1,20 @@
+# Canonical positive envelope — Dev specialist, status=pass.
+#
+# Source list: PRD Reference Artifacts (line 653) names five canonical envelopes
+# (dev-pass, dev-fail-scope-violation, review-patch-findings,
+#  qa-pass-with-loud-fails, qa-blocked-env-failure). Story 1.2 lands ONLY this
+# one as wire-up proof for the FR53 CI gate; the rest land with whichever story
+# first needs them as fixtures (likely Epic 2 specialist-dispatch stories).
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate.
+
+status: pass
+artifacts:
+  - bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/envelope_validator.py
+  - bmad-autopilot/schemas/envelope.schema.yaml
+findings: []
+rationale: >-
+  Implemented substrate component 1 (envelope schema + validator) per
+  ADR-003. All authored tests pass and lint/type-check are clean.
+proposed_commit_message: "feat(harness): land envelope schema + validator (substrate component 1)"
+scope_expanded_to: []

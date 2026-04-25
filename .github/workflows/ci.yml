@@ -31,3 +31,6 @@ jobs:
 
       - name: Test (pytest)
         run: uv run pytest
+
+      - name: Envelope schema gate (substrate component 1)
+        run: uv run envelope-validator $(git ls-files '../../examples/envelopes/*.yaml')

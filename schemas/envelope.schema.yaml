@@ -1,0 +1,167 @@
+# Specialist envelope schema (substrate component 1).
+#
+# Contract anchors:
+#   - ADR-003 (Schema Enforcement and Loud-Fail Harness Reconciliation, substrate component 1)
+#   - FR51 (uniform envelope across specialists)
+#   - FR52 (sensor-not-advisor — forbidden flow-policy fields, e.g. next_action / recommendation)
+#   - FR53 (CI gate rejects envelopes carrying forbidden fields)
+#   - FR54 (Dev-specific extensions: proposed_commit_message, scope_expanded_to)
+#   - FR55 (QA-specific extensions: ac_results)
+#   - FR56 (Review-BMAD-specific extensions: failed_layers)
+#   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
+#
+# This file encodes a contract validated by CI; modify with care.
+# Closed-by-default: additionalProperties=false at top-level rejects every
+# undeclared field. The explicit `not` clause names the two known forbidden
+# flow-policy fields so the validator's UX surface (envelope_validator.format_errors)
+# can rewrite errors to "forbidden flow-policy field: <name>" per AC-2.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/envelope.schema.yaml"
+title: "Specialist Envelope"
+description: >-
+  Uniform return envelope every BMAD specialist (Dev, Review-BMAD, QA, future LAD)
+  emits. The orchestrator parses this shape; flow-policy decisions are the
+  orchestrator's job, never the specialist's (sensor-not-advisor invariant).
+
+type: object
+required:
+  - status
+  - artifacts
+  - findings
+  - rationale
+additionalProperties: false
+
+# Defense-in-depth against the two most plausible flow-policy fields.
+# additionalProperties: false would already reject these, but naming them
+# explicitly lets the validator emit a clear "forbidden flow-policy field"
+# message instead of the generic "additional property not allowed".
+not:
+  anyOf:
+    - required: [next_action]
+    - required: [recommendation]
+
+properties:
+  status:
+    type: string
+    enum: [pass, fail, blocked]
+    description: "PRD-canonical lifecycle outcome literal."
+
+  artifacts:
+    type: array
+    description: "Repo-relative file paths the specialist produced or modified."
+    items:
+      type: string
+      minLength: 1
+
+  findings:
+    type: array
+    description: "Structured findings; each is a sensor observation, never a flow directive."
+    items:
+      $ref: "#/$defs/finding"
+
+  rationale:
+    type: string
+    minLength: 1
+    description: "Non-empty narrative explaining the envelope's status."
+
+  # ---- Optional specialist extensions (closed allowlist) -------------------
+  # Per AC-1: specialist-specific extensions are permitted under their respective
+  # specialist sub-schemas. Resolved here as a flat top-level allowlist (see Dev
+  # Notes "Open design choice" — no discriminator field exists in the PRD shape).
+  # The schema's job is shape; meaning (e.g. "ac_results is meaningful only for
+  # QA envelopes") is consumer-side.
+
+  proposed_commit_message:
+    type: string
+    description: "Dev-specific (FR54). Suggested commit message for the implemented change."
+
+  scope_expanded_to:
+    type: array
+    description: "Dev-specific (FR54). File paths the Dev specialist's scope expanded to."
+    items:
+      type: string
+      minLength: 1
+
+  ac_results:
+    type: array
+    description: "QA-specific (FR55). Per-acceptance-criterion verification results."
+    items:
+      $ref: "#/$defs/ac_result"
+
+  failed_layers:
+    type: array
+    description: "Review-BMAD-specific (FR56). Review layers whose execution failed."
+    items:
+      type: string
+      enum: [blind, edge, auditor, lad]
+
+$defs:
+  finding:
+    type: object
+    required:
+      - id
+      - source
+      - title
+      - detail
+      - location
+      - bucket
+      - severity
+    additionalProperties: false
+    properties:
+      id:
+        type: string
+        minLength: 1
+      source:
+        type: string
+        enum: [blind, edge, auditor, qa, lad, merged]
+      title:
+        type: string
+        minLength: 1
+      detail:
+        type: string
+        minLength: 1
+      location:
+        # "file:line" or "" for non-file-anchored findings.
+        type: string
+      bucket:
+        type: string
+        enum: [decision_needed, patch, defer, dismiss]
+      severity:
+        type: string
+        enum: [HIGH, MED, LOW]
+      # Optional QA-only flag (PRD line 587). Documented as optional; not enforced
+      # via discriminator at this story (no specialist field exists in the contract).
+      retry_likely_to_resolve:
+        type: boolean
+
+  ac_result:
+    type: object
+    required:
+      - ac_id
+      - status
+      - assertions
+      - evidence_refs
+      - semantic_verification
+    additionalProperties: false
+    properties:
+      ac_id:
+        type: string
+        minLength: 1
+      status:
+        type: string
+        enum: [pass, fail, blocked]
+      assertions:
+        type: array
+        items:
+          type: string
+      evidence_refs:
+        type: array
+        items:
+          type: string
+      semantic_verification:
+        # Shape intentionally loose at this story; tightened by QA-specialist
+        # stories in Epic 4. Accepts object or string for now.
+        oneOf:
+          - type: object
+          - type: string

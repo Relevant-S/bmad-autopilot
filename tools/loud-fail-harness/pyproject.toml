@@ -10,13 +10,19 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.13.3,<3",
     "jsonschema>=4.26.0,<5",
+    "pyyaml>=6,<7",
 ]
+
+[project.scripts]
+envelope-validator = "loud_fail_harness.envelope_validator:main"
 
 [dependency-groups]
 dev = [
     "ruff>=0.14",
     "mypy>=1.18",
     "pytest>=8.4",
+    "pytest-cov>=5",
+    "types-pyyaml>=6",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -29,6 +35,10 @@ line-length = 100
 [tool.mypy]
 python_version = "3.12"
 files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["jsonschema", "jsonschema.exceptions"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
