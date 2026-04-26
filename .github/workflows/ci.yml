@@ -40,6 +40,22 @@ jobs:
         # working-directory) to repo root where examples/ lives.
         run: uv run event-validator $(git ls-files '../../examples/orchestrator-events/*.yaml')
 
+      - name: Dependencies schema validation gate (SDN-001)
+        # Schema-content validator for schemas/dependencies.yaml.
+        # Validates the SDN-001 SHAPE: failure_profile enum closure,
+        # required fields per profile, profiles-vs-by_project_type mutual
+        # exclusion, sub_classifications shape rules. Paired with — but
+        # distinct from — the enumeration-check gate that follows
+        # (which validates marker_class CROSS-REFERENCES).
+        # Ordering rationale: dependencies-validator runs BEFORE
+        # enumeration-check so a malformed dependencies.yaml surfaces with
+        # a tighter NFR-O5 named-invariant diagnostic FIRST, before
+        # enumeration-check's broader "did not parse to YAML mapping"
+        # exit-2 path fires (defense-in-depth, not redundancy).
+        # No positional arguments — the script discovers
+        # schemas/dependencies.yaml from disk via find_repo_root.
+        run: uv run dependencies-validator
+
       - name: Cross-schema enumeration check (substrate component 4)
         # No positional arguments: enumeration-check resolves
         # schemas/marker-taxonomy.yaml + schemas/orchestrator-event.yaml

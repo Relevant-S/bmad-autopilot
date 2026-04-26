@@ -1,0 +1,168 @@
+# Dependency failure-profile manifest (cell-1 portable artifact per ADR-002).
+#
+# Contract anchors:
+#   - SDN-001 — Dependency Failure-Profile Schema (architecture.md
+#     lines 608–763). § Schema (lines 624–730) is the canonical structural
+#     source for this file. § Consumers (lines 732–737) names the downstream
+#     consumers (Epic 7 init, Epic 6 runtime, FR65 audit) that read this
+#     file's parsed shape via loud_fail_harness.dependencies_validator's
+#     load_dependencies() helper.
+#   - ADR-002 cell-1 portability classification — this manifest is a cell-1
+#     (Host-Portable / Methodology-Portable) artifact: failure profiles are
+#     policy taxonomy, primitive-agnostic, and methodology-agnostic.
+#   - ADR-003 substrate component 4 (extended) — every marker_class /
+#     emits_marker reference declared here is cross-validated against
+#     schemas/marker-taxonomy.yaml by the harness's enumeration_check
+#     (substrate component 4; story 1.5). Drift fails CI loudly.
+#   - NFR-I1 (range tracking) + NFR-I3 (per-failure-profile degradation) —
+#     this manifest is the single declarative source NFR-I1 / NFR-I3 name.
+#   - FR37 (init precondition checks consume this file) + FR38 (init blocks
+#     installation until hard-deps met).
+#   - FR30 (marker-taxonomy.yaml is the authoritative marker enumeration;
+#     marker_class fields here REFERENCE that taxonomy — single-source-of-
+#     truth discipline).
+#   - Pattern 1 (snake_case structural keys: schema_version, dependencies,
+#     version_floor, version_ceiling_policy, version_policy, phase, profiles,
+#     by_project_type, profile, diagnostic, diagnostic_pointer, marker_class,
+#     sub_classifications, condition, emits_marker, silent; kebab-case
+#     identifier values: dependency identifiers, profile enum values, phase
+#     keys, project-type keys, marker class identifiers).
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (per SDN-001 § Versioning Discipline):
+#
+#   - Schema-structure changes (adding a profile class, adding a lifecycle
+#     phase, changing field semantics) → MAJOR version bump with CI
+#     consistency review and downstream consumer updates.
+#   - Adding a new dependency entry                → MINOR version bump
+#     (additive, backward-compatible).
+#   - Updating a dependency's profile (e.g. graceful-degrade → total-block)
+#                                                  → MINOR version bump with
+#     explicit migration guidance for operators.
+#
+# Co-versioned with schemas/marker-taxonomy.yaml: marker-class additions or
+# removals affect both files; reconciliation review covers both per ADR-003
+# substrate component 4 (extended). Substrate component 4 (story 1.5's
+# enumeration_check) is the CI mechanism that enforces consistency between
+# this manifest's marker-class references and the taxonomy.
+#
+# This file is YAML data, NOT a JSON Schema document — no `$schema` keyword,
+# no `type: object` directive, no meta-schema validation. Shape enforcement
+# is by tools/loud-fail-harness/src/loud_fail_harness/dependencies_validator.py
+# (story 1.6); enumeration cross-validation is by enumeration_check
+# (story 1.5; substrate component 4 extended).
+#
+# Optional `phase` field semantics (per SDN-001 Open Items): absence means
+# MVP-scope; non-MVP values declare the phase in which the dependency
+# activates (e.g. `phase: "1.5"` for Phase 1.5 dependencies). Schema-loading
+# code in the harness MUST treat absence as MVP rather than as missing data.
+#
+# Canonical entry order (preserve verbatim — re-ordering loses architectural
+# narrative semantics): MVP-required dependencies first (claude-code,
+# bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
+# (mobile-mcp, lad).
+
+schema_version: "1.0"
+
+dependencies:
+  claude-code:
+    version_floor: "2.1.32"
+    version_ceiling_policy: "tracked-against-current-releases; primitive-deprecation triggers version-pin review"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "Claude Code v2.1.32+ required. Run `claude --version` to check."
+      runtime:
+        profile: total-block
+
+  bmad-core:
+    version_floor: "6.0"
+    version_ceiling_policy: "tracked-against-bmad-releases; upstream-absorption event triggers version-pin review"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "BMAD core v6.0+ required."
+      runtime:
+        profile: total-block
+
+  tea-module:
+    version_policy: "version-agnostic; detected at init"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "TEA module not installed. Run `/bmad:install tea` and re-run `/bmad-automation init`."
+      runtime:
+        profile: total-block
+
+  playwright-mcp:
+    version_floor: "officially-supported-as-of-mvp-release"
+    by_project_type:
+      web:
+        profiles:
+          init:
+            profile: total-block
+            diagnostic: "Playwright MCP unreachable. Required for web QA. See docs/playwright-mcp-setup.md."
+          runtime:
+            profile: graceful-degrade
+            marker_class: env-setup-failed
+            diagnostic_pointer: "Playwright MCP unavailable mid-run; QA phase skipped with marker."
+      api:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+      mobile:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+
+  mobile-mcp:
+    phase: "1.5"
+    version_floor: "TBD-at-Phase-1.5-design-time"
+    by_project_type:
+      mobile:
+        profiles:
+          init:
+            profile: total-block
+            diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
+          runtime:
+            profile: graceful-degrade
+            marker_class: mobile-blocked
+            diagnostic_pointer: "Mobile MCP unavailable mid-run; mobile QA phase skipped."
+      web:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+      api:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+
+  lad:
+    phase: "1.5"
+    version_floor: "latest-at-phase-1.5-design-time"
+    profiles:
+      init:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: configured-but-api-key-missing
+            emits_marker: LAD-skipped
+            diagnostic_pointer: "LAD configured but `LAD_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
+          - condition: unconfigured
+            silent: true
+      runtime:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: configured-but-api-key-missing
+            emits_marker: LAD-skipped
+          - condition: unconfigured
+            silent: true
