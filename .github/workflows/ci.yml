@@ -64,3 +64,31 @@ jobs:
         # dependencies.yaml exists yet — its absence is gracefully skipped
         # per AC-2 of story 1.5.
         run: uv run enumeration-check
+
+      - name: Fixture coverage gate (substrate component 5)
+        # Layer C completeness mitigation per ADR-003: validates the
+        # COVERAGE invariant — every marker class enumerated in
+        # schemas/marker-taxonomy.yaml has ≥1 synthetic-story fixture
+        # under examples/synthetic-stories/, and every fixture's
+        # expected_marker resolves to an entry in the taxonomy.
+        # Paired with — but DISTINCT from — story 1.8's FR33 fixture-
+        # driven gate (which will REPLAY each fixture's expected marker
+        # through reconciler.py and assert the reconciliation matches);
+        # the two gates are independent and run in series in CI.
+        # Ordering rationale: fixture-coverage runs LAST among the
+        # validator gates because (a) it depends on the same canonical
+        # marker-taxonomy.yaml that enumeration-check (the immediate-
+        # prior gate) already validated upstream, AND (b) Layer C's
+        # completeness mitigation is the last line of defense before
+        # story 1.8's gate consumes the corpus — placing it last makes
+        # its "marker class X has no fixture" diagnostic visible AFTER
+        # the upstream gates have certified the schema set is internally
+        # consistent (defense-in-depth, not redundancy).
+        # Operational meaning of a failure: a class added to
+        # marker-taxonomy.yaml without a corresponding fixture (or a
+        # fixture whose expected_marker is not in the taxonomy) — the
+        # FR65 / ADR-003 skip-class-recognition workflow's CI half.
+        # No positional arguments — the script discovers
+        # examples/synthetic-stories/ + schemas/marker-taxonomy.yaml
+        # from disk via find_repo_root.
+        run: uv run fixture-coverage
