@@ -1,0 +1,307 @@
+# Marker taxonomy (substrate component 3 — authoritative enumeration).
+#
+# Contract anchors:
+#   - ADR-003 substrate component 3 (this file's substrate role — Layer A
+#     primary mechanism's authoritative emission target; the reconciler in
+#     tools/loud-fail-harness/src/loud_fail_harness/reconciler.py consumes
+#     this file's enum closure conceptually via downstream substrate
+#     components 4 and 5)
+#   - ADR-003 Consequence 2 (CO-VERSIONED with schemas/orchestrator-event.yaml
+#     — schema-version bumps on either trigger reconciliation review;
+#     substrate component 4 / story 1.5's enumeration_check is what enforces
+#     consistency between them)
+#   - FR30 (this file IS the authoritative marker enumeration FR30 names —
+#     "single source of truth referenced by FR30 and consumed by FR33's
+#     harness reconciliation check; versioned with contract snapshot tests")
+#   - FR33 (substrate component 3's reconciliation API consumes this file's
+#     enum closure; CI fixture-driven gate lands in story 1.8)
+#   - Pattern 1 (snake_case structural keys: marker_class, diagnostic_pointer,
+#     sub_classifications, schema_version, markers; identifier values follow
+#     PRD-canonical kebab-case literals)
+#   - Pattern 2 (marker class naming: <domain>-<state> kebab-case format with
+#     optional `: <cause>` suffix in sub_classifications; THIS FILE IS THE
+#     AUTHORITATIVE LANDING of Pattern 2)
+#   - Pattern 5 (loud-fail discipline — every error class corresponds to a
+#     marker class in this file)
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (bump rule):
+#
+#   - Adding OR removing a marker class      → MINOR version bump
+#   - Renaming a marker_class identifier     → MAJOR version bump
+#   - Removing a marker_class's `diagnostic_pointer` field → MAJOR version bump
+#   - Adding or refining a sub_classification under an existing class
+#     (without renaming the parent marker_class) → PATCH version bump
+#
+# Co-versioned with schemas/orchestrator-event.yaml (ADR-003 Consequence 2).
+# Bumps on either schema trigger reconciliation review against the other —
+# substrate component 4 (story 1.5's enumeration_check) is the CI mechanism
+# that enforces consistency between them.
+#
+# This file is YAML data, NOT a JSON Schema document — there is no `$schema`
+# keyword, no `type: object` directive, and no meta-schema validation. The
+# top-level shape is `schema_version: "1.0"` + `markers: [<entries>]`. Each
+# marker entry is a mapping with `marker_class`, `diagnostic_pointer`, and
+# `sub_classifications` (always present, even when empty []).
+#
+# Canonical order (preserve verbatim — re-ordering loses narrative semantics):
+# entries 1-15 are the FR30-original marker classes; entries 16-27 are the
+# cross-epic-named marker classes added by the proactive sweep per epics.md
+# Story 1.4 AC narrative.
+
+schema_version: "1.0"
+
+markers:
+
+  # ---- FR30-original marker classes (15) ------------------------------------
+
+  - marker_class: LAD-skipped
+    diagnostic_pointer: |
+      Phase 1.5 / opt-in 4th-layer review (`bmad-code-review`'s LAD MCP
+      path). Emitted when LAD MCP is unavailable or API key is absent during
+      code review; loop continues without the 4th adversarial layer.
+      Remediation: configure LAD MCP + API key, OR accept the 3-layer review.
+    sub_classifications: []
+
+  - marker_class: Tier-3-not-configured
+    diagnostic_pointer: |
+      QA Tier-3 (semantic verification) is not configured for this AC.
+      Verification proceeds with Tier-1/Tier-2 evidence only. Remediation:
+      configure semantic verification per `qa-runbook.yaml`, OR accept the
+      lower-tier evidence as sufficient for this AC.
+    sub_classifications: []
+
+  - marker_class: heuristic-skipped
+    diagnostic_pointer: |
+      An exploratory heuristic (empty / error / auth) does not apply to this
+      AC's input or UI surface. NOT a failure — a structural-bound case. The
+      QA Behavioral Plan's `verification_mode` field documents which
+      heuristic was skipped.
+    sub_classifications: []
+
+  - marker_class: mobile-blocked
+    diagnostic_pointer: |
+      Mobile QA is a Phase 1.5 capability (see SDN-001 mobile-mcp + dependency
+      profile). At MVP, requesting QA on a mobile project surfaces this
+      marker and halts the QA phase. Remediation: wait for Phase 1.5 OR mark
+      the AC as web/api/manual.
+    sub_classifications: []
+
+  - marker_class: env-setup-failed
+    diagnostic_pointer: |
+      Env provisioning (dev server start, port-binding, Playwright launch)
+      failed. QA phase skips with this marker; loop continues to PR-bundle
+      assembly. See `sub_classifications` for the specific provisioning step
+      that failed. Remediation: inspect the env-setup logs at the qa-evidence
+      path.
+    sub_classifications:
+      - port-bind-failed
+      - playwright-launch-failed
+      - dev-server-not-ready
+
+  - marker_class: plan-drift-detected
+    diagnostic_pointer: |
+      AC hash diverges between Plan creation and current AC text. Plan status
+      resets; re-derivation triggers on next QA dispatch. Remediation: review
+      the AC change to confirm the new Plan reflects intent; rare false
+      positives are acceptable per loud-fail discipline.
+    sub_classifications: []
+
+  - marker_class: specialist-timeout
+    diagnostic_pointer: |
+      A Task-tool-dispatched specialist exceeded the orchestrator's
+      per-specialist timeout budget. Envelope is treated as failed;
+      remediation targets the specialist's prompt or evidence size. See
+      `sub_classifications` for the specific timeout cause (`timeout-exceeded`
+      vs. `context-budget-exceeded`).
+    sub_classifications:
+      - timeout-exceeded
+      - context-budget-exceeded
+
+  - marker_class: context-near-limit
+    diagnostic_pointer: |
+      A specialist's working context is approaching the model's context
+      budget. Signals to the orchestrator that retry should be `fix-only`
+      rather than `from-scratch`. NOT a terminal failure — a degradation
+      signal.
+    sub_classifications: []
+
+  - marker_class: evidence-truncated
+    diagnostic_pointer: |
+      QA evidence (screenshot / DOM / HTTP log) exceeded `max_evidence_size_mb`
+      and was truncated for the bundle. Remediation: inspect the truncated
+      artifact at its on-disk path under
+      `_bmad-output/qa-evidence/{story-id}/{run-id}/`.
+    sub_classifications: []
+
+  - marker_class: hook-failed
+    diagnostic_pointer: |
+      A hook's exit code is non-zero. Distinct from `bundle-assembly-failed`
+      (assembler-logic remediation) and `scope-assertion-violation` (Dev-diff-
+      vs-scope remediation): `hook-failed` remediates against the bash
+      script's environment. See `sub_classifications` for the specific
+      failure mode (`non-zero-exit`, `timeout`, `missing-binary`).
+    sub_classifications:
+      - non-zero-exit
+      - timeout
+      - missing-binary
+
+  - marker_class: undocumented-section-write
+    diagnostic_pointer: |
+      A specialist attempted to write to a story-doc section not in the
+      documented allowlist (`## Dev Agent Record`,
+      `## Senior Developer Review (AI)`, `## Review Findings`,
+      `## QA Behavioral Plan`, `## Review Follow-ups (AI)`). Contract-enforced,
+      NOT filesystem-permission-enforced. Remediation: route the write to a
+      documented section OR amend the allowlist via the upstream-proposal
+      workflow.
+    sub_classifications: []
+
+  - marker_class: orphan-process-cleanup
+    diagnostic_pointer: |
+      Env teardown discovered a process that should have been cleaned up by
+      an earlier teardown. Cleaned up implicitly + visible in the bundle so
+      users can investigate root cause. Remediation: review the env-teardown
+      logic for the specific provisioning path.
+    sub_classifications: []
+
+  - marker_class: cost-near-ceiling
+    diagnostic_pointer: |
+      In-flight cost-telemetry shows a story-run is approaching its cost
+      budget (default: 75% of ceiling per Epic 6 specialist boundary cadence).
+      Signal to the practitioner before the budget exhausts; loop continues.
+      Remediation: monitor or interrupt before exhaustion.
+    sub_classifications: []
+
+  - marker_class: smoke-first-abort
+    diagnostic_pointer: |
+      The QA Behavioral Plan's smoke pass failed before any AC-detail tests
+      ran; loop aborts without spending further QA effort on a known-broken
+      surface. Distinct from `env-setup-failed` (env up but smoke fails).
+      Remediation: fix the smoke-failing surface, then re-run QA.
+    sub_classifications: []
+
+  - marker_class: dangling-evidence-ref
+    diagnostic_pointer: |
+      A PR bundle contains an evidence reference path that does not resolve
+      to an on-disk artifact. Remediation: regenerate the evidence OR fix the
+      reference. Distinct from `orphan-run-state-detected`: dangling-evidence
+      is about evidence-file disappearance for a known story; orphan-run-
+      state is about run-state for a deleted story-doc.
+    sub_classifications: []
+
+  # ---- Cross-epic-named marker classes (12) ---------------------------------
+  # Diagnostic_pointer text for these 12 markers is mandated verbatim by AC-2
+  # (sourced from the story's "Per-marker diagnostic_pointer map"). The
+  # taxonomy-shape test (AC-6) spot-checks key phrases per marker.
+
+  - marker_class: walking-skeleton-bundle
+    diagnostic_pointer: |
+      Epic 2 thin-signals framing. PR bundles tagged with this marker are
+      produced by a substrate that lacks the loud-fail block; emission rule
+      is "absent loud-fail block triggers the marker," NOT "Epic 2 era
+      triggers the marker" (rule clarified by Epic 6).
+    sub_classifications: []
+
+  - marker_class: review-layer-failed
+    diagnostic_pointer: |
+      Per-layer failure surfaces in `failed_layers` envelope field (FR56) and
+      the `decision_needed` finding pattern in Epic 3's Story 3.3. A review
+      layer's failure surfaces as both a marker (for tooling) AND a
+      `decision_needed: HIGH` finding (for the human reviewer).
+    sub_classifications: []
+
+  - marker_class: playwright-mcp-unavailable
+    diagnostic_pointer: |
+      FR17 (Playwright MCP as web-driving primitive) + ADR-002's
+      graceful-degrade dependency profile. Runtime unavailability of
+      Playwright MCP for a web-project QA dispatch surfaces as this marker
+      and skips the dependent phase rather than killing the loop.
+    sub_classifications: []
+
+  - marker_class: scope-assertion-violation
+    diagnostic_pointer: |
+      FR10 (fix-only constraint) + FR12 (verification logic) + FR58
+      (SubagentStop hook non-zero exit path). Domain-specific contract
+      violation distinct from `hook-failed` because remediation differs
+      (review Dev's diff vs. declared scope; possibly tighten retry's
+      `affected_files`); markers are remediation-shaped, not emission-point-
+      shaped.
+    sub_classifications: []
+
+  - marker_class: retry-budget-exhausted
+    diagnostic_pointer: |
+      FR8 (budget) + FR14 (non-advance + state preservation) + FR15
+      (escalation bundle assembly path). Normal-flow halt event, NOT a
+      failure of any single specialist.
+    sub_classifications: []
+
+  - marker_class: bundle-assembly-failed
+    diagnostic_pointer: |
+      FR59 (Stop hook bundle assembly) + Epic 6. Distinct from `hook-failed`
+      per the remediation-shape principle: `hook-failed` remediates against
+      the Stop hook script (bash, environment); `bundle-assembly-failed`
+      remediates against the assembler logic (envelope shape, finding
+      rendering, taxonomy mismatch). Practitioner needs to know which surface
+      to inspect.
+    sub_classifications: []
+
+  - marker_class: reconciler-mismatch-runtime
+    diagnostic_pointer: |
+      FR33 (runtime variant) + Epic 6's runtime gate. Distinct from CI
+      fixture-driven gate failures (which use existing harness diagnostics):
+      runtime mismatch indicates a reference-project run produced a
+      skip-event the marker emission missed; remediation targets the
+      specialist or hook that missed the event, not the harness/synthetic
+      fixture.
+    sub_classifications: []
+
+  - marker_class: cost-telemetry-unavailable
+    diagnostic_pointer: |
+      ADR-006 (OTel cost-event pipeline) + NFR-P5 (per-retry cost
+      observability). Graceful-degrade behavior when OTel pipeline fails:
+      cost data unavailable for the run; loop continues; bundle's
+      cost-breakdown section shows the marker rather than fabricated zeros.
+    sub_classifications:
+      - otel-pipeline-unreachable
+      - prompt-id-correlation-missing
+
+  - marker_class: story-doc-version-out-of-window
+    diagnostic_pointer: |
+      FR43 (N-2 minor-version tolerance window) + NFR-I5 (story-doc version
+      tolerance behavior). An out-of-window story-doc template version
+      surfaces this marker plus upgrade guidance, rather than failing hard.
+    sub_classifications: []
+
+  - marker_class: init-would-destroy-existing-artifact
+    diagnostic_pointer: |
+      FR41 (non-destructive on existing projects) + FR42 (re-runs preserve
+      customization). `init` halts with this marker when proceeding would
+      overwrite user-owned content. Remediation requires the practitioner to
+      inspect what would be overwritten and choose to back up, merge, or
+      accept overwrite explicitly. Distinct from `env-setup-failed` (env
+      present but broken) and from `story-doc-version-out-of-window`
+      (artifact present but wrong version).
+    sub_classifications: []
+
+  - marker_class: recovery-state-conflict
+    diagnostic_pointer: |
+      NFR-R2 (crash recovery) + NFR-R8 (cross-state consistency: story-doc
+      canonical, run-state cache) + Epic 8's SessionStart reattachment. Fires
+      when run-state and story-doc disagree and the recovery algorithm
+      cannot reconcile cleanly. Remediation requires human triage of which
+      state representation reflects reality, then explicit reconciliation.
+    sub_classifications: []
+
+  - marker_class: orphan-run-state-detected
+    diagnostic_pointer: |
+      FR48b (multi-story status enumeration). Fires when the status
+      enumerator finds run-state entries for stories whose story-doc has
+      been deleted, renamed, or moved. Remediation is purge orphan run-state
+      OR recover the missing story-doc. Distinct from `recovery-state-
+      conflict` (state inconsistency for a *known* story) and from
+      `dangling-evidence-ref` (story-doc is the canonical anchor, not
+      evidence in the FR49 sense — conflating semantics is forbidden).
+    sub_classifications: []

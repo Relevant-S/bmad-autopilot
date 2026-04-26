@@ -24,6 +24,24 @@
 # Customization may break harness reconciliation checks.
 # Co-versioned with marker-taxonomy.yaml (ADR-003 Consequence 2) — bump together.
 #
+# Versioning discipline (bump rule):
+#
+#   - Adding OR removing an event class      → MINOR version bump
+#   - Renaming an event_class identifier     → MAJOR version bump
+#   - Removing an event class's required-field constraint → MAJOR version bump
+#   - Adding or refining a per-class field
+#     (without renaming the parent event_class) → PATCH version bump
+#
+# Co-versioned with schemas/marker-taxonomy.yaml (ADR-003 Consequence 2).
+# Bumps on either schema trigger reconciliation review against the other —
+# substrate component 4 (story 1.5's enumeration_check) is the CI mechanism
+# that enforces consistency between them.
+#
+# `schema_version` is a top-level annotation (sibling of $schema). JSON
+# Schema 2020-12 permits unknown top-level keywords; Draft202012Validator
+# .check_schema accepts this annotation silently. The annotation describes
+# the schema artifact and is NOT a field event payloads carry.
+#
 # Closed-by-default discipline: unevaluatedProperties=false at the top level
 # (the JSON-Schema-2020-12 idiom that COMPOSES with oneOf — unlike
 # additionalProperties=false, which only sees the local `properties` map and
@@ -43,6 +61,7 @@
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://bmad-autopilot.local/schemas/orchestrator-event.yaml"
+schema_version: "1.0"
 title: "Orchestrator Event"
 description: >-
   Canonical orchestrator-emitted event. The orchestrator emits one of these
