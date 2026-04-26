@@ -1,0 +1,363 @@
+# Orchestrator-event schema (substrate component 2).
+#
+# Contract anchors:
+#   - ADR-001 Consequence 1 (this schema's existence — orchestrator emits a
+#     schema-validated event matching this artifact at every seam transition)
+#   - ADR-001 Consequence 2 (every transition produces a schema-validated event
+#     written to run-state, surfaced in the terminal stream, and aggregated
+#     into the PR bundle's "what happened" summary)
+#   - ADR-003 substrate component 2 (this file's substrate role — the easy half
+#     of schema validation, paired with substrate component 1 / envelope.schema.yaml)
+#   - ADR-003 Consequence 2 (CO-VERSIONED with marker-taxonomy.yaml — schema-version
+#     bumps on either trigger reconciliation review; substrate component 4 /
+#     story 1.5's enumeration_check is what enforces consistency between them)
+#   - ADR-006 Consequence 3 (cost-event class added by ADR-006's hybrid persistence
+#     model; required field set: prompt_id + retry_attempt + specialist + cost_delta_usd)
+#   - ADR-006 Consequence 5 (OTel attribute names are host-Bridge per ADR-002 —
+#     pass-through; don't re-cast under our convention)
+#   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
+#   - Pattern 3 (kebab-case event class names; OTel pass-through attributes
+#     keep their dotted/mixed-case names — `prompt.id`, `claude_code.cost.usage`,
+#     `claude_code.token.usage`, `query_source`)
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+# Co-versioned with marker-taxonomy.yaml (ADR-003 Consequence 2) — bump together.
+#
+# Closed-by-default discipline: unevaluatedProperties=false at the top level
+# (the JSON-Schema-2020-12 idiom that COMPOSES with oneOf — unlike
+# additionalProperties=false, which only sees the local `properties` map and
+# would reject every per-class field) AND additionalProperties=false inside
+# every per-class branch of the oneOf. Per-class fields are validated via a
+# discriminated union keyed on `event_class` (oneOf + per-branch
+# properties.event_class.const: <name>; the dialect-correct way to express
+# closed discriminated unions without OpenAPI's discriminator extension).
+#
+# OTel pass-through (Pattern 3): attribute names like `prompt.id`,
+# `claude_code.cost.usage`, `claude_code.token.usage`, `query_source` are
+# external (host-Bridge per ADR-002) and pass through under their original
+# Claude-Code-OTel naming. They are encoded in the cost-event branch's
+# `properties` map with their dotted/mixed-case keys verbatim. They are typed
+# loosely ({} — any type) because their value shapes evolve at the platform
+# layer; over-specifying creates breakage risk.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/orchestrator-event.yaml"
+title: "Orchestrator Event"
+description: >-
+  Canonical orchestrator-emitted event. The orchestrator emits one of these
+  at every seam transition (specialist dispatch, lifecycle transition, retry,
+  escalation, env provisioning, hook firing, cost accounting). Validated by
+  the loud-fail harness in CI; consumed by the PR-bundle assembler and by
+  Epic 8's resumability machinery.
+
+type: object
+required:
+  - event_class
+  - event_id
+  - timestamp
+  - story_id
+unevaluatedProperties: false
+
+properties:
+  event_class:
+    type: string
+    description: "Kebab-case event class identifier (Pattern 3). Closed enum."
+    enum:
+      - specialist-dispatched
+      - specialist-returned
+      - state-transition
+      - retry-attempted
+      - escalation-fired
+      - env-provisioned
+      - env-torn-down
+      - hook-fired
+      - cost-event
+
+  event_id:
+    type: string
+    minLength: 1
+    description: "Opaque event identifier; uniqueness enforced by the orchestrator."
+
+  timestamp:
+    type: string
+    minLength: 1
+    format: date-time
+    description: "ISO 8601 timestamp. Pattern 3 OTel-aligned date-time convention."
+
+  story_id:
+    type: string
+    minLength: 1
+    description: "Story this event is bound to (FR45 run-state scope)."
+
+oneOf:
+  # ---- specialist-dispatched (FR3, ADR-001 Consequence 2, ADR-004) ---------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - specialist
+      - prompt_id
+      - retry_attempt
+    properties:
+      event_class: { const: specialist-dispatched }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      specialist:
+        type: string
+        enum: [dev, review-bmad, qa, lad]
+      prompt_id:
+        type: string
+        minLength: 1
+        description: "Internal correlation key (snake_case per Pattern 1)."
+      retry_attempt:
+        type: integer
+        minimum: 0
+      dispatch_seq:
+        type: integer
+        minimum: 0
+
+  # ---- specialist-returned (FR6, ADR-003) ----------------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - specialist
+      - prompt_id
+      - retry_attempt
+      - status
+    properties:
+      event_class: { const: specialist-returned }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      specialist:
+        type: string
+        enum: [dev, review-bmad, qa, lad]
+      prompt_id:
+        type: string
+        minLength: 1
+      retry_attempt:
+        type: integer
+        minimum: 0
+      status:
+        type: string
+        enum: [pass, fail, blocked]
+      envelope_artifact_path:
+        type: string
+        minLength: 1
+
+  # ---- state-transition (FR5) ----------------------------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - from_state
+      - to_state
+    properties:
+      event_class: { const: state-transition }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      from_state:
+        type: string
+        enum: [ready-for-dev, in-progress, review, qa, done]
+      to_state:
+        type: string
+        enum: [ready-for-dev, in-progress, review, qa, done]
+      trigger:
+        type: string
+    allOf:
+      - if: { properties: { from_state: { const: ready-for-dev } } }
+        then: { properties: { to_state: { not: { const: ready-for-dev } } } }
+      - if: { properties: { from_state: { const: in-progress } } }
+        then: { properties: { to_state: { not: { const: in-progress } } } }
+      - if: { properties: { from_state: { const: review } } }
+        then: { properties: { to_state: { not: { const: review } } } }
+      - if: { properties: { from_state: { const: qa } } }
+        then: { properties: { to_state: { not: { const: qa } } } }
+      - if: { properties: { from_state: { const: done } } }
+        then: { properties: { to_state: { not: { const: done } } } }
+
+  # ---- retry-attempted (FR8, FR10) -----------------------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - specialist
+      - retry_attempt
+      - affected_files
+    properties:
+      event_class: { const: retry-attempted }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      specialist:
+        type: string
+        enum: [dev, review-bmad, qa, lad]
+      retry_attempt:
+        type: integer
+        minimum: 1
+      affected_files:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          minLength: 1
+      retry_mode:
+        type: string
+        enum: [fix-only]
+
+  # ---- escalation-fired (FR14, FR15, FR24a, FR24b) -------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - escalation_class
+      - bundle_artifact_path
+    properties:
+      event_class: { const: escalation-fired }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      escalation_class:
+        type: string
+        enum:
+          - retry-budget-exhausted
+          - qa-verification-fail
+          - qa-env-setup-fail
+      bundle_artifact_path:
+        type: string
+        minLength: 1
+
+  # ---- env-provisioned (FR7) -----------------------------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - env_kind
+    properties:
+      event_class: { const: env-provisioned }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      env_kind:
+        type: string
+        enum: [web, api]
+      port:
+        type: integer
+      pid:
+        type: integer
+      env_diagnostic:
+        type: string
+
+  # ---- env-torn-down (FR7) -------------------------------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - env_kind
+      - outcome
+    properties:
+      event_class: { const: env-torn-down }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      env_kind:
+        type: string
+        enum: [web, api]
+      outcome:
+        type: string
+        enum: [clean, orphan-process-cleanup]
+
+  # ---- hook-fired (FR58, FR59, FR46 — the three FR60-budgeted hooks) -------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - hook_name
+      - exit_code
+    properties:
+      event_class: { const: hook-fired }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      hook_name:
+        type: string
+        enum: [subagent-stop, stop, session-start]
+      exit_code:
+        type: integer
+        minimum: 0
+      duration_ms:
+        type: integer
+        minimum: 0
+      hook_diagnostic:
+        type: string
+
+  # ---- cost-event (ADR-006 Consequence 3, NFR-O8, NFR-P5) ------------------
+  # OTel pass-through fields (`prompt.id`, `claude_code.cost.usage`,
+  # `claude_code.token.usage`, `query_source`) coexist with the snake_case
+  # internal `prompt_id`. They are distinct named fields per Pattern 3:
+  # `prompt_id` is the orchestrator-internal correlation key; `prompt.id` is
+  # the OTel-emitted attribute carried in the same event for downstream
+  # OTel-native consumers (per ADR-006 Consequence 5).
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - prompt_id
+      - retry_attempt
+      - specialist
+      - cost_delta_usd
+    properties:
+      event_class: { const: cost-event }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      prompt_id:
+        type: string
+        minLength: 1
+        description: "Internal snake_case correlation key (Pattern 1)."
+      retry_attempt:
+        type: integer
+        minimum: 0
+      specialist:
+        type: string
+        enum: [dev, review-bmad, qa, lad]
+      cost_delta_usd:
+        type: number
+        minimum: 0
+      # OTel pass-through (Pattern 3 — don't re-cast). Loose typing because
+      # the OTel value shapes evolve at the platform layer.
+      "prompt.id": {}
+      "claude_code.cost.usage": {}
+      "claude_code.token.usage": {}
+      "query_source": {}

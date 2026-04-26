@@ -34,3 +34,8 @@ jobs:
 
       - name: Envelope schema gate (substrate component 1)
         run: uv run envelope-validator $(git ls-files '../../examples/envelopes/*.yaml')
+
+      - name: Orchestrator-event schema gate (substrate component 2)
+        # ../../ walks up from tools/loud-fail-harness/ (the workflow's
+        # working-directory) to repo root where examples/ lives.
+        run: uv run event-validator $(git ls-files '../../examples/orchestrator-events/*.yaml')

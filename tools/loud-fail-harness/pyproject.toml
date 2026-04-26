@@ -15,6 +15,7 @@ dependencies = [
 
 [project.scripts]
 envelope-validator = "loud_fail_harness.envelope_validator:main"
+event-validator = "loud_fail_harness.event_validator:main"
 
 [dependency-groups]
 dev = [
