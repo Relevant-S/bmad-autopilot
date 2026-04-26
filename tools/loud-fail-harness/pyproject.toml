@@ -21,6 +21,7 @@ enumeration-check = "loud_fail_harness.enumeration_check:main"
 fixture-coverage = "loud_fail_harness.fixture_coverage:main"
 fr33-fixture-gate = "loud_fail_harness.fr33_fixture_gate:main"
 hook-budget-gate = "loud_fail_harness.hook_budget_gate:main"
+pluggability-gate = "loud_fail_harness.pluggability_gate:main"
 
 [dependency-groups]
 dev = [

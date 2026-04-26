@@ -179,3 +179,49 @@ jobs:
         # No positional arguments — the script discovers hooks/ from
         # disk via find_repo_root.
         run: uv run hook-budget-gate
+
+      - name: Pluggability gate (story 1.10a; FR62)
+        # FR62 (PRD line 897; architecture.md line 1031) — "CI enforces
+        # pluggability no-cross-references — specialist code (Dev, Review-
+        # BMAD, QA, Review-LAD) cannot import or reference another
+        # specialist." This gate IS the FR62 enforcement mechanism. It
+        # operationally underwrites FR63 (PRD line 898) — "removing one
+        # specialist requires removing only its orchestrator state
+        # transition and its hook-handled artifacts; no other specialist
+        # requires modification" — by preventing the cross-references that
+        # would force cascading edits on other specialists.
+        # Architectural reference: ADR-002 cell-1 invariant + ADR-004
+        # architecture.md line 374 + 406 — "sequential dispatch is forced
+        # by the pluggability invariant". Specialists are independently
+        # rebuildable; cross-references would collapse cell-5's port-cost
+        # analysis into a higher cost cell. CI enforcement is the only
+        # mechanism that prevents quiet erosion.
+        # Invariant under agents/ not existing: the baseline-zero pass
+        # case is the gate's correct posture at this story's landing time
+        # (before story 2.8 creates the directory). Stories 2.8 / 2.9 /
+        # 2.10 land the first three specialist wrapper files —
+        # agents/dev-wrapper.md, agents/review-bmad-wrapper.md,
+        # agents/qa.md per architecture.md lines 1068-1072 — and the gate
+        # must continue passing at each landing without edit; story 5.x
+        # (Phase 1.5) lands agents/lad-wrapper.md under the same contract.
+        # Operational meaning of a CI failure:
+        # (a) a specialist file has been edited to reference another
+        #     specialist by path (Rule 1: \bagents/<other>.md\b) or by
+        #     multi-hyphen slug (Rule 2: \b<other-slug>\b for slugs
+        #     containing at least one hyphen — single-word slugs like
+        #     `qa` are deliberately excluded from Rule 2 to avoid
+        #     colliding with marker classes, lifecycle states, and
+        #     section names);
+        # (b) a non-UTF-8 or unreadable file lives under agents/ (exit 2;
+        #     harness-level error).
+        # Ordering rationale: this gate runs LAST among the harness gates
+        # because (a) it operates over a different filesystem surface
+        # (agents/) than the prior gates' inputs (schemas/, examples/,
+        # hooks/); (b) its inputs are the most volatile-during-Epic-2-
+        # and-3 (stories 2.8 / 2.9 / 2.10 / 3.x / 4.x / 5.x land or
+        # evolve specialist files); (c) running LAST means specialist-
+        # edit churn is reflected on top of an otherwise-clean harness
+        # suite — defense-in-depth ordering, NOT redundancy.
+        # No positional arguments — the script discovers agents/ from
+        # disk via find_repo_root.
+        run: uv run pluggability-gate
