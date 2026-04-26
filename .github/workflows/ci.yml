@@ -39,3 +39,12 @@ jobs:
         # ../../ walks up from tools/loud-fail-harness/ (the workflow's
         # working-directory) to repo root where examples/ lives.
         run: uv run event-validator $(git ls-files '../../examples/orchestrator-events/*.yaml')
+
+      - name: Cross-schema enumeration check (substrate component 4)
+        # No positional arguments: enumeration-check resolves
+        # schemas/marker-taxonomy.yaml + schemas/orchestrator-event.yaml
+        # (and optional schemas/dependencies.yaml — story 1.6) from disk via
+        # find_repo_root. The gate is invariant under whether
+        # dependencies.yaml exists yet — its absence is gracefully skipped
+        # per AC-2 of story 1.5.
+        run: uv run enumeration-check

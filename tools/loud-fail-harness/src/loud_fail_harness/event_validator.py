@@ -29,35 +29,15 @@ import argparse
 import pathlib
 import re
 import sys
-from collections.abc import Iterable, Sequence
+from collections.abc import Sequence
 
 import yaml
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError, ValidationError
 
-# Re-use the substrate-shared helper from envelope_validator. Two callers is
-# the wrong number to extract a _shared.py for (YAGNI per scope discipline);
-# importing makes the substrate-shared role explicit and prevents drift.
-# When story 1.5's enumeration_check arrives as the third caller, that's the
-# right moment to consolidate.
-from loud_fail_harness.envelope_validator import find_repo_root
+from loud_fail_harness._shared import _path_pointer, find_repo_root, load_schema
 
 _ADDITIONAL_PROPERTY_KEY_PATTERN = re.compile(r"'([^']+)'")
-
-
-def load_schema(schema_path: pathlib.Path) -> dict:
-    """Read a YAML schema from disk and meta-validate it.
-
-    Raises ``SchemaError`` if the document is not a valid JSON Schema 2020-12
-    document. Raises ``OSError`` if the file is unreadable.
-    """
-    raw = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise SchemaError(
-            f"schema file {schema_path} did not parse to a YAML mapping at top level"
-        )
-    Draft202012Validator.check_schema(raw)
-    return raw
 
 
 def validate_event(event: dict, schema: dict) -> list[ValidationError]:
@@ -86,12 +66,6 @@ def validate_file(
             )
         ]
     return validate_event(raw, schema)
-
-
-def _path_pointer(path: Iterable[object]) -> str:
-    """Render a JSON-pointer-like path for human-readable error output."""
-    parts = [str(p) for p in path]
-    return "/" + "/".join(parts) if parts else "<root>"
 
 
 def _is_event_class_enum_error(err: ValidationError) -> bool:

@@ -16,6 +16,7 @@ dependencies = [
 [project.scripts]
 envelope-validator = "loud_fail_harness.envelope_validator:main"
 event-validator = "loud_fail_harness.event_validator:main"
+enumeration-check = "loud_fail_harness.enumeration_check:main"
 
 [dependency-groups]
 dev = [
@@ -43,3 +44,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "performance: marks tests as performance benchmarks (can be excluded with -m 'not performance')",
+]

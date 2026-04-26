@@ -60,7 +60,7 @@ from typing import Optional
 import yaml
 from pydantic import BaseModel, ConfigDict
 
-from loud_fail_harness.envelope_validator import find_repo_root
+from loud_fail_harness._shared import find_repo_root
 
 # Sentinel for None values in sort keys: U+FFFF sorts after all printable
 # Unicode strings, satisfying AC-5's "None-equivalent placeholders sorted last."
@@ -222,5 +222,11 @@ def load_marker_taxonomy(path: pathlib.Path | None = None) -> set[str]:
                 f"entry {i} must be a mapping with a 'marker_class' key; "
                 f"got: {entry!r}"
             )
-        result.add(entry["marker_class"])
+        mc = entry["marker_class"]
+        if not isinstance(mc, str):
+            raise RuntimeError(
+                f"marker-taxonomy file at {path} is malformed: "
+                f"entry {i} has non-string marker_class value: {mc!r}"
+            )
+        result.add(mc)
     return result
