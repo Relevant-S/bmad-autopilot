@@ -19,6 +19,7 @@ event-validator = "loud_fail_harness.event_validator:main"
 dependencies-validator = "loud_fail_harness.dependencies_validator:main"
 enumeration-check = "loud_fail_harness.enumeration_check:main"
 fixture-coverage = "loud_fail_harness.fixture_coverage:main"
+fr33-fixture-gate = "loud_fail_harness.fr33_fixture_gate:main"
 
 [dependency-groups]
 dev = [

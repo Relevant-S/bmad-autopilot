@@ -92,3 +92,46 @@ jobs:
         # examples/synthetic-stories/ + schemas/marker-taxonomy.yaml
         # from disk via find_repo_root.
         run: uv run fixture-coverage
+
+      - name: FR33 fixture-driven reconciliation gate (story 1.8)
+        # FR33's loud-fail-marker-completeness invariant over the *known*
+        # skip-class set (architecture.md line 219); blocking-not-best-effort
+        # per PRD ratification. Replays each fixture's expected_marker
+        # through reconciler.py (story 1.4) — synthesizing a per-fixture
+        # orchestrator-event payload that schema-validates against
+        # schemas/orchestrator-event.yaml (story 1.3), constructing the
+        # corresponding skip-event + marker pair, and asserting reconcile()
+        # produces a clean MatchedPair. Catches reconciler-logic regressions
+        # AND fixture-side declaration drift; per-fixture diagnostics name
+        # the failing fixture, expected_marker, and actual reconciliation
+        # result.
+        # Paired with — but DISTINCT from — story 1.7's fixture-coverage
+        # gate (the immediate-prior step), which validates COVERAGE
+        # (every taxonomy class has ≥1 fixture). 1.7 = COVERAGE; 1.8 =
+        # RECONCILIATION-OF-COVERED.
+        # Paired with — but DISTINCT from — story 6.8's runtime FR33 gate
+        # (lands in Epic 6), which validates the SAME reconciler against
+        # reference-project run logs. Both gates use the same reconciler.py
+        # component WITHOUT modification (epics.md line 905 + line 2783);
+        # their diagnostics are distinct-shape (epics.md line 2790:
+        # "Fixture reconciliation failed: ..." vs. "Runtime reconciliation
+        # failed: ..."); both gates coexist in CI (epics.md line 906).
+        # Ordering rationale: this gate runs LAST among the harness gates
+        # because (a) it depends on the same canonical corpus that
+        # fixture-coverage (the immediate-prior gate) just certified well-
+        # shaped, (b) it depends on the same canonical marker-taxonomy.yaml
+        # that enumeration-check certified internally consistent, (c) it
+        # depends on the same canonical orchestrator-event.yaml that
+        # event-validator certified instance-document-validatable, and
+        # (d) by running LAST, this gate's per-fixture diagnostics are
+        # interpretable in the context of upstream gates having ALREADY
+        # ruled out structural causes — defense-in-depth ordering, NOT
+        # redundancy.
+        # Operational meaning of a failure: (a) a regression in
+        # reconciler.py's matching logic, OR (b) a fixture-side
+        # declaration drift (the fixture's expected_marker no longer
+        # reflects what the reconciler produces).
+        # No positional arguments — the script discovers
+        # examples/synthetic-stories/ + schemas/marker-taxonomy.yaml +
+        # schemas/orchestrator-event.yaml from disk via find_repo_root.
+        run: uv run fr33-fixture-gate
