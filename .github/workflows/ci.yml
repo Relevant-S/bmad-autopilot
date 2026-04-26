@@ -135,3 +135,47 @@ jobs:
         # examples/synthetic-stories/ + schemas/marker-taxonomy.yaml +
         # schemas/orchestrator-event.yaml from disk via find_repo_root.
         run: uv run fr33-fixture-gate
+
+      - name: Hook-budget gate (story 1.9; FR60 + FR61)
+        # FR60 + FR61 + NFR-S4: the ≤3 hooks budget is the hook-sprawl-
+        # prevention invariant; the 20-lines-of-bash heuristic is the
+        # hook-script-trust-model attack-surface bound (PRD line 972).
+        # This gate enforces FR60 (≤3 .sh files at the top level of the
+        # inner repo's hooks/ directory) AND FR61 (≤20 effective lines of
+        # bash per hook script, with effective-line counting per
+        # tools/loud-fail-harness/docs/hook-counting-rules.md — shebang on
+        # line 1, blank lines, and comment-only lines are skipped; everything
+        # else counts).
+        # Invariant under hooks/ not existing: the baseline-zero pass case
+        # is the gate's correct posture at this story's landing time
+        # (before story 2.7 creates the directory). Story 2.7 lands the
+        # canonical 3-hook set — hooks/subagent-stop.sh (FR58 — Dev commit
+        # handler), hooks/stop.sh (FR59 — PR bundle assembly),
+        # hooks/session-start.sh (FR46 — resumability) per architecture.md
+        # lines 1073-1076 — exactly 3 hooks; the gate must continue passing
+        # at 2.7's landing without edit.
+        # Operational meaning of a CI failure:
+        # (a) a 4th hook was added without removing one of the three
+        #     (FR60 violation; per PRD line 729 the budget is NOT
+        #     revisitable as a relaxation — only renegotiable as a
+        #     replacement);
+        # (b) one of the existing hook scripts grew past 20 effective
+        #     lines (FR61 violation — reduce the script OR factor logic
+        #     into a non-hook artifact);
+        # (c) a non-UTF-8 or unreadable file lives under hooks/ (exit 2;
+        #     harness-level error).
+        # Mixed FR60 + FR61 violations both fire as exit 1 — both
+        # diagnostics print; neither promotes to exit 2 (FR60 + FR61 are
+        # equivalent invariant-tier signals; unlike fr33-fixture-gate's
+        # harness-bug-wins rule).
+        # Ordering rationale: this gate runs LAST among the harness gates
+        # because (a) it operates over a different filesystem surface
+        # (hooks/) than the prior gates' inputs (schemas/, examples/);
+        # (b) its inputs are the most volatile-during-Epic-2 (story 2.7
+        # lands all three hook scripts and 2.x stories evolve hook
+        # bodies); (c) running LAST means hook-script-edit churn in
+        # 2.7+ stories is reflected on top of an otherwise-clean harness
+        # suite — defense-in-depth ordering, NOT redundancy.
+        # No positional arguments — the script discovers hooks/ from
+        # disk via find_repo_root.
+        run: uv run hook-budget-gate
