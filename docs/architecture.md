@@ -980,6 +980,23 @@ This section consolidates rather than re-derives; the binding decisions live in 
 - Sprint-status writes scoped to non-BMAD-native transitions (specifically the `qa` state per upstream proposal 1).
 - Cost-counter writes batch with other run-state writes between specialist completions (per ADR-006 Consequence 2).
 
+#### Pattern 4 (cont.) — `advance_run_state` API surface
+
+Story 2.2 (`_bmad-output/implementation-artifacts/2-2-run-state-schema-atomic-write-helper-layer-with-enforced-write-ordering.md`) operationalizes this pattern. The helper module lives at `tools/loud-fail-harness/src/loud_fail_harness/run_state.py` (substrate library; NOT a sixth substrate component per ADR-003 closure). Public function signature:
+
+```python
+def advance_run_state(
+    run_state_path: pathlib.Path,
+    next_state: RunState,
+    *,
+    story_doc_callback: Callable[[], StoryDocCallbackResult],
+) -> AdvanceResult: ...
+```
+
+Structural enforcement: `story_doc_callback` is keyword-only (the `*,` separator) AND non-defaulted. Omitting it raises `TypeError` at call time; mypy strict mode catches the omission at type-check time. There is no API path that writes run-state without a callback — Pattern 4's "story-doc canonical write before run-state advance" invariant is encoded in the type signature, not in a docstring a future contributor can ignore.
+
+Execution order: callback first → on success, atomic-rename run-state second; on callback failure, no run-state mutation, raise `RunStateAdvanceBlocked` carrying the upstream cause and the attempted next-state. Canonical caller-side integration with `loud_fail_harness.story_doc_validator.validate_section_write()` is documented in `run_state.py`'s module docstring.
+
 ### Pattern 5: Error Handling Discipline
 
 This section consolidates rather than re-derives; the binding decisions live in the loud-fail doctrine (PRD-level invariant) and ADR-003's marker taxonomy enforcement.

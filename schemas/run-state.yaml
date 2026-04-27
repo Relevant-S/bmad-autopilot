@@ -1,0 +1,328 @@
+# Run-state schema (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 2.2 (this schema's authoring; epics.md lines 1183-1217). Run-state
+#     is the orchestrator-domain canonical cache of flow-control state for the
+#     in-flight story loop; the file at `_bmad/automation/run-state.yaml` (user-
+#     runtime path per architecture.md View 3 line 1171; gitignored, ephemeral)
+#     conforms to this schema. Reconstructable from story-doc + event-log on
+#     recovery per ADR-005 Sub-decision (c).
+#   - FR3 (PRD line 811) — orchestrator advances story-doc lifecycle states;
+#     `current_state` is the Automator's view of this advancement.
+#   - FR4 (PRD line 812) — per-story branch encoded in `branch_name`.
+#   - FR13 (PRD line 824) — retry history preserved in run-state; encoded as
+#     `retry_history` (MVP shape; populated by Epic 5 via additive MINOR bump).
+#   - FR14 (PRD line 825) — retry-budget exhaustion preserves run-state with
+#     non-advance + escalation marker; encoded by `current_state: "escalated"`.
+#   - FR45 (PRD line 873) — orchestrator persists ephemeral run state at
+#     `_bmad/automation/run-state.yaml`; gitignored; auto-cleaned on merge-
+#     ready (Story 2.11); preserved on escalation (per FR14).
+#   - FR46 (PRD line 874) — SessionStart hook detects existing run-state file
+#     and reattaches per ADR-005 recovery algorithm; this schema's invariants
+#     are post-recovery-stable per ADR-005 Consequence 1.
+#   - FR48a (PRD line 877) — `/bmad-automation status <story-id>` reads run-
+#     state without mutating; the human-readable YAML format per NFR-O2 makes
+#     inline practitioner inspection viable.
+#   - FR48b (PRD line 878) — `/bmad-automation status` (no args) lists runs
+#     by walking run-state files; orphan-run-state-detected marker per
+#     epics.md line 8-5.
+#   - NFR-R1 (PRD line 945) — atomic run-state writes; encoded as
+#     `os.replace`-after-temp-file-write in the AC-2 helper. Writes use
+#     temp-file-plus-atomic-rename per NFR-R1 and ADR-005 Consequence 6; on
+#     crash mid-rename, either the prior version or the new version is on
+#     disk — never a partial-state file.
+#   - NFR-R2 (PRD line 946) — crash recovery without duplicate state advance;
+#     the `current_state` enum + `retry_history` invariants make duplicate-
+#     advance detectable on recovery (per ADR-005's recovery algorithm).
+#   - NFR-R8 (PRD line 952) — cross-state consistency; story-doc canonical,
+#     run-state cache; story-doc writes complete before run-state advances.
+#     The AC-2 helper's "callback first → run-state second" execution order
+#     encodes this verbatim.
+#   - NFR-O2 (PRD line 981) — run-state inspectability — plain YAML, human-
+#     readable. The Pydantic model serializes to a dict, then YAML-formatted,
+#     so a practitioner can `cat` the file mid-run.
+#   - NFR-O4 (PRD line 983) — `status` command completeness — exposes current
+#     state, retry history, loud-fail markers, latest specialist return
+#     without advancing state.
+#   - NFR-O8 (PRD line 987) — in-flight cost observability; encoded as
+#     `cost_to_date_by_specialist` (MVP shape; Epic 6 thickens via additive
+#     MINOR bump).
+#   - ADR-001 cell-1 portable surface (architecture.md lines 80-82) — the
+#     orchestrator's portable surface includes "run-state.yaml schema". This
+#     schema is the structural encoding of that surface.
+#   - ADR-002 cell-1 portability classification (architecture.md lines
+#     99-203) — the 3×3 matrix at line 129 places `run-state.yaml schema` in
+#     cell 1 (Host-Portable / Methodology-Portable).
+#   - ADR-003 substrate-component closure at FIVE (architecture.md lines
+#     311-315) — this schema is a cell-1 ARTIFACT, NOT a sixth substrate
+#     component. JSON-Schema-2020-12 meta-validation reuses the existing
+#     envelope_validator family; no new gate is added.
+#   - ADR-005 Cross-State Consistency Protocol (architecture.md lines
+#     429-541) — three-store recovery model (story-doc / sprint-status / run-
+#     state) + NFR-R8 ordering. Consequence 1 (lines 504-509): "the post-
+#     recovery run-state must conform to the same schema that pre-crash
+#     run-state conforms to, with the same field invariants". Consequence 6
+#     (line 529): "Run-state.yaml... and orchestrator-event log entries all
+#     use temp-file-plus-atomic-rename. Standard Python pathlib + os.replace
+#     covers it; implementation detail."
+#   - ADR-006 per-story cost telemetry source (architecture.md line 585) —
+#     "Cost-counter writes batch with other run-state writes between
+#     specialist completions." → the `cost_to_date_by_specialist` field's
+#     writes are batched into the AC-2 helper's `advance_run_state` calls,
+#     not per-API-call.
+#   - Pattern 1 (architecture.md lines 925-955) — snake_case structural keys
+#     (schema_version, story_id, run_id, current_state, branch_name,
+#     dispatched_specialist, last_envelope, retry_history, active_markers,
+#     cost_to_date_by_specialist, pending_qa_dispatch_payload, retry_attempt,
+#     retry_reason); kebab-case identifier values (current_state enum,
+#     dispatched_specialist enum). Pattern 1 conformance is enforced by
+#     tools/loud-fail-harness/src/loud_fail_harness/naming_lint.py per the
+#     _CASING_RULES registration added by Story 2.2 AC-6.
+#   - Pattern 4 (architecture.md lines 973-981) — state-update discipline.
+#     This schema IS the structural commitment Pattern 4 governs; the AC-2
+#     helper's API surface (advance_run_state) is the single write-path.
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors tea-handoff-contract.yaml lines 62-77):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Co-versioned-on-bump with `tea-handoff-contract.yaml` because
+#     run-state's `pending_qa_dispatch_payload` `$ref`s into it. Bumps to
+#     `tea-handoff-contract.yaml` trigger reconciliation review with this
+#     schema per ADR-003 substrate component 4's enumeration-equivalence
+#     discipline.
+#   - Co-versioned-on-bump with `envelope.schema.yaml` because run-state's
+#     `last_envelope` `$ref`s into it. Bumps to `envelope.schema.yaml`
+#     trigger reconciliation review with this schema per the same discipline.
+#
+# Boundary doc cross-reference: NONE. Unlike tea-handoff-contract.yaml's
+# split-across-files pattern (where docs/tea-boundary-contract.md carries
+# the prose answers + spike findings), run-state has no ambiguity-resolving
+# spike findings to document — its shape is FR/NFR-binding-driven, not
+# spike-driven. This contract-header carries the full prose explanation
+# (parallel to envelope.schema.yaml's pattern of self-contained header).
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/run-state.yaml"
+schema_version: "1.0"
+title: "Run-State"
+description: >-
+  Orchestrator-domain canonical cache of flow-control state for the in-flight
+  story loop. Reconstructable from story-doc + event-log on recovery per
+  ADR-005 Sub-decision (c). Writes use temp-file-plus-atomic-rename per
+  NFR-R1 and ADR-005 Consequence 6; on crash mid-rename, either the prior
+  version or the new version is on disk — never a partial-state file. See
+  the contract-header comment block above for the full FR/NFR/ADR anchor
+  set and the versioning discipline.
+
+type: object
+required:
+  - schema_version
+  - story_id
+  - run_id
+  - current_state
+  - branch_name
+  - dispatched_specialist
+  - last_envelope
+  - retry_history
+  - active_markers
+  - cost_to_date_by_specialist
+  - pending_qa_dispatch_payload
+additionalProperties: false
+
+properties:
+  schema_version:
+    type: string
+    enum: ["1.0"]
+    description: >-
+      Schema version of this run-state document. Closed enum at MVP so a
+      future MINOR/MAJOR bump (per the contract-header versioning rules)
+      requires an explicit additive change rather than silent acceptance.
+
+  story_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-story identifier (e.g. "2-2-run-state-schema-..."), the
+      key into _bmad-output/implementation-artifacts/sprint-status.yaml's
+      development_status section. Free-form by BMAD convention; not regex-
+      constrained here.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating dispatch with the
+      run-state.yaml record per ADR-005 Consequence 1 (post-recovery run-
+      state must reference the same run_id). Distinguishes successive runs
+      against the same story_id (e.g. retry-after-escalation re-runs).
+
+  current_state:
+    type: string
+    enum:
+      - ready-for-dev
+      - in-progress
+      - review
+      - qa
+      - done
+      - escalated
+    description: >-
+      BMAD lifecycle state per architecture.md line 1256, plus the proposed
+      `qa` state per upstream proposal 1 (architecture.md line 1259), plus
+      `escalated` for the retry-budget-exhaustion non-advance state per FR14
+      (PRD line 825; epics.md story 5-6). Enum members are kebab-case per
+      Pattern 1. The `qa` state is documented in docs/extension-audit.md
+      with `upstream-proposal` classification per Story 1.11; this schema
+      treats all six states uniformly.
+
+  branch_name:
+    type: string
+    minLength: 1
+    description: >-
+      Per-story branch name per FR4 (PRD line 812) / Story 2.3's lifecycle
+      module. Set at story-loop entry; persists across specialist
+      dispatches. Free-form by BMAD convention; the per-story-branch shape
+      is Story 2.3's responsibility.
+
+  dispatched_specialist:
+    oneOf:
+      - type: string
+        enum:
+          - dev
+          - review-bmad
+          - qa
+          - lad
+      - type: "null"
+    description: >-
+      Specialist currently dispatched (the seam-streaming "active specialist"
+      per FR45 / Story 2.12), or null when no specialist is dispatched (the
+      value at story-loop entry before the first dispatch and between
+      specialist returns). Closed enum: dev, review-bmad, qa, lad — the four
+      MVP specialists plus the Phase-1.5 LAD per ADR's review-LAD plan.
+      Identifiers are kebab-case per Pattern 1.
+
+  last_envelope:
+    oneOf:
+      - $ref: "envelope.schema.yaml#"
+      - type: "null"
+    description: >-
+      The most recent specialist envelope cached for orchestrator flow-
+      control reads (per ADR-001's portable-surface enumeration: "specialist
+      envelope schema" is a cell-1 artifact whose shape is referenced from
+      run-state, not duplicated). Null at story-loop entry before the first
+      dispatch; populated by Story 2.6's dispatch wrapper at every
+      specialist-return. The shape is bound by `$ref` to envelope.schema.yaml;
+      bumps to envelope.schema.yaml trigger reconciliation review per the
+      contract-header co-versioning note.
+
+  pending_qa_dispatch_payload:
+    oneOf:
+      - $ref: "tea-handoff-contract.yaml#"
+      - type: "null"
+    description: >-
+      The dispatch payload the orchestrator hands the QA specialist at the
+      `review → qa` lifecycle transition (FR16 / Story 2.1's TEA-handoff
+      contract). Populated by Story 2.6's dispatch wrapper at the transition
+      and consumed by Story 2.10's QA wrapper. Null at every other lifecycle
+      state per the FR16 dispatch-time-only invariant; the `tea_artifacts_
+      consumed: maxItems: 0` invariant from Story 2.1 propagates through the
+      `$ref` unchanged.
+
+  retry_history:
+    type: array
+    description: >-
+      Retry attempts preserved per FR13 (PRD line 824). MVP shape (this
+      story): possibly-empty array of {retry_attempt, retry_reason} entries;
+      Epic 5 thickens via additive MINOR bump per the contract-header
+      versioning rules (the bump is mechanical and does not break this
+      story's MVP shape).
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - retry_attempt
+        - retry_reason
+      properties:
+        retry_attempt:
+          type: integer
+          minimum: 1
+          description: >-
+            1-indexed retry attempt number (the FIRST retry is attempt 1,
+            not 0). Bounded by the retry budget per Epic 5 / FR14.
+        retry_reason:
+          type: string
+          minLength: 1
+          description: >-
+            Free-form (at MVP) human-readable reason for the retry; Epic 5
+            tightens this to a closed enum sourced from the bucket-driven
+            retry router (epics.md story 5-2) via additive MINOR bump.
+
+  active_markers:
+    type: array
+    description: >-
+      Loud-fail marker-class string identifiers currently active on the
+      run; resolved against schemas/marker-taxonomy.yaml at runtime by
+      Story 2.6's dispatch wrapper (epics.md line 1327 — "the marker class
+      name is sourced from `marker-taxonomy.yaml`... never invented
+      inline"). Possibly empty (no markers active is conformant). This
+      schema does NOT add validation that items are members of the
+      taxonomy — that's substrate component 4 territory (already covered
+      by enumeration_check).
+    items:
+      type: string
+      minLength: 1
+
+  cost_to_date_by_specialist:
+    type: object
+    additionalProperties: false
+    description: >-
+      In-flight cost-to-date per specialist per NFR-O8 (PRD line 987). MVP
+      shape (this story): possibly-empty mapping; Epic 6 thickens via
+      additive MINOR bump per ADR-006 Consequence 2 (cost-counter writes
+      batch with other run-state writes between specialist completions).
+      Property keys are field names (snake_case per Pattern 1's structural-
+      keys boundary at architecture.md lines 932-935); they parallel the
+      dispatched_specialist enum values transliterated to snake_case (the
+      enum side stays kebab-case per Pattern 1's identifier boundary). All
+      properties are optional so that pre-first-dispatch run-state is
+      conformant.
+    properties:
+      dev:
+        type: number
+        minimum: 0
+        description: >-
+          Cumulative cost (USD; Epic 6 documents the unit) attributed to
+          the Dev specialist across this run.
+      review_bmad:
+        type: number
+        minimum: 0
+        description: >-
+          Cumulative cost attributed to the Review-BMAD specialist across
+          this run.
+      qa:
+        type: number
+        minimum: 0
+        description: >-
+          Cumulative cost attributed to the QA specialist across this run.
+      lad:
+        type: number
+        minimum: 0
+        description: >-
+          Cumulative cost attributed to the Phase-1.5 LAD specialist
+          across this run.

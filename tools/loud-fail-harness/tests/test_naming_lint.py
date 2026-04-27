@@ -467,13 +467,15 @@ def test_finding_carries_named_invariant_fields() -> None:
 
 def test_casing_rules_cover_all_cell_one_schemas() -> None:
     """The position-classification table has an entry for each cell-1 schema
-    file (story 1.12b AC-2; story 2.1 AC-3 added schemas/tea-handoff-contract.yaml)."""
+    file (story 1.12b AC-2; story 2.1 AC-3 added schemas/tea-handoff-contract.yaml;
+    story 2.2 AC-6 added schemas/run-state.yaml)."""
     expected = {
         "schemas/envelope.schema.yaml",
         "schemas/orchestrator-event.yaml",
         "schemas/marker-taxonomy.yaml",
         "schemas/dependencies.yaml",
         "schemas/tea-handoff-contract.yaml",
+        "schemas/run-state.yaml",
     }
     assert set(_CASING_RULES.keys()) == expected
 

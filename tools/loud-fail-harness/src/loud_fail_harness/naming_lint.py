@@ -264,19 +264,49 @@ _CASING_RULES: dict[str, dict[str, list[str]]] = {
         ],
         "entity-identifier-key": [],
     },
+    # ---- run-state.yaml — JSON Schema 2020-12 document --------------------
+    # User-defined field names live under top-level ``properties:`` and the
+    # nested object positions: the ``retry_history`` items shape and the
+    # ``cost_to_date_by_specialist`` properties map. JSON-Schema reserved
+    # keywords (``type``, ``required``, ``enum``, ``additionalProperties``,
+    # ``items``, ``description``, ``minLength``, ``minimum``, ``oneOf``,
+    # ``$ref``, ``const``, etc.) are NOT user-defined fields and are exempt
+    # by this table not registering them. The ``current_state`` and
+    # ``dispatched_specialist`` enum members are entity-identifier values
+    # (kebab-case per Pattern 1). The ``cost_to_date_by_specialist``
+    # property keys are *field names* (snake_case per Pattern 1's
+    # structural-keys boundary at architecture.md lines 932-935), NOT
+    # entity-identifier keys — the keys parallel the
+    # ``dispatched_specialist`` enum values transliterated to snake_case.
+    # Story 2.2 AC-6.
+    "schemas/run-state.yaml": {
+        "field-name": [
+            "/properties",
+            "/properties/retry_history/items/properties",
+            "/properties/cost_to_date_by_specialist/properties",
+        ],
+        "entity-identifier-value": [
+            "/properties/current_state/enum/*",
+            "/properties/dispatched_specialist/oneOf/0/enum/*",
+        ],
+        "entity-identifier-key": [],
+    },
 }
 
 
 #: Canonical relative paths for the cell-1 schema files. The CLI's default
 #: target set; also the position-classification-table key set. Story 2.1
 #: AC-3 added ``schemas/tea-handoff-contract.yaml`` as the fifth cell-1
-#: artifact (TEA-handoff dispatch payload contract).
+#: artifact (TEA-handoff dispatch payload contract). Story 2.2 AC-6 added
+#: ``schemas/run-state.yaml`` as the sixth cell-1 artifact (orchestrator
+#: run-state cache).
 _CANONICAL_TARGETS: tuple[str, ...] = (
     "schemas/envelope.schema.yaml",
     "schemas/orchestrator-event.yaml",
     "schemas/marker-taxonomy.yaml",
     "schemas/dependencies.yaml",
     "schemas/tea-handoff-contract.yaml",
+    "schemas/run-state.yaml",
 )
 
 
@@ -550,6 +580,7 @@ def _resolve_file_key(path: pathlib.Path) -> str:
         "marker-taxonomy.yaml",
         "dependencies.yaml",
         "tea-handoff-contract.yaml",
+        "run-state.yaml",
     }
     if name in canonical_basenames:
         return f"schemas/{name}"
@@ -580,8 +611,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         description=(
             "Pattern 1 (YAML casing convention) + Pattern 2 (marker class "
             "naming) static linter over the cell-1 schema files. Story "
-            "1.12b (four schemas) + Story 2.1 AC-3 (tea-handoff-contract.yaml); "
-            "architecture.md § Implementation Patterns lines 919-1006."
+            "1.12b (four schemas) + Story 2.1 AC-3 (tea-handoff-contract.yaml) "
+            "+ Story 2.2 AC-6 (run-state.yaml); architecture.md § "
+            "Implementation Patterns lines 919-1006."
         ),
     )
     parser.add_argument(
@@ -589,11 +621,12 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         nargs="*",
         type=pathlib.Path,
         help=(
-            "Optional explicit schema paths. Default: discover the five cell-1 "
-            "schemas (envelope.schema.yaml, orchestrator-event.yaml, "
-            "marker-taxonomy.yaml, dependencies.yaml, tea-handoff-contract.yaml) "
-            "under the repo root via find_repo_root. Test-injection flag; CI "
-            "invocations omit it."
+            "Optional explicit schema paths. Default: discover the cell-1 "
+            "schemas under the repo root via find_repo_root "
+            "(envelope.schema.yaml, orchestrator-event.yaml, "
+            "marker-taxonomy.yaml, dependencies.yaml, "
+            "tea-handoff-contract.yaml, run-state.yaml). Test-injection "
+            "flag; CI invocations omit it."
         ),
     )
     return parser
