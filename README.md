@@ -1,0 +1,10 @@
+# BMAD Agent Development Automator — source repo
+
+This repository is the **source repo** for the BMAD Agent Development Automator (architecture View 1, per `docs/architecture.md` lines 1048-1107). It is not the user-facing distribution unit (View 2 — what gets installed into a user's BMAD project from `bmad-autopilot/skills/`, `agents/`, `hooks/`, `schemas/`, and `config-templates/`), and it is not the planning workspace (which lives outside this repo, alongside the BMAD module installation that produced these specs). Contributors checking out this tree are looking at View 1 only.
+
+## Architecture & Boundaries
+
+- **[Architecture](docs/architecture.md)** — ADRs (001–006), SDN-001, Implementation Patterns 1–7, and the View 1 / View 2 / View 3 project structure. The single source of truth for technical decisions; canonical per architecture.md View 1 line 1056.
+- **[TEA vs. Automator boundary](docs/tea-vs-automator.md)** — what TEA validates vs. what the Automator exercises, the QA-AC-only rule, and the canonical First-Run Orientation Message text. Operationalizes PRD FR34 (one-time TEA-boundary orientation at `init`), grounds PRD FR16-FR25 (QA behavioral verification scope) and PRD FR38 (TEA hard-dependency at `init`), and locks ADR-002's dependency-profile total-block.
+- **[Git hygiene](docs/git-hygiene.md)** — the operation-scope rules the Automator follows when touching git, plus the canonical per-story branch naming convention `bmad-automation/story/<story-id>` that Story 2.3's branch lifecycle module reads at implementation time. Operationalizes PRD NFR-S3 (git operation scope) and the destructive-operation halt-with-diagnostic guidance from Story 1.12a's AC.
+- **[BMAD-extension audit](docs/extension-audit.md)** — the public BMAD-extension audit listing what the Automator extends, what it bypasses, and what it leaves untouched. Operationalizes PRD FR65 (public extension audit at MVP); created by Story 1.11.
