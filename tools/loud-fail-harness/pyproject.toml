@@ -22,6 +22,16 @@ fixture-coverage = "loud_fail_harness.fixture_coverage:main"
 fr33-fixture-gate = "loud_fail_harness.fr33_fixture_gate:main"
 hook-budget-gate = "loud_fail_harness.hook_budget_gate:main"
 pluggability-gate = "loud_fail_harness.pluggability_gate:main"
+# story-doc-validator is a library-as-CLI-aid (story 1.10b; FR66 / NFR-S5),
+# NOT a CI gate step — the library has no canonical filesystem surface to
+# scan at MVP because story-doc writes happen at specialist runtime in
+# Epic 2+, not as committed filesystem artifacts. CI enforcement is the
+# test suite (`uv run pytest tests/test_story_doc_validator.py`) plus the
+# existing `enumeration_check` (story 1.5) verifying the marker class is
+# in `schemas/marker-taxonomy.yaml`. Placed after `pluggability-gate` to
+# preserve the gate-execution-order grouping, then library-as-CLI-aid
+# grouping.
+story-doc-validator = "loud_fail_harness.story_doc_validator:main"
 
 [dependency-groups]
 dev = [
