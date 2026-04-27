@@ -49,9 +49,19 @@
 # Canonical order (preserve verbatim — re-ordering loses narrative semantics):
 # entries 1-15 are the FR30-original marker classes; entries 16-27 are the
 # cross-epic-named marker classes added by the proactive sweep per epics.md
-# Story 1.4 AC narrative.
+# Story 1.4 AC narrative; entries 28-29 are the per-story branch-lifecycle
+# write-time guards added by Story 2.3 (NFR-R3 + NFR-S3 enforcement at the
+# `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/branch_lifecycle.py`
+# substrate-library surface; distinct from the recovery-time `dangling-
+# uncommitted-work` git probe diagnostic at entry 14 — see each new entry's
+# `diagnostic_pointer` for the explicit demarcation).
+#
+# Schema-version history:
+#   1.0 → 1.1 (Story 2.3) — additive: appended `git-uncommitted-work-detected`
+#                            and `trunk-branch-write-rejected` per the file's
+#                            documented MINOR-bump rule (adding a marker class).
 
-schema_version: "1.0"
+schema_version: "1.1"
 
 markers:
 
@@ -304,4 +314,39 @@ markers:
       conflict` (state inconsistency for a *known* story) and from
       `dangling-evidence-ref` (story-doc is the canonical anchor, not
       evidence in the FR49 sense — conflating semantics is forbidden).
+    sub_classifications: []
+
+  # ---- Story 2.3 branch-lifecycle write-time guards (2) ---------------------
+
+  - marker_class: git-uncommitted-work-detected
+    diagnostic_pointer: |
+      NFR-R3 (PRD line 947, git operation safety — "Git operations that would
+      destroy uncommitted user work halt with a diagnostic rather than
+      proceeding") + NFR-S3 (PRD line 971, git operation scope) + NFR-O5
+      (PRD line 984, named diagnostic per failure class) + `docs/git-hygiene.md`
+      § "No operations that destroy uncommitted user work". Fires at write-time
+      (pre-branch-creation) when the per-story branch lifecycle module
+      (Story 2.3's `branch_lifecycle.create_story_branch`) detects uncommitted
+      changes via the injected `WorkingTreeProbe` callable. The orchestrator
+      halts; it does NOT auto-stash, auto-commit, or auto-clean — the
+      practitioner decides remediation (stash, commit, or abort). Distinct
+      from `dangling-uncommitted-work` (entry 14), which is ADR-005's git
+      probe diagnostic firing at recovery-time on commit-state mismatch
+      (visibility-only, not flow-blocking); this marker is a write-time halt
+      diagnostic (flow-blocking pre-write).
+    sub_classifications: []
+
+  - marker_class: trunk-branch-write-rejected
+    diagnostic_pointer: |
+      NFR-S3 (PRD line 971, git operation scope — verbatim "No operations on
+      `main` / `master` / `trunk`") + Story 2.3's `branch_lifecycle` module +
+      `docs/git-hygiene.md` § "No operations on `main` / `master` / `trunk`".
+      Fires when the trunk-name allowlist consultation in
+      `branch_lifecycle.create_story_branch` matches the would-be branch name
+      against an entry in the configurable allowlist (default
+      `("main", "master", "trunk")` per NFR-S3's enumeration; overridable via
+      `_bmad/automation/config.yaml` per FR40). Rejection happens at module
+      level BEFORE any `git checkout`-form invocation; no git command runs
+      against the protected branch. Remediation: review the project's actual
+      trunk branch name and the orchestrator's `trunk_allowlist` configuration.
     sub_classifications: []

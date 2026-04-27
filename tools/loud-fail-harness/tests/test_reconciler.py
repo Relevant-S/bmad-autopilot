@@ -26,14 +26,14 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6):
-    [x] all 27 expected marker_class identifiers present         → test_taxonomy_has_27_canonical_markers
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.1):
+    [x] all 29 expected marker_class identifiers present         → test_taxonomy_has_29_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.0" at top level                       → test_taxonomy_declares_schema_version_1_0
+    [x] schema_version: "1.1" at top level                       → test_taxonomy_declares_schema_version_1_1
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
-12 mandated diagnostic_pointer keyword spot-checks (AC-2 verbatim text):
+14 mandated diagnostic_pointer keyword spot-checks (AC-2 verbatim text; Story 2.3 added 2):
     [x] walking-skeleton-bundle / "Epic 2 thin-signals"
     [x] review-layer-failed / "decision_needed: HIGH"
     [x] playwright-mcp-unavailable / "FR17"
@@ -46,7 +46,9 @@ Taxonomy file shape (AC-1, AC-2, AC-3, AC-6):
     [x] init-would-destroy-existing-artifact / "FR41"
     [x] recovery-state-conflict / "NFR-R8"
     [x] orphan-run-state-detected / "FR48b"
-    All twelve covered by                                        → test_mandated_diagnostic_pointer_keywords
+    [x] git-uncommitted-work-detected / "NFR-R3"        (Story 2.3)
+    [x] trunk-branch-write-rejected / "NFR-S3"          (Story 2.3)
+    All fourteen covered by                                      → test_mandated_diagnostic_pointer_keywords
 
 Pydantic v2 loud-fail (Pattern 5 / AC-4):
     [x] missing marker_class on SkipEvent → ValidationError      → test_skip_event_missing_marker_class_raises
@@ -117,6 +119,9 @@ CANONICAL_MARKER_CLASSES = [
     "init-would-destroy-existing-artifact",
     "recovery-state-conflict",
     "orphan-run-state-detected",
+    # Story 2.3 — branch-lifecycle write-time guards (NFR-R3 + NFR-S3).
+    "git-uncommitted-work-detected",
+    "trunk-branch-write-rejected",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -135,6 +140,9 @@ MANDATED_DIAGNOSTIC_KEYWORDS: dict[str, str] = {
     "init-would-destroy-existing-artifact": "FR41",
     "recovery-state-conflict": "NFR-R8",
     "orphan-run-state-detected": "FR48b",
+    # Story 2.3 — branch-lifecycle write-time guards.
+    "git-uncommitted-work-detected": "NFR-R3",
+    "trunk-branch-write-rejected": "NFR-S3",
 }
 
 
@@ -352,12 +360,12 @@ def test_determinism_under_shuffle() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_taxonomy_has_27_canonical_markers(taxonomy_data: dict) -> None:
+def test_taxonomy_has_29_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 27
+    assert len(names) == 29
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
-        "AC-2 mandates the order verbatim"
+        "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29)"
     )
 
 
@@ -370,8 +378,8 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_0(taxonomy_data: dict) -> None:
-    assert taxonomy_data.get("schema_version") == "1.0"
+def test_taxonomy_declares_schema_version_1_1(taxonomy_data: dict) -> None:
+    assert taxonomy_data.get("schema_version") == "1.1"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -440,7 +448,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 27
+    assert len(ids) == 29
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

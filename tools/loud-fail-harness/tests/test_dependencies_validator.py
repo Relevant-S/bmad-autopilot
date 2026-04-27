@@ -799,12 +799,15 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     assert rc == 0, f"enumeration-check failed: stdout={out.getvalue()!r} stderr={err.getvalue()!r}"
 
     text = out.getvalue()
-    # AC-5: 4 passing + 24 orphans, no deferral note.
-    # Arithmetic: 27 total taxonomy markers − 3 distinct referenced markers
-    # (env-setup-failed, mobile-blocked, LAD-skipped) = 24 orphans.
+    # AC-5: 4 passing + 26 orphans, no deferral note.
+    # Arithmetic: 29 total taxonomy markers − 3 distinct referenced markers
+    # (env-setup-failed, mobile-blocked, LAD-skipped) = 26 orphans.
+    # Story 2.3 added 2 markers (git-uncommitted-work-detected, trunk-branch-
+    # write-rejected); both are orphan-at-MVP per the existing pattern (will
+    # bind to dependencies.yaml or orchestrator-event.yaml in Epic 2+ stories).
     # If a future story adds markers to marker-taxonomy.yaml or new marker_class
     # references to dependencies.yaml, update this count accordingly.
-    assert "Summary: 4 passing reference(s), 0 missing reference(s), 24 orphan marker class(es)" in text
+    assert "Summary: 4 passing reference(s), 0 missing reference(s), 26 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
 
 
