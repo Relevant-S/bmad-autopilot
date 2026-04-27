@@ -32,6 +32,13 @@ pluggability-gate = "loud_fail_harness.pluggability_gate:main"
 # preserve the gate-execution-order grouping, then library-as-CLI-aid
 # grouping.
 story-doc-validator = "loud_fail_harness.story_doc_validator:main"
+# naming-lint (story 1.12b; Pattern 1 + Pattern 2 enforcement matrix per
+# architecture.md lines 1031-1032) is a CI gate, listed last here because all
+# prior [project.scripts] entries already existed at this story's landing time.
+# The position in this table does NOT reflect CI execution order — the CI step
+# runs between `dependencies-validator` and `enumeration-check`, as encoded in
+# .github/workflows/ci.yml.
+naming-lint = "loud_fail_harness.naming_lint:main"
 
 [dependency-groups]
 dev = [
@@ -45,10 +52,42 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/loud_fail_harness"]
 
+# Pattern 6 — Python code style. See docs/implementation-patterns.md#pattern-6-python-code-style.
 [tool.ruff]
 target-version = "py312"
 line-length = 100
 
+# Pattern 6 — Python code style. See docs/implementation-patterns.md#pattern-6-python-code-style.
+# Explicit `select` makes the chosen rule families a project-wide style decision
+# rather than implicit-via-default (story 1.12b AC-4). Covers the full
+# pycodestyle errors family (E), pycodestyle warnings (W), and Pyflakes (F).
+# E501 (line-too-long) is suppressed via `ignore` because line-length
+# enforcement is the `[tool.ruff.format]` formatter's responsibility (line-
+# length = 100 above); a linter E501 check on top would fire on existing
+# docstring-heavy modules that AC-9 forbids touching in this story's scope.
+# This is a project-level decision, not per-file suppression.
+# Extending the set (I, UP, B, RUF) requires the existing harness modules to
+# remain ruff-clean post-PR per AC-4 — fix-where-fixed in the same PR rather
+# than baseline-suppression via `noqa` or `per-file-ignores`.
+[tool.ruff.lint]
+select = ["E", "W", "F"]
+ignore = [
+    # E501 line-too-long: formatter's responsibility via [tool.ruff.format]
+    # + line-length = 100 in [tool.ruff]. Project-level decision; not per-file.
+    "E501",
+]
+
+# Pattern 6 — Python code style. See docs/implementation-patterns.md#pattern-6-python-code-style.
+# Section's presence makes "use Ruff's formatter with project-line-length defaults"
+# an explicit choice (story 1.12b AC-4) rather than absent-by-default; future
+# explicit formatter settings (quote-style, indent-style, etc.) land here.
+[tool.ruff.format]
+
+# Pattern 6 — Python code style. Strict mode intentionally OFF at MVP per
+# CLAUDE.md ("mypy strict mode is off for the empty scaffold; per-component
+# strictness lands incrementally"). Per-component strictness via
+# [[tool.mypy.overrides]] entries lands as new modules opt-in. See
+# docs/implementation-patterns.md#pattern-6-python-code-style.
 [tool.mypy]
 python_version = "3.12"
 files = ["src"]

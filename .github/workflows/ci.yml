@@ -56,6 +56,50 @@ jobs:
         # schemas/dependencies.yaml from disk via find_repo_root.
         run: uv run dependencies-validator
 
+      - name: Naming lint (Pattern 1 + Pattern 2; story 1.12b)
+        # Architectural source: Pattern 1 (casing convention) + Pattern 2
+        # (marker class naming format) per architecture.md lines 919-1006;
+        # enforcement matrix per architecture.md lines 1031-1032 names
+        # Pattern 1's cell-1-schema scope as CI-enforced and Pattern 2 as
+        # CI-enforced (refined by story 1.12b AC-2 + AC-3). Codification
+        # doc: docs/implementation-patterns.md (story 1.12b AC-1).
+        # Validator scope:
+        #   - Pattern 1 (snake_case fields; kebab-case identifier values
+        #     and entity-identifier dict keys) over the four cell-1 schema
+        #     files: schemas/envelope.schema.yaml,
+        #     schemas/orchestrator-event.yaml, schemas/marker-taxonomy.yaml,
+        #     schemas/dependencies.yaml. Only registered structural surfaces
+        #     are checked — see _CASING_RULES in
+        #     tools/loud-fail-harness/src/loud_fail_harness/naming_lint.py
+        #     for the per-file position-classification table; PRD-canonical
+        #     lifecycle/finding literals (e.g. `decision_needed`,
+        #     `from_state` enum members) are deliberately exempt per
+        #     architecture.md line 955; OTel pass-through dotted attribute
+        #     keys are exempt per Pattern 3 / ADR-006 Consequence 5.
+        #   - Pattern 2 (marker_class regex `^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)+$`
+        #     ≥ 2 segments; sub-classification regex
+        #     `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`) over schemas/marker-taxonomy.yaml.
+        # Exit-code semantics:
+        #   0 — clean (no findings).
+        #   1 — at least one validation finding (Pattern 1 OR Pattern 2).
+        #   2 — harness-level error (file unreadable, YAML parse failure,
+        #       top-level not a YAML mapping); NFR-O5 named-invariant
+        #       diagnostic shape.
+        # Ordering rationale: this gate is structurally a per-file
+        # casing/naming shape check. It runs AFTER `dependencies-validator`
+        # because dependencies-validator is itself a per-file shape check
+        # whose existing ordering rationale (gate-execution-order grouping;
+        # malformed dependencies.yaml surfaces with the tighter NFR-O5
+        # named-invariant diagnostic FIRST) is preserved. It runs BEFORE
+        # `enumeration-check` so per-file casing violations surface with
+        # tight per-file diagnostics before downstream cross-reference
+        # gates fire (defense-in-depth, not redundancy). The same
+        # per-file-before-cross-reference principle that puts
+        # dependencies-validator before enumeration-check applies here.
+        # No positional arguments — the script discovers the four cell-1
+        # schema files from disk via find_repo_root.
+        run: uv run naming-lint
+
       - name: Cross-schema enumeration check (substrate component 4)
         # No positional arguments: enumeration-check resolves
         # schemas/marker-taxonomy.yaml + schemas/orchestrator-event.yaml
