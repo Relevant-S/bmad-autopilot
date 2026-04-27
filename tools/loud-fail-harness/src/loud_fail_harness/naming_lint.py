@@ -1,11 +1,11 @@
-"""Pattern 1 + Pattern 2 naming-convention lint over the four cell-1 schema files.
+"""Pattern 1 + Pattern 2 naming-convention lint over the cell-1 schema files.
 
 Codifies architecture.md § Implementation Patterns 1 and 2 mechanically — for
 the conventions whose mechanical-enforcement-where-feasible position is named
 in architecture.md lines 1031-1032 and refined by story 1.12b AC-2 / AC-3.
 
 Contract anchors (story 1.12b):
-    * AC-2 (Pattern 1 casing CI lint over the four cell-1 schema files):
+    * AC-2 (Pattern 1 casing CI lint over the cell-1 schema files):
       structural keys (field names) follow ``snake_case``; identifier values
       and entity-identifier dictionary keys follow ``kebab-case``. The
       position-classification of each surface is encoded in
@@ -112,7 +112,7 @@ _SUB_CLASSIFICATION_REGEX: re.Pattern[str] = re.compile(
 
 #: Position-classification table per AC-2.
 #:
-#: A static dictionary mapping each of the four cell-1 schema files to a
+#: A static dictionary mapping each cell-1 schema file to a
 #: per-position-class list of JSON-pointer-like glob selectors. Glob notation:
 #: ``*`` matches a single path segment; ``""`` (empty string) matches the
 #: top-level mapping. Path segments are rendered as the YAML keys (string)
@@ -150,7 +150,7 @@ _SUB_CLASSIFICATION_REGEX: re.Pattern[str] = re.compile(
 #: exempted programmatically in :func:`_walk` per Pattern 3 / ADR-006
 #: Consequence 5.
 #:
-#: Adding a new structural key to one of the four cell-1 schemas: register the
+#: Adding a new structural key to one of the cell-1 schemas: register the
 #: key's parent-path under ``field-name`` (or under the appropriate identifier
 #: position class) in this table, and add a do/don't worked example to
 #: ``docs/implementation-patterns.md``.
@@ -245,16 +245,38 @@ _CASING_RULES: dict[str, dict[str, list[str]]] = {
             "/dependencies/*/by_project_type/*/profiles",
         ],
     },
+    # ---- tea-handoff-contract.yaml — JSON Schema 2020-12 document ---------
+    # User-defined field names live under top-level ``properties:`` and inside
+    # ``/properties/ac_list/items/properties:`` (the per-AC item shape).
+    # JSON-Schema reserved keywords (``type``, ``required``, ``enum``,
+    # ``additionalProperties``, ``items``, ``description``, ``minLength``,
+    # ``minItems``, ``maxItems``, etc.) are NOT user-defined fields and are
+    # exempt by this table not registering them. The ``project_type`` enum
+    # values (``web``, ``api``, ``mobile``) are entity-identifier values and
+    # match _KEBAB_CASE_REGEX as single-segment names. Story 2.1 AC-3.
+    "schemas/tea-handoff-contract.yaml": {
+        "field-name": [
+            "/properties",
+            "/properties/ac_list/items/properties",
+        ],
+        "entity-identifier-value": [
+            "/properties/project_type/enum/*",
+        ],
+        "entity-identifier-key": [],
+    },
 }
 
 
-#: Canonical relative paths for the four cell-1 schema files. The CLI's default
-#: target set; also the position-classification-table key set.
+#: Canonical relative paths for the cell-1 schema files. The CLI's default
+#: target set; also the position-classification-table key set. Story 2.1
+#: AC-3 added ``schemas/tea-handoff-contract.yaml`` as the fifth cell-1
+#: artifact (TEA-handoff dispatch payload contract).
 _CANONICAL_TARGETS: tuple[str, ...] = (
     "schemas/envelope.schema.yaml",
     "schemas/orchestrator-event.yaml",
     "schemas/marker-taxonomy.yaml",
     "schemas/dependencies.yaml",
+    "schemas/tea-handoff-contract.yaml",
 )
 
 
@@ -421,7 +443,7 @@ def _walk(
 
 
 def lint_casing(file_key: str, raw: Any) -> list[ValidationFinding]:
-    """Pattern 1 walker for one of the four cell-1 schema files.
+    """Pattern 1 walker for one of the cell-1 schema files.
 
     ``file_key`` MUST be one of :data:`_CANONICAL_TARGETS` for the position-
     classification table to apply; for unknown keys the walker emits no
@@ -527,6 +549,7 @@ def _resolve_file_key(path: pathlib.Path) -> str:
         "orchestrator-event.yaml",
         "marker-taxonomy.yaml",
         "dependencies.yaml",
+        "tea-handoff-contract.yaml",
     }
     if name in canonical_basenames:
         return f"schemas/{name}"
@@ -556,8 +579,9 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         prog="naming-lint",
         description=(
             "Pattern 1 (YAML casing convention) + Pattern 2 (marker class "
-            "naming) static linter over the four cell-1 schema files. Story "
-            "1.12b; architecture.md § Implementation Patterns lines 919-1006."
+            "naming) static linter over the cell-1 schema files. Story "
+            "1.12b (four schemas) + Story 2.1 AC-3 (tea-handoff-contract.yaml); "
+            "architecture.md § Implementation Patterns lines 919-1006."
         ),
     )
     parser.add_argument(
@@ -565,10 +589,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         nargs="*",
         type=pathlib.Path,
         help=(
-            "Optional explicit schema paths. Default: discover the four cell-1 "
+            "Optional explicit schema paths. Default: discover the five cell-1 "
             "schemas (envelope.schema.yaml, orchestrator-event.yaml, "
-            "marker-taxonomy.yaml, dependencies.yaml) under the repo root via "
-            "find_repo_root. Test-injection flag; CI invocations omit it."
+            "marker-taxonomy.yaml, dependencies.yaml, tea-handoff-contract.yaml) "
+            "under the repo root via find_repo_root. Test-injection flag; CI "
+            "invocations omit it."
         ),
     )
     return parser

@@ -1,0 +1,186 @@
+# TEA-handoff dispatch payload contract (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 2.1 (this contract's authoring; epics.md lines 1149-1182). The
+#     standalone schema fragment co-located with docs/tea-boundary-contract.md
+#     answers the open research blocker "TEA API surface for orchestrator
+#     handoff" recorded at architecture.md line 850.
+#   - FR16 (PRD line 830) — "QA reads only the story's acceptance criteria as
+#     its verification input; it does not read TEA test files, dev tests,
+#     review findings, or commit diffs." Encoded structurally below as
+#     `tea_artifacts_consumed: { type: array, maxItems: 0 }` so a non-empty
+#     array fails JSON-Schema-2020-12 validation rather than being caught only
+#     by review-time discipline.
+#   - FR7 (PRD line 815) — orchestrator-owned env provisioning lifecycle. Full
+#     FR7 env-handle surface lands in Story 4.3 via additive MINOR bump; not
+#     present at MVP scope (Story 2.10 is AC-1-only Tier-1 evidence).
+#   - FR17 (PRD line 831) — "QA drives the running product independently — via
+#     Playwright MCP for web project types, via HTTP for API project types."
+#     The `project_type` enum is the dispatch-time discriminator selecting QA
+#     driver behavior.
+#   - NFR-R1 (PRD; ADR-005 Consequence 6) — atomic-write protocol for
+#     run-state.yaml. The orchestrator writes a payload conforming to this
+#     schema into run-state.yaml under the same atomic-rename discipline.
+#   - NFR-R8 (PRD line 952) — "story-doc canonical, run-state cache; story-doc
+#     writes complete before run-state advances." The dispatch payload's
+#     `ac_list` field is a cache projection of the story-doc's
+#     `## Acceptance Criteria` section.
+#   - ADR-002 cell-1 portability classification (architecture.md lines 99-203).
+#     This fragment is a cell-1 (Host-Portable / Methodology-Portable)
+#     artifact: the dispatch contract is primitive-agnostic and methodology-
+#     agnostic. Cell-1 schemas port unchanged across host-axis (Codex, Cursor)
+#     and methodology-axis (non-BMAD) boundaries.
+#   - ADR-003 substrate-component closure at FIVE (architecture.md lines
+#     205-333). This fragment is a cell-1 ARTIFACT, NOT a sixth substrate
+#     component. JSON-Schema-2020-12 meta-validation reuses the existing
+#     envelope_validator family; no new gate is added.
+#   - ADR-004 Consequence 1 — Task tool's prompt format is the dispatch
+#     contract surface. The dispatch payload conforming to this schema is
+#     serialized into the Task-tool prompt's structured-input section by
+#     Story 2.6's dispatch wrapper.
+#   - ADR-005 Consequence 1 (architecture.md line 509) — "the post-recovery
+#     run-state must conform to the same schema that pre-crash run-state
+#     conforms to, with the same field invariants." This fragment's
+#     invariants (notably `tea_artifacts_consumed: maxItems: 0`) propagate to
+#     the cached run-state copy unchanged.
+#   - Pattern 1 (architecture.md lines 925-955) — snake_case structural keys
+#     (story_id, run_id, project_type, ac_list, tea_artifacts_consumed,
+#     ac_id, ac_text); kebab-case identifier values where applicable
+#     (project_type enum members: web, api, mobile). Pattern 1 conformance
+#     is enforced by tools/loud-fail-harness/src/loud_fail_harness/
+#     naming_lint.py per the _CASING_RULES registration added by Story 2.1
+#     AC-3.
+#   - Pattern 2 (architecture.md line 961) — marker class naming. NOT
+#     applicable to this fragment: the schema does not introduce any new
+#     marker class identifiers (the spike found no TEA-related skip class
+#     warranting addition; see docs/tea-boundary-contract.md ## Consumers
+#     for the per-AC-5 assessment).
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors marker-taxonomy.yaml lines 30-36):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Story 2.2's run-state schema (schemas/run-state.yaml; not yet authored)
+#     consumes this fragment by JSON-Schema-2020-12 `$ref` resolution. Bumps
+#     to this fragment trigger reconciliation review with the run-state schema
+#     once 2.2 lands. Until 2.2 lands, the run-state schema's reference is a
+#     placeholder per epics.md lines 1169-1172.
+#   - Per AC-2 of Story 2.1: every additional field beyond the minimum
+#     (story_id, run_id, project_type, ac_list, tea_artifacts_consumed) MUST
+#     be justified in docs/tea-boundary-contract.md's Question (d) trace
+#     evidence at the time of the field's addition (not pre-emptively).
+#
+# Boundary doc cross-reference: see docs/tea-boundary-contract.md for the
+# prose answers, rationale citations, and trace evidence behind this schema's
+# structural shape. Drift between this file and the boundary doc is a
+# review-time finding; reconcile by editing the more-out-of-date side.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/tea-handoff-contract.yaml"
+schema_version: "1.0"
+title: "TEA-handoff dispatch payload"
+description: >-
+  The dispatch payload the orchestrator hands the QA specialist at the
+  `review → qa` lifecycle transition. Encodes the FR16 QA-independence-from-
+  TEA-artifacts invariant as the structurally-empty `tea_artifacts_consumed`
+  array. See docs/tea-boundary-contract.md for the architectural prose,
+  rationale citations, and per-question trace evidence.
+
+type: object
+required:
+  - story_id
+  - run_id
+  - project_type
+  - ac_list
+  - tea_artifacts_consumed
+additionalProperties: false
+
+properties:
+  story_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-story identifier (e.g. "2-10-minimal-qa-subagent").
+      Anchors the orchestrator's per-story branch (FR4) and PR-bundle
+      assembly (FR32). Free-form by BMAD convention; not regex-constrained
+      here.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating dispatch with the
+      run-state.yaml record per ADR-005. Required for recovery semantics
+      (post-recovery run-state must reference the same run_id per ADR-005
+      Consequence 1).
+
+  project_type:
+    type: string
+    enum: [web, api, mobile]
+    description: >-
+      Dispatch-time discriminator selecting QA driver behavior per FR17.
+      Closed enum matching schemas/dependencies.yaml's `by_project_type`
+      keys (lines 101, 117, 127, 138). `mobile` is Phase-1.5 per
+      dependencies.yaml line 125; valid at MVP for forward-compatibility
+      but the corresponding QA driver is opt-in-skip until Phase-1.5.
+
+  ac_list:
+    type: array
+    minItems: 1
+    description: >-
+      The story's acceptance criteria, sourced from the story-doc's
+      `## Acceptance Criteria` section (NFR-R8 canonical). QA's verification
+      input per FR16; no other field can substitute. The list is non-empty:
+      a story with zero ACs has no behavior to verify.
+    items:
+      type: object
+      required:
+        - ac_id
+        - ac_text
+      additionalProperties: false
+      properties:
+        ac_id:
+          type: string
+          minLength: 1
+          description: >-
+            Per-story AC identifier (e.g. "AC-1", "AC-2"). Free-form per BMAD
+            convention; not regex-constrained here. FR22b uses the AC
+            ordering as criticality signal (AC-1 first, AC-N last).
+        ac_text:
+          type: string
+          minLength: 1
+          description: >-
+            The acceptance criterion text verbatim from the story doc. QA
+            grades the running product against this text; no transformation
+            or normalization at dispatch time.
+
+  tea_artifacts_consumed:
+    type: array
+    maxItems: 0
+    description: >-
+      MUST be empty per FR16 (PRD line 830) — "QA reads only the story's
+      acceptance criteria as its verification input; it does not read TEA
+      test files, dev tests, review findings, or commit diffs." A non-empty
+      array fails this schema's validation, surfacing the FR16 violation as
+      a structural error rather than a runtime-discipline lapse. Per the
+      AC-5 spike assessment in docs/tea-boundary-contract.md, no dedicated
+      TEA-related marker class is needed; the existing envelope_validator
+      family (substrate component 1) surfaces the per-field diagnostic.
+    items:
+      type: string

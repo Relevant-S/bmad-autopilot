@@ -4,7 +4,7 @@ Story 1.12b AC-7 coverage shape (review-enforced, not CI-enforced — parallel
 to test_dependencies_validator.py's matrix):
 
 Positive paths (live cell-1 schemas):
-    [x] live four cell-1 schemas pass with zero findings  → test_live_schemas_pass_clean
+    [x] live cell-1 schemas pass with zero findings       → test_live_schemas_pass_clean
     [x] CLI main([]) on live schemas exits 0              → test_main_no_args_exits_zero
 
 Pattern 1 negative paths (synthetic fixtures):
@@ -62,8 +62,8 @@ from loud_fail_harness.naming_lint import (
 
 
 def test_live_schemas_pass_clean(capsys: pytest.CaptureFixture[str]) -> None:
-    """The four cell-1 schemas at this story's landing time conform to
-    Pattern 1 + Pattern 2 (story 1.12b AC-7 positive path)."""
+    """The cell-1 schemas conform to Pattern 1 + Pattern 2 (story 1.12b AC-7
+    positive path; story 2.1 AC-3 added schemas/tea-handoff-contract.yaml)."""
     assert main([]) == 0
     captured = capsys.readouterr()
     assert "OK" in captured.out
@@ -465,14 +465,15 @@ def test_finding_carries_named_invariant_fields() -> None:
 # ---------- Position-classification table sanity ---------------------------
 
 
-def test_casing_rules_cover_all_four_cell_one_schemas() -> None:
-    """The position-classification table has an entry for each of the four
-    cell-1 schema files (story 1.12b AC-2)."""
+def test_casing_rules_cover_all_cell_one_schemas() -> None:
+    """The position-classification table has an entry for each cell-1 schema
+    file (story 1.12b AC-2; story 2.1 AC-3 added schemas/tea-handoff-contract.yaml)."""
     expected = {
         "schemas/envelope.schema.yaml",
         "schemas/orchestrator-event.yaml",
         "schemas/marker-taxonomy.yaml",
         "schemas/dependencies.yaml",
+        "schemas/tea-handoff-contract.yaml",
     }
     assert set(_CASING_RULES.keys()) == expected
 
