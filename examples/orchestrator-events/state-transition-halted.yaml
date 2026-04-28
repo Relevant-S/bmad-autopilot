@@ -1,0 +1,22 @@
+# Canonical positive `state-transition-halted` event.
+#
+# Sources:
+#   - PRD FR6 (orchestrator halts state advancement when a specialist returns
+#     non-pass status; halts at the current state — does not advance)
+#   - Story 2.4 (BMAD lifecycle state-transition logic; the
+#     `state-transition-halted` `oneOf:` branch added in this story's schema
+#     edit; emitted by `loud_fail_harness.lifecycle_state_machine.record_halt`)
+#
+# Per Pattern 3, event class names are kebab-case; field names within events
+# are snake_case. Identifier-value enums (`halt_reason`, `halted_at_state`,
+# `triggering_specialist`, `last_envelope_status`) are kebab-case per Pattern 1.
+# Validates against schemas/orchestrator-event.yaml (schema_version: 1.1).
+
+event_class: state-transition-halted
+event_id: ev-2-4-seed-0001
+timestamp: "2026-04-28T00:00:00Z"
+story_id: "2-4"
+halted_at_state: review
+halt_reason: non-pass-envelope
+triggering_specialist: review-bmad
+last_envelope_status: fail

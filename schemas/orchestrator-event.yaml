@@ -61,7 +61,7 @@
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://bmad-autopilot.local/schemas/orchestrator-event.yaml"
-schema_version: "1.0"
+schema_version: "1.1"
 title: "Orchestrator Event"
 description: >-
   Canonical orchestrator-emitted event. The orchestrator emits one of these
@@ -86,6 +86,7 @@ properties:
       - specialist-dispatched
       - specialist-returned
       - state-transition
+      - state-transition-halted
       - retry-attempted
       - escalation-fired
       - env-provisioned
@@ -207,6 +208,39 @@ oneOf:
         then: { properties: { to_state: { not: { const: qa } } } }
       - if: { properties: { from_state: { const: done } } }
         then: { properties: { to_state: { not: { const: done } } } }
+
+  # ---- state-transition-halted (FR6) ---------------------------------------
+  - type: object
+    additionalProperties: false
+    required:
+      - event_class
+      - event_id
+      - timestamp
+      - story_id
+      - halted_at_state
+      - halt_reason
+    properties:
+      event_class: { const: state-transition-halted }
+      event_id: { type: string, minLength: 1 }
+      timestamp: { type: string, minLength: 1 }
+      story_id: { type: string, minLength: 1 }
+      halted_at_state:
+        type: string
+        enum: [ready-for-dev, in-progress, review, qa, done]
+      halt_reason:
+        type: string
+        enum:
+          - non-pass-envelope
+          - attempted-backward-transition
+          - attempted-skip-transition
+      triggering_specialist:
+        oneOf:
+          - { type: string, enum: [dev, review-bmad, qa, lad] }
+          - { type: "null" }
+      last_envelope_status:
+        oneOf:
+          - { type: string, enum: [pass, fail, decision-needed, blocked] }
+          - { type: "null" }
 
   # ---- retry-attempted (FR8, FR10) -----------------------------------------
   - type: object

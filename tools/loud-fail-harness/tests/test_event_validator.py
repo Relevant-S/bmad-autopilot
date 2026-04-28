@@ -4,11 +4,12 @@ This docstring IS the contract-coverage checklist required by AC-4. Reviewers
 verify every row maps to at least one passing test in this module. The matrix
 is review-enforced, NOT CI-enforced (parallel to story 1.2 AC-4).
 
-Per-event-class positive payloads (AC-4 — one per class, 9 total):
+Per-event-class positive payloads (AC-4 — one per class, 10 total):
     [x] specialist-dispatched valid                              → test_positive_specialist_dispatched
     [x] specialist-returned valid                                → test_positive_specialist_returned
     [x] state-transition valid                                   → test_positive_state_transition
     [x] state-transition self-transition rejected (P5)           → test_state_transition_self_transition_rejected
+    [x] state-transition-halted valid                            → test_positive_state_transition_halted
     [x] retry-attempted valid                                    → test_positive_retry_attempted
     [x] retry-attempted empty affected_files rejected (P6)       → test_retry_attempted_empty_affected_files_rejected
     [x] escalation-fired valid                                   → test_positive_escalation_fired
@@ -17,10 +18,11 @@ Per-event-class positive payloads (AC-4 — one per class, 9 total):
     [x] hook-fired valid                                         → test_positive_hook_fired
     [x] cost-event valid                                         → test_positive_cost_event
 
-Per-event-class negative-required-field tests (AC-4 — one per class, 9 total):
+Per-event-class negative-required-field tests (AC-4 — one per class, 10 total):
     [x] specialist-dispatched missing `specialist`               → test_missing_required_per_class[specialist-dispatched]
     [x] specialist-returned missing `status`                     → test_missing_required_per_class[specialist-returned]
     [x] state-transition missing `from_state`                    → test_missing_required_per_class[state-transition]
+    [x] state-transition-halted missing `halted_at_state`        → test_missing_required_per_class[state-transition-halted]
     [x] retry-attempted missing `affected_files`                 → test_missing_required_per_class[retry-attempted]
     [x] escalation-fired missing `escalation_class`              → test_missing_required_per_class[escalation-fired]
     [x] env-provisioned missing `env_kind`                       → test_missing_required_per_class[env-provisioned]
@@ -138,6 +140,18 @@ def _state_transition(**overrides: object) -> dict:
     return base
 
 
+def _state_transition_halted(**overrides: object) -> dict:
+    base = _common_top_level(
+        event_class="state-transition-halted",
+        halted_at_state="review",
+        halt_reason="non-pass-envelope",
+        triggering_specialist="review-bmad",
+        last_envelope_status="fail",
+    )
+    base.update(overrides)
+    return base
+
+
 def _retry_attempted(**overrides: object) -> dict:
     base = _common_top_level(
         event_class="retry-attempted",
@@ -204,6 +218,7 @@ _BUILDERS = {
     "specialist-dispatched": _specialist_dispatched,
     "specialist-returned": _specialist_returned,
     "state-transition": _state_transition,
+    "state-transition-halted": _state_transition_halted,
     "retry-attempted": _retry_attempted,
     "escalation-fired": _escalation_fired,
     "env-provisioned": _env_provisioned,
@@ -243,6 +258,10 @@ def test_positive_specialist_returned(schema: dict) -> None:
 
 def test_positive_state_transition(schema: dict) -> None:
     assert validate_event(_state_transition(), schema) == []
+
+
+def test_positive_state_transition_halted(schema: dict) -> None:
+    assert validate_event(_state_transition_halted(), schema) == []
 
 
 def test_state_transition_self_transition_rejected(schema: dict) -> None:
@@ -294,6 +313,7 @@ def test_positive_cost_event(schema: dict) -> None:
         ("specialist-dispatched", "specialist"),
         ("specialist-returned", "status"),
         ("state-transition", "from_state"),
+        ("state-transition-halted", "halted_at_state"),
         ("retry-attempted", "affected_files"),
         ("escalation-fired", "escalation_class"),
         ("env-provisioned", "env_kind"),
