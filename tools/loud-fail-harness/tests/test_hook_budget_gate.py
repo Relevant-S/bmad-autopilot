@@ -751,26 +751,18 @@ def test_gate_result_frozen_not_hashable() -> None:
 
 
 def test_canonical_corpus_baseline_zero() -> None:
-    """At story 1.9's landing time the canonical hooks/ dir does NOT exist.
+    """At story 2.7's landing time the canonical hooks/ dir contains the
+    three architecturally documented hook scripts (subagent-stop.sh,
+    stop.sh, session-start.sh) per architecture.md View 1 lines
+    1073-1076. The gate's CORRECT POSTURE on the canonical corpus is
+    exit 0 with 3 passing hooks, 0 count violations, 0 line violations.
 
-    This test asserts the gate's CORRECT POSTURE at landing time. Once
-    story 2.7 lands the canonical 3-hook set, this test's expected
-    Summary line shifts to::
-
-        Summary: 3 passing hook(s), 0 count-violation finding(s),
-        0 line-violation finding(s).
-
-    Flag this co-evolution seam to the dev landing 2.7 — the test does
-    NOT use ``tmp_path``; it uses the actual canonical ``hooks/``
-    directory via ``find_repo_root``.
+    The test does NOT use ``tmp_path``; it uses the actual canonical
+    ``hooks/`` directory via ``find_repo_root``.
     """
     rc, out, err = _capture_main([])
-    # The canonical dir may or may not exist depending on test ordering and
-    # whether the dev has experimented locally. Both branches are AC-5 exit 0.
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    # Whatever the discovered count (0 at landing time, 3 at 2.7's landing),
-    # it must be ≤ 3 (count_violation empty) AND every entry must be
-    # under-budget (line_violation empty).
+    assert "3 passing hook(s)" in out
     assert "0 count-violation finding(s)" in out
     assert "0 line-violation finding(s)" in out
 
