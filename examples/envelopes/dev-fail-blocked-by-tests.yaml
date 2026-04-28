@@ -1,0 +1,33 @@
+# Dev specialist envelope — status=fail, blocked by failing tests.
+#
+# Source list: PRD Reference Artifacts (line 653) names five canonical envelopes.
+# This fixture lands with Story 2.8 (minimal Dev-wrapper subagent) to extend
+# the Story 1.2 corpus with the failing-run shape: bmad-dev-story implementation
+# completed structurally but the test suite reports a failure; the orchestrator's
+# flow policy routes the patch-bucket finding into a retry per FR9 (Story 5.x).
+# Per FR50, the SubagentStop hook still attempts a commit on status=fail to
+# capture partial state for diagnostic visibility.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: fail
+artifacts:
+  - bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/example_module.py
+  - bmad-autopilot/tools/loud-fail-harness/tests/test_example_module.py
+findings:
+  - id: dev-002
+    source: merged
+    title: Unit test test_example_edge_case fails
+    detail: >-
+      Implementation produced an off-by-one when the input list is empty;
+      the new unit test covering AC-3 fails with AssertionError. Patch
+      bucket — orchestrator should route into a Dev fix-only retry.
+    location: bmad-autopilot/tools/loud-fail-harness/tests/test_example_module.py:42
+    bucket: patch
+    severity: HIGH
+rationale: >-
+  Implementation landed structurally but the new edge-case test fails;
+  partial state captured for diagnostic visibility per FR50.
+proposed_commit_message: "wip(harness): partial implementation; edge-case test fails"
+scope_expanded_to: []

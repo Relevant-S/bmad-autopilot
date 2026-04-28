@@ -1,0 +1,31 @@
+# Dev specialist envelope — status=pass with deferred findings.
+#
+# Source list: PRD Reference Artifacts (line 653) names five canonical envelopes.
+# This fixture lands with Story 2.8 (minimal Dev-wrapper subagent) to extend
+# the Story 1.2 corpus with a representative shape: pass-but-with-findings the
+# orchestrator's flow policy keeps the loop advancing despite (bucket=defer).
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator) and against schemas/envelope.schema.yaml's $defs/finding
+# subschema by the same gate's per-finding traversal.
+
+status: pass
+artifacts:
+  - bmad-autopilot/agents/dev-wrapper.md
+  - bmad-autopilot/examples/envelopes/dev-pass-with-findings.yaml
+findings:
+  - id: dev-001
+    source: merged
+    title: TODO comment left in dev-wrapper prose
+    detail: >-
+      Encountered a TODO line in the wrapper draft suggesting future expansion
+      of the procedure section; deferred to Story 5.3 surface where retry-mode
+      prose is in scope.
+    location: bmad-autopilot/agents/dev-wrapper.md:0
+    bucket: defer
+    severity: LOW
+rationale: >-
+  Implemented the Dev wrapper agent definition; tests pass; one informational
+  observation deferred to Epic 5.
+proposed_commit_message: "feat(agents): land dev-wrapper agent definition (story 2.8)"
+scope_expanded_to: []

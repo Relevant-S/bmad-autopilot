@@ -1,0 +1,20 @@
+# Dev specialist envelope — status=pass, no-op (no artifacts, no findings).
+#
+# Source list: PRD Reference Artifacts (line 653) names five canonical envelopes.
+# This fixture lands with Story 2.8 (minimal Dev-wrapper subagent) to extend
+# the Story 1.2 corpus with the no-op confirmation shape: a story whose AC
+# requires only schema-doc updates already committed by an earlier specialist;
+# bmad-dev-story observes the work is already done and emits a pass envelope
+# with empty artifacts and empty findings.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts: []
+findings: []
+rationale: >-
+  Story acceptance criteria already satisfied by prior commit; no
+  changes required and no findings to surface.
+proposed_commit_message: "chore: no-op confirmation"
+scope_expanded_to: []
