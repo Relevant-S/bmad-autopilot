@@ -1,0 +1,23 @@
+# Canonical positive `specialist-returned` event.
+#
+# Sources:
+#   - PRD ADR-001 Consequence 1 (orchestrator emits a schema-validated event
+#     at every seam transition; specialist-returned is the post-dispatch
+#     pair to specialist-dispatched per FR3 + ADR-004)
+#   - Story 2.6 (substrate library specialist_dispatch.py — wire-up proof
+#     for the event-validator CI gate against the canonical
+#     `specialist-returned` event class; pairs with the existing
+#     `specialist-dispatched.yaml` from Story 1.3's seed)
+#
+# Per Pattern 3, event class names are kebab-case; field names within events
+# are snake_case. Validates against schemas/orchestrator-event.yaml (post-bump
+# 1.2 — the `status` enum includes `decision-needed` per Story 2.6's AC-8).
+
+event_class: specialist-returned
+event_id: ev-2-6-seed-0001
+timestamp: "2026-04-29T00:00:00Z"
+story_id: "2.6"
+specialist: dev
+prompt_id: prompt-seed-0001
+retry_attempt: 0
+status: pass

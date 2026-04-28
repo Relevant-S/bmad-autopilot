@@ -61,7 +61,7 @@
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://bmad-autopilot.local/schemas/orchestrator-event.yaml"
-schema_version: "1.1"
+schema_version: "1.2"
 title: "Orchestrator Event"
 description: >-
   Canonical orchestrator-emitted event. The orchestrator emits one of these
@@ -169,7 +169,7 @@ oneOf:
         minimum: 0
       status:
         type: string
-        enum: [pass, fail, blocked]
+        enum: [pass, fail, decision-needed, blocked]
       envelope_artifact_path:
         type: string
         minLength: 1
