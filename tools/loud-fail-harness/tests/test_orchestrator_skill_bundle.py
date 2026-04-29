@@ -57,6 +57,7 @@ from __future__ import annotations
 import inspect
 import pathlib
 import re
+import sys
 
 import pytest
 import yaml
@@ -255,7 +256,7 @@ def test_find_repo_root_not_at_module_collection_time() -> None:
     breaks pytest collection in alien environments. The fixture
     :func:`skill_bundle_root` calls it at fixture-setup time only.
     """
-    src = inspect.getsource(__import__(__name__))
+    src = inspect.getsource(sys.modules[__name__])
     # Strip the module docstring, then look for find_repo_root() invocations
     # OUTSIDE function/method bodies. Crude but sufficient: the only top-
     # level statements should be imports + parametrize lists + fixture +
