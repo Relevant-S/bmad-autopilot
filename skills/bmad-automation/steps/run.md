@@ -43,15 +43,20 @@ Invoke `advance_run_state(run_state_path=..., next_state=initial_run_state, stor
 
 ### (e) Advance to in-progress
 
-Construct a `next_state` `RunState` with `current_state="in-progress"` (all other fields identical to the initial state). Invoke `commit_transition(run_state_path=..., current_state=initial_run_state, next_state=next_state, story_doc_callback=story_doc_callback_factory(story_id), event_log_appender=...)` (Story 2.4's helper).
+BEFORE invoking `commit_transition`, construct the per-run streaming substrate per Story 2.12. The `event_log_appender` is the SAME closure reused at every seam in this run (here at step (e), again at step (f)'s dispatch protocol per `steps/dispatch.md`, and at every subsequent specialist return); construct it ONCE so all events flow into the same events.jsonl file AND the same terminal stream:
+
+1. Resolve the canonical event-log path via `event_log_path = default_event_log_path(qa_evidence_root=pathlib.Path("_bmad-output/qa-evidence"), story_id=story_id, run_id=run_id)` (Story 2.12's `loud_fail_harness.event_streaming` substrate library).
+2. Construct the appender via `event_log_appender = make_event_log_appender(event_log_path, stream=sys.stdout, fsync=True)`. The closure conforms to Story 2.4's `EventLogAppender = Callable[[dict[str, Any]], None]` type alias verbatim — signature `(event: dict[str, Any]) -> None`. It performs JSONL persistence FIRST, terminal render SECOND per Story 2.12 AC-4's durability invariant.
+
+Construct a `next_state` `RunState` with `current_state="in-progress"` (all other fields identical to the initial state). Invoke `commit_transition(run_state_path=..., current_state=initial_run_state, next_state=next_state, story_doc_callback=story_doc_callback_factory(story_id), event_log_appender=event_log_appender)` (Story 2.4's helper) — the appender variable from step (1) above is passed in; the substrate invokes it once on the success path AFTER `advance_run_state` returns.
 
 The factory is invoked HERE (not at module top-level; not at step (d)) because step (e) is the first step where a story-doc write is structurally required — the story-doc's lifecycle field transitions from `ready-for-dev` to `in-progress`, and the callback performs that write per Pattern 4 / NFR-R8 (story-doc canonical write first via callback; then atomic run-state advance).
 
-Propagate `RunStateAdvanceBlocked`, `InvalidLifecycleTransition`, `OSError` unchanged.
+Propagate `RunStateAdvanceBlocked`, `InvalidLifecycleTransition`, `OSError` unchanged. `OSError` raised by the streaming appender (disk-full / permission-denied / etc. on the events.jsonl write) propagates verbatim per Pattern 5; the durability invariant is "every line in events.jsonl is durable; the terminal stream is best-effort visibility".
 
 ### (f) Dispatch the first specialist (Dev)
 
-Invoke `dispatch_callback(specialist="dev", story_id=story_id, run_state_path=..., story_doc_resolution=..., event_log_appender=...)`. The callback returns a `DispatchCallbackResult`.
+Invoke `dispatch_callback(specialist="dev", story_id=story_id, run_state_path=..., story_doc_resolution=..., event_log_appender=event_log_appender)` — REUSE the same `event_log_appender` closure constructed at step (e) so every dispatch / return event in this run flows into the same events.jsonl + terminal stream. The callback returns a `DispatchCallbackResult`.
 
 At Story 2.6's landing, the canonical `dispatch_callback` is constructed via `make_task_tool_dispatch_callback(registry=..., log_root=..., agent_definition_dir=..., timeout_seconds=900)` (the substrate factory at `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py`). The factory's returned closure is structurally compatible with Story 2.5's wildcard `DispatchCallback = Callable[..., DispatchCallbackResult]` — no edit to `orchestrator_run_entry.py` is required. The closure's body is the LLM-runtime protocol per `steps/dispatch.md`: pre-dispatch substrate composition (build the payload, emit the `specialist-dispatched` event), Task-tool invocation with wall-clock timeout monitoring, post-dispatch substrate composition (validate the return envelope, persist the diagnostic log, emit the `specialist-returned` event).
 
@@ -74,6 +79,7 @@ The four pre-flight named-invariant exceptions (`StoryDocNotFound` / `StoryDocMa
 ## Cross-references
 
 - Canonical Python composition: `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/orchestrator_run_entry.py`
+- Per-seam streaming substrate (Story 2.12): `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/event_streaming.py` — exports `make_event_log_appender(event_log_path, *, stream=sys.stdout, fsync=True)` + `default_event_log_path(qa_evidence_root, story_id, run_id)` + `format_event_for_stream(event)`; the `EventLogAppender` closure persists JSONL FIRST to `_bmad-output/qa-evidence/{story_id}/{run_id}/events.jsonl`, then renders one line per event to `stream`.
 - Specialist-dispatch substrate library + LLM-runtime protocol: `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py` + `bmad-autopilot/skills/bmad-automation/steps/dispatch.md`
 - Architectural commitment: `bmad-autopilot/docs/architecture.md` (ADR-001 / ADR-002 / ADR-003 / ADR-004 / ADR-005 / Pattern 4 / Pattern 5)
 - Story-doc section allowlist: `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py`

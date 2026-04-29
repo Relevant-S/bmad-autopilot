@@ -1134,6 +1134,88 @@ def test_assembler_does_not_mutate_run_state(
     assert post_bytes == pre_bytes, "run-state must NOT be mutated by the assembler"
 
 
+def test_bundle_assembly_unaffected_by_runtime_duration_ms_addition(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 2.12 AC-5: adding ``runtime_duration_ms`` to the dispatch log
+    payload does NOT affect bundle assembly output.
+
+    The assembler reads ONLY the ``return_envelope`` field from each
+    log file (per AC-5 of Story 2.11); the new ``runtime_duration_ms``
+    field is invisible. This test seeds three logs WITH the new field
+    populated and asserts the rendered bundle is byte-identical to the
+    canonical baseline produced by the standard ``_seed_dispatch_log``
+    helper (which does NOT include the field).
+    """
+    # Baseline: assemble bundle WITHOUT the new field.
+    _, baseline_bundle = _assemble(
+        tmp_path=tmp_path / "baseline",
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    baseline_body = baseline_bundle.read_text(encoding="utf-8")
+
+    # With-field run: hand-author logs that include runtime_duration_ms
+    # then run the assembler against them.
+    run_root = tmp_path / "with-field"
+    run_root.mkdir()
+    rs_path = _write_run_state_yaml(
+        run_root / "_bmad" / "automation" / "run-state.yaml"
+    )
+    logs_root = run_root / "qa-evidence"
+    bundle_root = run_root / "pr-bundles"
+
+    for specialist, envelope in (
+        ("dev", canonical_dev_envelope),
+        ("review-bmad", canonical_review_envelope),
+        ("qa", canonical_qa_envelope),
+    ):
+        log_path = (
+            logs_root
+            / "sample-auto-001"
+            / "run-2026-04-29-001"
+            / "logs"
+            / f"{specialist}-1.log"
+        )
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        # Same payload shape as _seed_dispatch_log PLUS the new
+        # runtime_duration_ms field — proves the assembler ignores it.
+        payload = {
+            "dispatched_specialist": specialist,
+            "story_id": "sample-auto-001",
+            "attempt_number": 1,
+            "agent_definition_path": f"agents/{specialist}.md",
+            "acceptance_criteria": [{"ac_id": "AC-1", "text": "stub"}],
+            "dispatch_timestamp": "2026-04-29T12:00:00+00:00",
+            "return_timestamp": "2026-04-29T12:01:00+00:00",
+            "return_envelope": envelope,
+            "runtime_duration_ms": 60_000,  # Story 2.12 AC-5 additive field
+        }
+        log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    with_field_bundle = assemble_bundle(
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        run_state_path=rs_path,
+        logs_root=logs_root,
+        bundle_root=bundle_root,
+        marker_registry=runtime_marker_registry,
+        generated_at=datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc),
+    ).bundle_path
+    with_field_body = with_field_bundle.read_text(encoding="utf-8")
+
+    assert with_field_body == baseline_body, (
+        "bundle output must be byte-identical regardless of runtime_duration_ms presence "
+        "(AC-5: assembler reads only return_envelope from each log)"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # AC-7 — canonical example bundle fixture                                     #
 # --------------------------------------------------------------------------- #

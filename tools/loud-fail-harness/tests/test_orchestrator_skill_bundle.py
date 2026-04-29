@@ -282,3 +282,46 @@ def test_find_repo_root_not_at_module_collection_time() -> None:
                 "find_repo_root() must not be called at module collection "
                 "time; use a fixture per Epic 1 retro Action #1"
             )
+
+
+# --------------------------------------------------------------------------- #
+# Story 2.12 AC-6 — streaming substrate wiring presence test                  #
+# --------------------------------------------------------------------------- #
+
+
+def test_run_step_names_make_event_log_appender(
+    skill_bundle_root: pathlib.Path,
+) -> None:
+    """Story 2.12 AC-6: ``steps/run.md`` names the streaming substrate.
+
+    Structural assertion that the wiring landed in prose: the file
+    references both ``make_event_log_appender`` (the appender factory)
+    and ``default_event_log_path`` (the canonical path resolver) from
+    Story 2.12's :mod:`loud_fail_harness.event_streaming` substrate.
+    NOT a behavioral test of LLM-runtime execution — that's the
+    practitioner's domain at run time.
+    """
+    run_md = (skill_bundle_root / "steps" / "run.md").read_text(encoding="utf-8")
+    assert "make_event_log_appender" in run_md, (
+        "steps/run.md must name make_event_log_appender (Story 2.12 AC-6 wiring)"
+    )
+    assert "default_event_log_path" in run_md, (
+        "steps/run.md must name default_event_log_path (Story 2.12 AC-6 wiring)"
+    )
+    assert "event_streaming" in run_md, (
+        "steps/run.md must cross-reference the event_streaming substrate "
+        "module (Story 2.12 AC-6 wiring)"
+    )
+
+
+def test_workflow_md_references_event_streaming_substrate(
+    skill_bundle_root: pathlib.Path,
+) -> None:
+    """Story 2.12 AC-6: ``workflow.md`` cross-references the streaming substrate."""
+    workflow_md = (skill_bundle_root / "workflow.md").read_text(encoding="utf-8")
+    assert "event_streaming.py" in workflow_md, (
+        "workflow.md must cross-reference event_streaming.py (Story 2.12 AC-6)"
+    )
+    assert "make_event_log_appender" in workflow_md, (
+        "workflow.md must name make_event_log_appender (Story 2.12 AC-6)"
+    )

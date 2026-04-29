@@ -774,6 +774,8 @@ def test_persist_dispatch_log_creates_missing_parent_dirs(
         "dispatch_timestamp",
         "return_timestamp",
         "return_envelope",
+        # Story 2.12 AC-5: additive runtime_duration_ms field.
+        "runtime_duration_ms",
     ],
 )
 def test_persist_dispatch_log_log_shape_carries_nfr_o3_fields(
@@ -782,7 +784,7 @@ def test_persist_dispatch_log_log_shape_carries_nfr_o3_fields(
     dispatch_payload: SpecialistDispatchPayload,
     fixed_timestamp: datetime,
 ) -> None:
-    """AC-4: every NFR-O3 field is present in the persisted JSON."""
+    """AC-4 + Story 2.12 AC-5: every NFR-O3 field is present in the persisted JSON."""
     log_root = tmp_path / "logs"
     log_path = persist_dispatch_log(
         dispatch_payload,
@@ -793,6 +795,129 @@ def test_persist_dispatch_log_log_shape_carries_nfr_o3_fields(
     )
     body = json.loads(log_path.read_text(encoding="utf-8"))
     assert field in body
+
+
+def test_persist_dispatch_log_includes_runtime_duration_ms(
+    tmp_path: pathlib.Path,
+    story_doc_resolution: StoryDocResolution,
+    agent_definition_path: pathlib.Path,
+) -> None:
+    """Story 2.12 AC-5: ``runtime_duration_ms`` = (return - dispatch) in milliseconds.
+
+    Constructs a payload with dispatch_timestamp = 2026-04-29T12:00:00Z;
+    invokes persist_dispatch_log with return_timestamp = 2026-04-29T12:00:01.500Z
+    (1.5 seconds later); asserts ``payload["runtime_duration_ms"] == 1500``.
+    """
+    dispatch_ts = datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc)
+    return_ts = datetime(2026, 4, 29, 12, 0, 1, 500_000, tzinfo=timezone.utc)
+    payload = build_dispatch_payload(
+        specialist="dev",
+        story_id="2.12",
+        attempt_number=0,
+        story_doc_resolution=story_doc_resolution,
+        agent_definition_path=agent_definition_path,
+        prompt_body_renderer=default_prompt_body_renderer,
+        dispatch_timestamp_factory=lambda: dispatch_ts,
+    )
+    log_root = tmp_path / "logs"
+    log_path = persist_dispatch_log(
+        payload,
+        {"status": "pass", "rationale": "ok"},
+        return_timestamp=return_ts,
+        log_root=log_root,
+        run_id="run-001",
+    )
+    body = json.loads(log_path.read_text(encoding="utf-8"))
+    assert body["runtime_duration_ms"] == 1500
+
+
+def test_persist_dispatch_log_runtime_duration_ms_is_integer(
+    tmp_path: pathlib.Path,
+    story_doc_resolution: StoryDocResolution,
+    agent_definition_path: pathlib.Path,
+) -> None:
+    """Story 2.12 AC-5: ``runtime_duration_ms`` is always ``int`` (NOT float).
+
+    Millisecond resolution matches diagnostic-correlation precision;
+    sub-millisecond precision is noise. A sub-millisecond duration
+    truncates to 0; a multi-second duration carries the full integer
+    millisecond count.
+    """
+    dispatch_ts = datetime(2026, 4, 29, 12, 0, 0, 0, tzinfo=timezone.utc)
+    # Sub-millisecond duration: 100 microseconds → 0 ms (truncation).
+    submilli_return = datetime(2026, 4, 29, 12, 0, 0, 100, tzinfo=timezone.utc)
+    payload = build_dispatch_payload(
+        specialist="dev",
+        story_id="2.12",
+        attempt_number=0,
+        story_doc_resolution=story_doc_resolution,
+        agent_definition_path=agent_definition_path,
+        prompt_body_renderer=default_prompt_body_renderer,
+        dispatch_timestamp_factory=lambda: dispatch_ts,
+    )
+    log_root = tmp_path / "logs"
+    log_path = persist_dispatch_log(
+        payload,
+        {"status": "pass", "rationale": "ok"},
+        return_timestamp=submilli_return,
+        log_root=log_root,
+        run_id="run-001",
+    )
+    body = json.loads(log_path.read_text(encoding="utf-8"))
+    assert isinstance(body["runtime_duration_ms"], int)
+    # Multi-second duration: 5.250 seconds → 5250 ms.
+    multisec_return = datetime(2026, 4, 29, 12, 0, 5, 250_000, tzinfo=timezone.utc)
+    log_path2 = persist_dispatch_log(
+        payload,
+        {"status": "pass", "rationale": "ok"},
+        return_timestamp=multisec_return,
+        log_root=log_root / "second",
+        run_id="run-002",
+    )
+    body2 = json.loads(log_path2.read_text(encoding="utf-8"))
+    assert body2["runtime_duration_ms"] == 5250
+    assert isinstance(body2["runtime_duration_ms"], int)
+
+
+def test_persist_dispatch_log_rejects_negative_runtime_duration(
+    tmp_path: pathlib.Path,
+    story_doc_resolution: StoryDocResolution,
+    agent_definition_path: pathlib.Path,
+) -> None:
+    """Story 2.12 review patch: negative ``runtime_duration_ms`` is loud-fail rejected.
+
+    Pattern 5 doctrine: a negative duration (return_timestamp before
+    dispatch_timestamp) means clock skew / NTP backwards step / VM
+    time-warp — a programmer-error invariant violation, not a value
+    to silently clamp. ``persist_dispatch_log`` raises ``ValueError``
+    instead of writing the corrupted log.
+    """
+    dispatch_ts = datetime(2026, 4, 29, 12, 0, 5, tzinfo=timezone.utc)
+    # Return BEFORE dispatch — clock skewed backwards.
+    return_ts = datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc)
+    payload = build_dispatch_payload(
+        specialist="dev",
+        story_id="2.12",
+        attempt_number=0,
+        story_doc_resolution=story_doc_resolution,
+        agent_definition_path=agent_definition_path,
+        prompt_body_renderer=default_prompt_body_renderer,
+        dispatch_timestamp_factory=lambda: dispatch_ts,
+    )
+    log_root = tmp_path / "logs"
+    with pytest.raises(ValueError, match="negative runtime_duration_ms"):
+        persist_dispatch_log(
+            payload,
+            {"status": "pass", "rationale": "ok"},
+            return_timestamp=return_ts,
+            log_root=log_root,
+            run_id="run-skew",
+        )
+    # No log file should have been written when the guard fires.
+    assert not any(log_root.rglob("*.log")), (
+        "persist_dispatch_log must NOT write a log when the negative-duration "
+        "guard rejects the inputs"
+    )
 
 
 def test_persist_dispatch_log_naive_datetime_assertion_fires(

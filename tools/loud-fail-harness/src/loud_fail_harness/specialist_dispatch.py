@@ -673,6 +673,22 @@ def persist_dispatch_log(
     unchanged; the caller (the orchestrator skill at runtime) catches
     and surfaces via the orchestrator-event log.
 
+    JSON payload fields (NFR-O3 + Story 2.12 AC-5):
+        * ``dispatched_specialist`` — ``payload.specialist`` (kebab-case).
+        * ``story_id`` — ``payload.story_id``.
+        * ``attempt_number`` — 0-indexed retry counter.
+        * ``agent_definition_path`` — string form of the agent file
+          read AS DATA per FR62 + ADR-004.
+        * ``acceptance_criteria`` — list of ``{ac_id, text}`` dicts.
+        * ``dispatch_timestamp`` — ISO-8601 UTC.
+        * ``return_timestamp`` — ISO-8601 UTC.
+        * ``return_envelope`` — the validated envelope dict.
+        * ``runtime_duration_ms`` — milliseconds elapsed between
+          ``dispatch_timestamp`` and ``return_timestamp`` (``int``;
+          additive per Story 2.12 AC-5; existing readers including
+          Story 2.11's :func:`bundle_assembly.assemble_bundle` per
+          its AC-5 read ONLY ``return_envelope`` and are unaffected).
+
     Args:
         payload: The :class:`SpecialistDispatchPayload` constructed by
             :func:`build_dispatch_payload`.
@@ -698,6 +714,20 @@ def persist_dispatch_log(
         "got naive datetime — programmer-error invariant"
     )
 
+    duration_ms = int(
+        (return_timestamp - payload.dispatch_timestamp).total_seconds() * 1000
+    )
+    if duration_ms < 0:
+        raise ValueError(
+            "persist_dispatch_log: negative runtime_duration_ms "
+            f"({duration_ms} ms) — return_timestamp "
+            f"({return_timestamp.isoformat()}) precedes dispatch_timestamp "
+            f"({payload.dispatch_timestamp.isoformat()}); clock skew or "
+            "monotonicity violation. Pattern 5 loud-fail: a negative duration "
+            "is a programmer-error / NTP-step invariant violation, not a "
+            "value to clamp silently."
+        )
+
     log_path = log_root / LOG_PATH_TEMPLATE.format(
         story_id=payload.story_id,
         run_id=run_id,
@@ -718,6 +748,14 @@ def persist_dispatch_log(
         "dispatch_timestamp": payload.dispatch_timestamp.isoformat(),
         "return_timestamp": return_timestamp.isoformat(),
         "return_envelope": return_envelope,
+        # Story 2.12 AC-5: additive ``runtime_duration_ms`` field
+        # (milliseconds elapsed between dispatch and return). Negative
+        # values are loud-fail-rejected above per Pattern 5 — clock
+        # skew / NTP backwards step is a programmer-error invariant,
+        # not a value to silently clamp. Additive: existing readers
+        # (Story 2.11's ``bundle_assembly`` per its AC-5 reads ONLY
+        # ``return_envelope``) are unaffected.
+        "runtime_duration_ms": duration_ms,
     }
 
     tmp = tempfile.NamedTemporaryFile(
