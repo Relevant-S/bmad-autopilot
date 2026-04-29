@@ -1,0 +1,60 @@
+# Review-BMAD specialist envelope — partial layer failure with surviving
+# layers' findings flowing through (FR28 graceful degradation).
+#
+# Source list: PRD Reference Artifacts (line 653) names canonical envelope
+# shapes. This fixture lands with Story 3.1 to extend the canonical Review-BMAD
+# corpus with the partial-layer-failure shape — the Story 3.3 consumer's input
+# fixture. NOT the orchestrator-side `review-layer-failed` marker emission
+# (which lands in Story 3.3 per epics.md lines 1671-1715); THIS fixture only
+# proves the wrapper-side `failed_layers` declaration shape per Story 3.1
+# AC-3 contract 2.
+#
+# Per FR28 graceful degradation: when one layer crashes/times-out/exits-non-zero
+# but at least one other layer surfaces findings successfully, the wrapper
+# does NOT kill the overall review. The surviving layers' findings flow
+# through the envelope normally; `failed_layers` carries the failed layer's
+# name; `status` reflects the surviving layers' verdict (here `pass` because
+# no HIGH-severity patch-bucket findings). bmad-code-review's
+# step-02-review.md line 27 already drops the failed layer's contribution
+# from the findings stream; the wrapper preserves that behavior verbatim.
+#
+# Downstream consumers: Story 3.3 (orchestrator-side `review-layer-failed`
+# marker emission per FR28) consumes THIS fixture's `failed_layers` field;
+# Story 3.4 consumes the surviving findings for PR-bundle rendering; Story
+# 3.5 audits the actual layer composition. Validated against
+# schemas/envelope.schema.yaml by the harness CI gate (envelope-validator).
+
+status: pass
+artifacts:
+  - bmad-autopilot/_bmad-output/implementation-artifacts/3-1-three-layer-parallel-pass-wiring.md
+findings:
+  - id: review-001
+    source: blind
+    title: Diff-only adversarial pass identified no contract violations
+    detail: >-
+      Blind Hunter inspected the diff in isolation (no spec, no project context)
+      and found no contract violations; one LOW-severity informational
+      observation about prose density was triaged to defer.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:1
+    bucket: defer
+    severity: LOW
+  - id: review-002
+    source: auditor
+    title: Story-doc acceptance criteria covered by surviving layers' verdict
+    detail: >-
+      Acceptance Auditor reviewed the diff against the story-doc acceptance
+      criteria and the spec context docs; the layer ran to completion and
+      reported one LOW-severity informational finding. Layer-attribution
+      preserved (source=auditor); the layer reached a verdict despite Edge
+      Case Hunter's structural failure.
+    location: bmad-autopilot/_bmad-output/implementation-artifacts/3-1-three-layer-parallel-pass-wiring.md:1
+    bucket: defer
+    severity: LOW
+rationale: >-
+  Edge Case Hunter failed structurally; Blind Hunter and Acceptance Auditor
+  returned successfully with two LOW-severity defer-bucket findings
+  (`failed_layers: ["edge"]` declares the partial layer-failure for Story
+  3.3's review-layer-failed marker emission). Surviving layers' verdict is
+  `status: pass`; no HIGH-severity patch-bucket findings.
+failed_layers:
+  - edge

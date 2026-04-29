@@ -1,29 +1,39 @@
-"""Contract-coverage matrix for Story 2.9 (minimal Review-BMAD-wrapper subagent).
+"""Contract-coverage matrix for the Review-BMAD wrapper (Story 2.9 → Story 3.1).
 
-This docstring IS the contract-coverage checklist required by AC-7. Reviewers
-verify every row maps to at least one passing test in this module. The matrix
-is review-enforced, NOT CI-enforced (parallel to stories 1.2-1.9 + 2.2-2.8).
+This docstring IS the contract-coverage checklist required by AC-7 (Story 2.9)
+and AC-5 (Story 3.1). Reviewers verify every row maps to at least one passing
+test in this module. The matrix is review-enforced, NOT CI-enforced (parallel
+to stories 1.2-1.9 + 2.2-2.8). Story 3.1 thickens this file IN PLACE: the
+Story 2.9 single-layer assertions are RELAXED to Epic-3 three-layer scope and
+EXTENDED with new tests for the three new fixtures + cross-fixture invariants.
 
-Fixture-shape conformance (AC-6, AC-7):
-    [x] review-pass-acceptance-auditor.yaml validates against schema   → test_review_pass_acceptance_auditor_fixture_validates_against_schema
-    [x] review-fail-layer-failure.yaml validates against schema        → test_review_fail_layer_failure_fixture_validates_against_schema
+Fixture-shape conformance (Story 2.9 AC-6/AC-7; Story 3.1 AC-5):
+    [x] review-pass-acceptance-auditor.yaml validates against schema     → test_review_pass_acceptance_auditor_fixture_validates_against_schema
+    [x] review-fail-layer-failure.yaml validates against schema          → test_review_fail_layer_failure_fixture_validates_against_schema
+    [x] review-pass-three-layer.yaml validates against schema            → test_review_pass_three_layer_fixture_validates_against_schema
+    [x] review-fail-three-layer-patch.yaml validates against schema      → test_review_fail_three_layer_patch_fixture_validates_against_schema
+    [x] review-blocked-partial-layer-failure.yaml validates against schema → test_review_blocked_partial_layer_failure_fixture_validates_against_schema
 
-Cross-fixture invariants (AC-4, AC-7, FR52, FR56):
-    [x] every review-*.yaml has failed_layers field present (list)     → test_all_review_fixtures_have_failed_layers_field_present
-    [x] no review-*.yaml carries forbidden flow-policy fields          → test_all_review_fixtures_have_no_forbidden_flow_policy_fields
+Cross-fixture invariants (Story 2.9 AC-4/AC-7, FR52, FR56; Story 3.1 AC-5):
+    [x] every review-*.yaml has failed_layers field present (5 fixtures) → test_all_review_fixtures_have_failed_layers_field_present
+    [x] every review-*.yaml failed_layers ⊆ {blind, edge, auditor, lad}  → test_all_review_fixtures_have_failed_layers_subset_of_schema_enum
+    [x] every review-*.yaml finding source ∈ schema source enum          → test_all_review_fixtures_have_layer_attribution_preserved_on_findings
+    [x] no review-*.yaml carries forbidden flow-policy fields            → test_all_review_fixtures_have_no_forbidden_flow_policy_fields
+    [x] every Epic-3-scope review-*.yaml carries surviving findings      → test_epic3_review_fixtures_carry_surviving_findings
 
-Wrapper-prose discipline (AC-2, AC-3, AC-4, AC-5, AC-7, AC-8):
-    [x] review-bmad-wrapper.md names Acceptance Auditor at Epic 2 scope→ test_review_bmad_wrapper_documents_acceptance_auditor_single_layer_scope
-    [x] review-bmad-wrapper.md names failed_layers always-present      → test_review_bmad_wrapper_documents_failed_layers_invariant
-    [x] review-bmad-wrapper.md has zero cross-specialist references    → test_review_bmad_wrapper_no_cross_specialist_references
-    [x] review-bmad-wrapper.md documents bmad-code-review composition  → test_review_bmad_wrapper_documents_bmad_code_review_composition
-    [x] review-bmad-wrapper.md documents required envelope fields      → test_review_bmad_wrapper_documents_required_envelope_fields
-    [x] review-bmad-wrapper.md documents Acceptance Auditor rationale  → test_review_bmad_wrapper_documents_acceptance_auditor_rationale
+Wrapper-prose discipline (Story 2.9 AC-2/AC-3/AC-4/AC-5/AC-7/AC-8;
+Story 3.1 AC-1/AC-2/AC-3/AC-5):
+    [x] review-bmad-wrapper.md documents three-layer parallel-pass scope → test_review_bmad_wrapper_documents_three_layer_parallel_pass_scope
+    [x] review-bmad-wrapper.md names failed_layers always-present        → test_review_bmad_wrapper_documents_failed_layers_invariant
+    [x] review-bmad-wrapper.md has zero cross-specialist references      → test_review_bmad_wrapper_no_cross_specialist_references
+    [x] review-bmad-wrapper.md documents bmad-code-review composition    → test_review_bmad_wrapper_documents_bmad_code_review_composition
+    [x] review-bmad-wrapper.md documents required envelope fields        → test_review_bmad_wrapper_documents_required_envelope_fields
+    [x] review-bmad-wrapper.md documents Acceptance Auditor rationale    → test_review_bmad_wrapper_documents_acceptance_auditor_rationale
 
-Directory shape (AC-1):
-    [x] agents/ contains dev-wrapper.md AND review-bmad-wrapper.md at  → test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper_at_minimum
+Directory shape (Story 2.9 AC-1):
+    [x] agents/ contains dev-wrapper.md AND review-bmad-wrapper.md at    → test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper_at_minimum
         minimum (one of three+ specialist files at this point)
-    [x] review-bmad-wrapper.md uses LF line endings                    → test_review_bmad_wrapper_has_lf_line_endings
+    [x] review-bmad-wrapper.md uses LF line endings                      → test_review_bmad_wrapper_has_lf_line_endings
 """
 
 from __future__ import annotations
@@ -81,13 +91,23 @@ def _load_envelope(envelopes_dir: pathlib.Path, filename: str) -> dict[str, Any]
 
 
 def _all_review_envelope_filenames() -> tuple[str, ...]:
+    """Story 3.1 relaxation: the set spans all 5 review-*.yaml fixtures —
+    the 2 Epic-2-scope fixtures from Story 2.9 plus the 3 Epic-3-scope
+    fixtures from Story 3.1.
+    """
     return (
         "review-pass-acceptance-auditor.yaml",
         "review-fail-layer-failure.yaml",
+        "review-pass-three-layer.yaml",
+        "review-fail-three-layer-patch.yaml",
+        "review-blocked-partial-layer-failure.yaml",
     )
 
 
 _FAILED_LAYERS_ENUM: frozenset[str] = frozenset({"blind", "edge", "auditor", "lad"})
+_FINDING_SOURCE_ENUM: frozenset[str] = frozenset(
+    {"blind", "edge", "auditor", "qa", "lad", "merged"}
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -136,6 +156,90 @@ def test_review_fail_layer_failure_fixture_validates_against_schema(
     )
 
 
+def test_review_pass_three_layer_fixture_validates_against_schema(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.1 AC-5 item 4: post-aggregation envelope shape with all three
+    layers running successfully and at least three distinct source values
+    among the post-triage findings.
+    """
+    envelope = _load_envelope(envelopes_dir, "review-pass-three-layer.yaml")
+    result = validate_return_envelope(envelope)
+    assert result.valid, result.errors
+    assert envelope["status"] == "pass"
+    assert envelope["failed_layers"] == []
+    assert len(envelope["findings"]) >= 3, (
+        "review-pass-three-layer fixture must carry at least three findings "
+        "to demonstrate post-aggregation envelope shape across layers"
+    )
+    sources = {finding["source"] for finding in envelope["findings"]}
+    expected_sources = {"blind", "edge", "auditor", "merged"}
+    overlap = sources & expected_sources
+    assert len(overlap) >= 3, (
+        f"review-pass-three-layer fixture must surface at least three of "
+        f"{sorted(expected_sources)}; got {sorted(sources)}"
+    )
+
+
+def test_review_fail_three_layer_patch_fixture_validates_against_schema(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.1 AC-5 item 5: at least one HIGH-severity patch-bucket finding
+    drives status=fail end-to-end.
+    """
+    envelope = _load_envelope(envelopes_dir, "review-fail-three-layer-patch.yaml")
+    result = validate_return_envelope(envelope)
+    assert result.valid, result.errors
+    assert envelope["status"] == "fail"
+    high_patch_findings = [
+        f
+        for f in envelope["findings"]
+        if f.get("bucket") == "patch" and f.get("severity") == "HIGH"
+    ]
+    assert high_patch_findings, (
+        "review-fail-three-layer-patch fixture must carry at least one "
+        "HIGH-severity patch-bucket finding driving the fail verdict per "
+        "FR9 routing"
+    )
+
+
+def test_review_blocked_partial_layer_failure_fixture_validates_against_schema(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.1 AC-5 item 6: partial-layer-failure shape — exactly one
+    failed layer drawn from {blind, edge, auditor}; surviving layers'
+    findings flow through normally per FR28 graceful degradation.
+    """
+    envelope = _load_envelope(
+        envelopes_dir, "review-blocked-partial-layer-failure.yaml"
+    )
+    result = validate_return_envelope(envelope)
+    assert result.valid, result.errors
+    assert envelope["status"] in {"pass", "fail"}, (
+        "partial-layer-failure fixture must have status: pass or fail "
+        "(blocked is reserved for total layer failure — all three layers failing)"
+    )
+    assert len(envelope["failed_layers"]) == 1, (
+        "partial-layer-failure fixture must declare exactly one failed layer "
+        "to demonstrate the partial-failure shape from AC-3 contract 2"
+    )
+    assert envelope["failed_layers"][0] in {"blind", "edge", "auditor"}, (
+        "partial-layer-failure fixture's failed layer must be drawn from "
+        "the three live Epic-3 layers"
+    )
+    assert len(envelope["findings"]) >= 1, (
+        "FR28 graceful degradation: surviving layers' findings must flow "
+        "through the envelope when one layer fails"
+    )
+    failed_layer = envelope["failed_layers"][0]
+    for finding in envelope["findings"]:
+        assert finding["source"] != failed_layer, (
+            f"findings from the failed layer ({failed_layer}) must not appear "
+            f"in the envelope per bmad-code-review's step-02-review.md "
+            f"line 27 (failed-layer drop)"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Cross-fixture invariants                                                    #
 # --------------------------------------------------------------------------- #
@@ -144,6 +248,9 @@ def test_review_fail_layer_failure_fixture_validates_against_schema(
 def test_all_review_fixtures_have_failed_layers_field_present(
     envelopes_dir: pathlib.Path,
 ) -> None:
+    """Story 3.1 AC-5 item 9 (relaxed in place): the loaded set grows from
+    the 2 Epic-2 fixtures to all 5 review-*.yaml fixtures.
+    """
     for name in _all_review_envelope_filenames():
         envelope = _load_envelope(envelopes_dir, name)
         assert "failed_layers" in envelope, (
@@ -151,10 +258,39 @@ def test_all_review_fixtures_have_failed_layers_field_present(
         )
         layers = envelope["failed_layers"]
         assert isinstance(layers, list), f"{name} failed_layers must be a list"
+
+
+def test_all_review_fixtures_have_failed_layers_subset_of_schema_enum(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.1 AC-5 item 7: every fixture's failed_layers ⊆
+    {blind, edge, auditor, lad} per envelope.schema.yaml lines 92-97.
+    """
+    for name in _all_review_envelope_filenames():
+        envelope = _load_envelope(envelopes_dir, name)
+        layers = envelope["failed_layers"]
         for layer in layers:
             assert layer in _FAILED_LAYERS_ENUM, (
                 f"{name} failed_layers item {layer!r} not in schema enum "
                 f"{sorted(_FAILED_LAYERS_ENUM)}"
+            )
+
+
+def test_all_review_fixtures_have_layer_attribution_preserved_on_findings(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.1 AC-5 item 8: every finding's source field is drawn from
+    the schema's source enum per envelope.schema.yaml line 117 — the
+    layer-attribution discipline that lets Story 3.5 audit per-layer
+    composition and lets Story 3.2 route bucket signals downstream.
+    """
+    for name in _all_review_envelope_filenames():
+        envelope = _load_envelope(envelopes_dir, name)
+        for finding in envelope["findings"]:
+            source = finding.get("source")
+            assert source in _FINDING_SOURCE_ENUM, (
+                f"{name} finding source {source!r} not in schema enum "
+                f"{sorted(_FINDING_SOURCE_ENUM)}"
             )
 
 
@@ -169,45 +305,89 @@ def test_all_review_fixtures_have_no_forbidden_flow_policy_fields(
         )
 
 
+def test_epic3_review_fixtures_carry_surviving_findings(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.1 cross-fixture invariant: the three Epic-3-scope review
+    fixtures (review-pass-three-layer.yaml, review-fail-three-layer-patch.yaml,
+    review-blocked-partial-layer-failure.yaml) all carry at least one
+    finding. The pass + fail + partial-failure shapes all reach a verdict
+    via at least one surviving layer. Story 2.9's review-fail-layer-failure.yaml
+    (Epic-2-scope single-layer total-failure case, preserved as canonical history)
+    emits findings: []; the true Epic-3 total-layer-failure shape
+    (failed_layers: ["blind", "edge", "auditor"]) has no fixture in this story —
+    tracked for Story 3.3. Note: an all-dismiss triage run also produces
+    findings: [] with status: pass; this test only checks the three named
+    Epic-3 fixtures which are designed to carry surviving findings.
+    """
+    epic3_fixtures = (
+        "review-pass-three-layer.yaml",
+        "review-fail-three-layer-patch.yaml",
+        "review-blocked-partial-layer-failure.yaml",
+    )
+    for name in epic3_fixtures:
+        envelope = _load_envelope(envelopes_dir, name)
+        assert envelope["findings"], (
+            f"{name} must carry at least one finding (Epic-3-scope fixtures "
+            f"exercise the post-aggregation envelope shape via surviving "
+            f"layers' findings flowing through; only the total-layer-failure "
+            f"case emits findings: [])"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # Wrapper-prose discipline                                                    #
 # --------------------------------------------------------------------------- #
 
 
-def test_review_bmad_wrapper_documents_acceptance_auditor_single_layer_scope(
+def test_review_bmad_wrapper_documents_three_layer_parallel_pass_scope(
     review_wrapper_text: str,
 ) -> None:
+    """Story 3.1 AC-5 item 2: relaxed + renamed from Story 2.9's
+    test_review_bmad_wrapper_documents_acceptance_auditor_single_layer_scope.
+    The rewrite frames the wrapper as Epic-3-scope; all three layer names
+    must appear in the prose, and Epic 3 framing must be near the first
+    Acceptance Auditor mention.
+    """
     text = review_wrapper_text
+    for layer_name in ("Blind Hunter", "Edge Case Hunter", "Acceptance Auditor"):
+        assert layer_name in text, (
+            f"review-bmad-wrapper.md must name the {layer_name} layer "
+            "(layer-attribution discipline is now structurally documented)"
+        )
     idx = text.find("Acceptance Auditor")
-    assert idx >= 0, "review-bmad-wrapper.md must mention Acceptance Auditor"
-    # AC-3 (b): Epic 2 within 200 chars of first Acceptance Auditor mention.
-    window_200 = text[idx : idx + 200]
-    assert re.search(r"[Ee]pic 2", window_200), (
-        "first Acceptance Auditor mention must name Epic 2 within 200 chars"
-    )
-    # AC-3 (c): Epic 3 or Story 3.1 within 600 chars of first Acceptance Auditor.
+    assert idx >= 0
+    # Story 3.1 relaxation: Epic 3 framing within 600 chars of first
+    # Acceptance Auditor mention; Epic 2 single-layer history may also
+    # appear (referenced in the "Epic 3 thickening landing" section per
+    # AC-1) but is no longer the dominant frame.
     window_600 = text[idx : idx + 600]
     assert re.search(r"Epic 3|Story 3\.1", window_600), (
-        "first Acceptance Auditor mention must name Epic 3 or Story 3.1 within 600 chars"
+        "first Acceptance Auditor mention must name Epic 3 or Story 3.1 within "
+        "600 chars (the Epic-3-scope framing per Story 3.1 AC-1)"
     )
 
 
 def test_review_bmad_wrapper_documents_failed_layers_invariant(
     review_wrapper_text: str,
 ) -> None:
+    """Story 3.1 AC-5 item 3: substring-proximity assertion accepts any of
+    blind / edge / auditor within the proximity window (relaxed from
+    Story 2.9's auditor-only assertion).
+    """
     text = review_wrapper_text
     idx = text.find("failed_layers")
     assert idx >= 0, "review-bmad-wrapper.md must mention failed_layers"
     window = text[idx : idx + 400]
-    # AC-4 (b): auditor within window.
-    assert "auditor" in window, (
-        "first failed_layers mention must name auditor within 400 chars"
+    # Story 3.1 relaxation: any of blind / edge / auditor is acceptable in
+    # the proximity window (Epic-3 thickened layer set).
+    assert any(layer in window for layer in ("blind", "edge", "auditor")), (
+        "first failed_layers mention must name at least one of "
+        "blind / edge / auditor within 400 chars"
     )
-    # AC-4 (c): the always-present-even-when-empty invariant. Match the
-    # bracketed-empty-list literal as a standalone token (not the trailing `]`
-    # of an enum like `[blind, edge, auditor, lad]`) OR the literal word
-    # "empty". Regex requires a non-`,` non-alphanum char before `[]` so that
-    # enum closures cannot satisfy the proximity check coincidentally.
+    # Always-present invariant unchanged from Story 2.9 AC-4: standalone
+    # `[]` token or the literal word "empty" near the first failed_layers
+    # mention.
     assert re.search(r"(^|[^A-Za-z0-9,])\[\]", window) or "empty" in window, (
         "first failed_layers mention must show standalone [] or word 'empty' "
         "within 400 chars (bare enum-closing bracket does not count)"
@@ -217,11 +397,12 @@ def test_review_bmad_wrapper_documents_failed_layers_invariant(
 def test_review_bmad_wrapper_no_cross_specialist_references(
     review_wrapper_text: str,
 ) -> None:
-    # AC-5: zero substring matches for any sibling specialist agent file by path.
-    # The wrapper's FR62 prohibition prose names sibling specialists by
-    # human-readable form (the Dev specialist, the QA specialist, the
-    # Phase-1.5 LAD layer), not by literal `agents/<slug>.md` path-form, so
-    # the pluggability_gate's Rule 1 regex cannot fire on this wrapper.
+    # Story 2.9 AC-5 + Story 3.1 AC-2: zero substring matches for any sibling
+    # specialist agent file by path. The wrapper's FR62 prohibition prose names
+    # sibling specialists by human-readable form (the Dev specialist, the QA
+    # specialist, the Phase-1.5 LAD layer), not by literal `agents/<slug>.md`
+    # path-form, so the pluggability_gate's Rule 1 regex cannot fire on this
+    # wrapper.
     forbidden_paths = (
         "agents/dev-wrapper.md",
         "agents/qa.md",
@@ -233,8 +414,12 @@ def test_review_bmad_wrapper_no_cross_specialist_references(
             f"review-bmad-wrapper.md must not reference {name} "
             "(FR62 zero-substring-match)"
         )
-    # AC-5 (slug-form): zero word-bounded matches for the multi-hyphen sibling
-    # slugs that would trigger the pluggability gate's Rule 2 regex.
+    # Slug-form: zero word-bounded matches for the multi-hyphen sibling slugs
+    # that would trigger the pluggability gate's Rule 2 regex.
+    # Note: standalone single-word slugs (lad, qa) are deliberately excluded
+    # from Rule 2 checking — the gate targets multi-hyphen slugs only; the
+    # wrapper's `lad` occurrences are in schema-enum documentation context
+    # ([blind, edge, auditor, lad]), not specialist references.
     forbidden_slugs = ("dev-wrapper", "review-lad")
     for slug in forbidden_slugs:
         assert not re.search(r"\b" + re.escape(slug) + r"\b", review_wrapper_text), (
@@ -274,15 +459,20 @@ def test_review_bmad_wrapper_documents_acceptance_auditor_rationale(
     review_wrapper_text: str,
 ) -> None:
     text = review_wrapper_text
-    # AC-8 clause-(a) marker: traceability to acceptance criteria.
+    # Story 2.9 AC-8 clause-(a) marker: traceability to acceptance criteria.
+    # Story 3.1 AC-1 retains this language via the cross-reference to
+    # Story 3.5's audit artifact which validates the Story 2.9 rationale
+    # clauses against the actual three-layer composition.
     assert re.search(r"traceab", text), (
         "review-bmad-wrapper.md must document Acceptance Auditor traceability "
-        "rationale (clause a) per AC-8"
+        "rationale (clause a) per Story 2.9 AC-8 / Story 3.1 AC-1"
     )
-    # AC-8 clause-(b) marker: seam-contract churn minimization OR aggregated output.
+    # Story 2.9 AC-8 clause-(b) marker: seam-contract churn minimization OR
+    # aggregated output.
     assert "seam-contract" in text or "aggregated output" in text, (
         "review-bmad-wrapper.md must document Acceptance Auditor "
-        "seam-contract / aggregated-output rationale (clause b) per AC-8"
+        "seam-contract / aggregated-output rationale (clause b) per "
+        "Story 2.9 AC-8 / Story 3.1 AC-1"
     )
 
 

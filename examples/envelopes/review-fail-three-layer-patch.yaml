@@ -1,0 +1,74 @@
+# Review-BMAD specialist envelope — status=fail, three-layer parallel pass with
+# HIGH-severity patch-bucket finding driving the verdict.
+#
+# Source list: PRD Reference Artifacts (line 653) names canonical envelope
+# shapes; the canonical "patch-bucket-findings" shape (PRD-list deferred
+# fixture `review-patch-findings.yaml`) is realized here as
+# review-fail-three-layer-patch.yaml because Epic 3's three-layer scope is
+# the first place patch-bucket findings drive `status: fail` end-to-end. The
+# fixture lands per the Story 1.2 / Story 2.9 strategy "the rest land with
+# whichever story first needs them as fixtures" (see Story 2.9's contract
+# header at review-pass-acceptance-auditor.yaml lines 11-13).
+#
+# This is the AC-failure shape (per Story 3.1 AC-3): all three layers ran
+# to completion (`failed_layers: []`); at least one HIGH-severity
+# patch-bucket finding indicates the implementation does NOT satisfy the
+# story ACs. The orchestrator's flow policy routes patch-bucket findings
+# into a Dev fix-only retry per FR9 — that routing is Story 3.2's job, not
+# this fixture's contract.
+#
+# Downstream consumers: Story 3.2 (bucket-driven retry-router prep) consumes
+# the patch-bucket signal; Story 3.4 consumes the aggregated `findings` for
+# PR-bundle rendering; Story 3.5 audits the actual layer composition.
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: fail
+artifacts:
+  - bmad-autopilot/_bmad-output/implementation-artifacts/3-1-three-layer-parallel-pass-wiring.md
+findings:
+  - id: review-002
+    source: blind
+    title: Diff-only pass flagged inconsistent envelope-field naming
+    detail: >-
+      Blind Hunter inspected the diff in isolation and observed an envelope
+      field-name documented inconsistently between the RETURN-ENVELOPE prose
+      and the worked example. Triaged as MED-severity defer because the
+      schema-validator structurally enforces correctness; the prose
+      inconsistency is documentation-quality, not a contract bug.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:78
+    bucket: defer
+    severity: MED
+  - id: review-003
+    source: edge
+    title: Edge case in total-layer-failure shape's findings array
+    detail: >-
+      Edge Case Hunter walked the total-layer-failure path and noted the
+      worked example does not include a fixture; this is acceptable because
+      the schema requires `findings: []` on total failure and the always-empty
+      shape is structurally trivial. Triaged as LOW-severity defer.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:60
+    bucket: defer
+    severity: LOW
+  - id: review-004
+    source: merged
+    title: Wrapper prose's pluggability-discipline section contains stale slug
+    detail: >-
+      Acceptance Auditor and Blind Hunter independently flagged the same
+      stale slug-form mention; step-03-triage.md step 2 deduplicated the two
+      findings into a single merged-source finding. Same root cause as
+      review-001; the orchestrator's flow policy treats this as one Dev
+      fix-only retry input.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:42
+    bucket: patch
+    severity: HIGH
+rationale: >-
+  All three layers (Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+  ran to completion via bmad-code-review's step-02-review.md parallel-pass
+  invocation; step-03-triage.md aggregated three findings including one
+  HIGH-severity patch-bucket merged finding (Blind Hunter and Acceptance
+  Auditor independently flagged the same FR62 pluggability discipline
+  violation; step-03-triage.md step 2 deduplicated them into source:merged).
+  The patch-bucket finding drives `status: fail`; orchestrator-side flow
+  policy routes the patch-bucket signal into a Dev fix-only retry per FR9.
+failed_layers: []

@@ -1,0 +1,79 @@
+# Review-BMAD specialist envelope — status=pass, three-layer parallel-pass success.
+#
+# Source list: PRD Reference Artifacts (line 653) names canonical envelope shapes.
+# This fixture lands with Story 3.1 (three-layer parallel pass wiring) to extend
+# the Story 1.2 + Story 2.8 + Story 2.9 + Story 2.10 corpus with the Review-BMAD
+# happy-path shape at Epic 3 scope: all three layers (Blind Hunter + Edge Case
+# Hunter + Acceptance Auditor) ran successfully, the post-triage aggregated
+# `findings` list carries layer-attribution preserved on each finding (sources
+# `blind` / `edge` / `auditor` / `merged`), `failed_layers: []` (no structural
+# layer failure), and the verdict was reached.
+#
+# Downstream consumers (epics.md Story 3.1 dependency map): Story 3.2 (finding
+# taxonomy passthrough router) consumes the bucket × severity signal; Story 3.3
+# consumes the `failed_layers` invariant; Story 3.4 consumes the aggregated
+# `findings` for PR-bundle rendering; Story 3.5 audits the actual three-layer
+# composition. Validated against schemas/envelope.schema.yaml by the harness CI
+# gate (envelope-validator).
+
+status: pass
+artifacts:
+  - bmad-autopilot/_bmad-output/implementation-artifacts/3-1-three-layer-parallel-pass-wiring.md
+findings:
+  - id: review-001
+    source: blind
+    title: Diff-only adversarial pass surfaced no contract violations
+    detail: >-
+      Blind Hunter inspected the diff in isolation (no spec, no project context)
+      and found no contract violations or obvious code smells; one MED-severity
+      observation about wrapper prose density was logged for triage and routed
+      to the defer bucket because the prose still passes the existing FR62
+      pluggability gate's substring-absence checks.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:1
+    bucket: defer
+    severity: MED
+  - id: review-002
+    source: edge
+    title: Boundary condition on partial layer failure shape covered by fixtures
+    detail: >-
+      Edge Case Hunter walked the partial-layer-failure code path documented in
+      the wrapper's RETURN-ENVELOPE section and confirmed the worked example
+      (Edge Case Hunter crashes; Blind Hunter and Acceptance Auditor return
+      successfully) is structurally exercised by the
+      review-blocked-partial-layer-failure.yaml fixture; no edge case
+      uncovered.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:55
+    bucket: defer
+    severity: LOW
+  - id: review-003
+    source: auditor
+    title: Story doc references epics.md line numbers verbatim
+    detail: >-
+      Acceptance Auditor noted the story doc's References block hardcodes
+      epics.md line numbers; flagged as informational only since BMAD-core's
+      story-doc convention permits line references and the orchestrator's
+      flow policy does not act on bucket=defer findings.
+    location: bmad-autopilot/_bmad-output/implementation-artifacts/3-1-three-layer-parallel-pass-wiring.md:1
+    bucket: defer
+    severity: LOW
+  - id: review-004
+    source: merged
+    title: Wrapper prose explicitly names all three layer identifiers
+    detail: >-
+      Blind Hunter and Acceptance Auditor independently observed that the
+      rewritten wrapper's PROCEDURE section names all three layers
+      (Blind Hunter, Edge Case Hunter, Acceptance Auditor) verbatim;
+      step-03-triage.md step 2 deduplicated the two findings into a single
+      merged-source finding preserving the layer-attribution discipline AC-5
+      requires.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:25
+    bucket: defer
+    severity: LOW
+rationale: >-
+  All three layers (Blind Hunter + Edge Case Hunter + Acceptance Auditor)
+  ran to completion via bmad-code-review's step-02-review.md parallel-pass
+  invocation; step-03-triage.md aggregated four findings (one per layer plus
+  one cross-layer-merged finding); no HIGH-severity patch-bucket findings
+  drove the verdict. Layer attribution preserved on each finding; verdict
+  is pass.
+failed_layers: []
