@@ -1,0 +1,29 @@
+# Review-BMAD specialist envelope — status=blocked, Acceptance Auditor structural failure.
+#
+# Source list: PRD Reference Artifacts (line 653) names five canonical envelopes.
+# This fixture lands with Story 2.9 (minimal Review-BMAD-wrapper subagent, single-layer)
+# to extend the Story 1.2 + Story 2.8 corpus with the Review-BMAD graceful-degradation
+# shape per FR28: the Acceptance Auditor layer itself failed structurally (crashed,
+# timed out, or exited non-zero before producing a verdict) — distinct from a
+# substantive AC-failure verdict (status=fail). Per FR28 the orchestrator surfaces
+# this as a `review-layer-failed` marker (Story 3.3 wires the marker emission;
+# THIS fixture only proves the wrapper-side declaration shape).
+#
+# The third PRD-canonical Review-BMAD fixture (`review-patch-findings.yaml`) is
+# OUT of THIS story's scope and lands when a downstream story (likely Story 3.1
+# or Story 5.2) first needs it as a fixture, per the Story 1.2 strategy "the rest
+# land with whichever story first needs them as fixtures".
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: blocked
+artifacts: []
+findings: []
+rationale: >-
+  Acceptance Auditor crashed during context-gathering before producing any
+  verdict; no review output written; no findings emitted. Orchestrator-side
+  flow policy decides whether to retry the layer per FR28 graceful
+  degradation; this wrapper merely declares the structural failure.
+failed_layers:
+  - auditor

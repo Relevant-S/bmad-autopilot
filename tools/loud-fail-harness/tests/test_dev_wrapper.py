@@ -21,7 +21,9 @@ Wrapper-prose discipline (AC-2, AC-3, AC-4, AC-6):
     [x] dev-wrapper.md documents required envelope fields              → test_dev_wrapper_documents_required_envelope_fields
 
 Directory shape (AC-1):
-    [x] agents/ contains exactly dev-wrapper.md at top-level           → test_agents_directory_contains_only_dev_wrapper
+    [x] agents/ contains dev-wrapper.md at top-level (one of two       → test_agents_directory_contains_dev_wrapper
+        specialist files at this point — relaxed in story 2.9 per
+        the deferred review finding)
     [x] dev-wrapper.md uses LF line endings                            → test_dev_wrapper_has_lf_line_endings
 """
 
@@ -236,11 +238,11 @@ def test_dev_wrapper_documents_required_envelope_fields(
 # --------------------------------------------------------------------------- #
 
 
-def test_agents_directory_contains_only_dev_wrapper(agents_dir: pathlib.Path) -> None:
+def test_agents_directory_contains_dev_wrapper(agents_dir: pathlib.Path) -> None:
     assert agents_dir.is_dir(), "agents/ directory must exist"
     md_files = sorted(p.name for p in agents_dir.glob("*.md"))
-    assert md_files == ["dev-wrapper.md"], (
-        f"agents/ top-level must contain exactly dev-wrapper.md; found {md_files}"
+    assert "dev-wrapper.md" in md_files, (
+        f"agents/ top-level must contain dev-wrapper.md; found {md_files}"
     )
     subdirs = [p for p in agents_dir.iterdir() if p.is_dir()]
     assert subdirs == [], f"agents/ must have no subdirectories; found {subdirs}"

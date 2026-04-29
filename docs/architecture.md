@@ -1441,3 +1441,23 @@ The distinction between yellow-gated and yellow-implementation-deferred matters 
 - Upstream proposal submissions to BMAD core (post-RFC-format research)
 
 These items are tracked as their respective revisit conditions in the relevant ADRs/SDN; implementation proceeds on the unblocked path while these resolve.
+
+## Acceptance Auditor — Epic 2 Single-Layer Rationale (Story 2.9)
+
+This addendum clarifies the existing FR26 / FR28 architecture for the Code Review (Adversarial) capability area (FR26–FR29 at line 776; Requirements-to-Location Mapping row at line 1224). It records WHY the Acceptance Auditor is the chosen single layer at Epic 2 scope; it is not a new architectural decision and does not introduce or renumber any ADR.
+
+**Epic 2 wraps only the Acceptance Auditor layer of `bmad-code-review`'s three-layer adversarial pass.** The Review-BMAD wrapper at `agents/review-bmad-wrapper.md` (Story 2.9) dispatches a single layer; Epic 3's Story 3.1 thickens the wrapper IN PLACE (same agent identity, same envelope contract) to dispatch all three layers (Blind Hunter + Edge Case Hunter + Acceptance Auditor) in parallel. The wrapper's Epic-2 single-layer scope is a walking-skeleton commitment, not a final shape.
+
+**Two reasons the Acceptance Auditor is the right single layer at Epic 2 scope:**
+
+1. **Traceability to acceptance criteria.** The Acceptance Auditor's findings are most directly traceable to story acceptance criteria. This matches Epic 2's AC-1-only QA scope from Story 2.10 (the QA specialist at Epic 2 scope verifies AC-1 only). A single-layer minimum that lines up with AC-driven verification produces an end-to-end loop that exercises the same AC-traceability seam at both the review stage and the QA stage.
+
+2. **Seam-contract churn minimization at Epic 3 thickening.** The Acceptance Auditor's output shape is closest to the eventual three-layer aggregated output. Picking it as the Epic-2 layer minimizes seam-contract churn when Epic 3's Story 3.1 thickens the wrapper to all three layers — the envelope shape (`status`, `artifacts`, `findings`, `rationale`, `failed_layers`) does not change, only the wrapper's internal coverage thickens.
+
+**Contract-violation-not-silent-assumption posture.** If either rationale above is invalidated by Epic 3's discoveries — e.g., the Acceptance Auditor's single-layer behavior conflicts with how it composes into the three-layer parallel pass, or the aggregated-output assumption breaks because cross-layer deduplication reshapes the finding set — the team treats this as a discoverable contract violation rather than a silent assumption. Epic 3 flags it explicitly and swaps to a different layer choice if needed. This posture is the load-bearing reason this rationale is recorded HERE (in the architecture doc) rather than only in the wrapper prose: a future re-implementation that inherits the wrapper but discards the wrapper's prose still inherits the rationale (and the explicit invalidation contract) from this architectural addendum.
+
+**Cross-references.**
+
+- The same rationale (in 2-3-line summary form) is documented in `agents/review-bmad-wrapper.md` under the "Why Acceptance Auditor at Epic 2 scope" heading, with a forward pointer to this addendum.
+- FR26 (PRD line 845) and FR28 (PRD line 847) are the bounding requirements; this addendum is a clarification of their Epic-2 surface, not an extension.
+- Epic 3's Story 3.1 (epics.md lines 1612-1648) owns the three-layer thickening; Story 3.3 (epics.md lines 1672-1700) owns the orchestrator-side `review-layer-failed` marker emission consuming the wrapper's `failed_layers` declaration.
