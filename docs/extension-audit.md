@@ -138,3 +138,26 @@ The four open research blockers from architecture.md lines 847-852, listed verba
 - **Claude Code plugin primitive name and stability** — shapes install path (primary vs fallback) and repo layout. Discharged by Story 7.1.
 
 A `research-needed` classification entry on the per-convention table MUST name its bounding spike from this list (or a successor entry added as research blockers accumulate). Without a bounding spike, the classification has no exit criterion and the convention drifts into the indefinite-stall failure mode the principle exists to prevent.
+
+---
+
+## Contributor-discipline notes
+
+This subsection holds append-only contributor-discipline notes — fixture/file location invariants, naming overlaps to avoid, and similar review-time conventions that are NOT BMAD-extension classification events (those go in the per-convention table above). These notes are review-enforced per `extension-audit.md`'s overall posture (ADR-003 line 292), NOT CI-enforced; reviewers verify the discipline at PR review time.
+
+### Epic 2 walking-skeleton smoke fixture vs. Epic 7 user-facing onboarding sample (Story 2.13 resolution)
+
+Two artifacts share a "sample story" surface concept but live at structurally different filesystem locations and serve fundamentally different audiences. Conflating them is the most plausible drift the smoke fixture's "test infrastructure only" identity exists to prevent.
+
+- **Epic 2 smoke fixture** — `bmad-autopilot/tools/loud-fail-harness/tests/fixtures/sample-story-walking-skeleton.md`. Audience: Epic 2 maintainers running the harness's CI smoke suite. Lifecycle: CI-only; never user-visible; loaded by `tests/test_walking_skeleton_smoke.py` via `find_repo_root` + relative path. Distribution: per architecture.md View 2 lines 1109–1141, `tools/` is excluded from the shipped distribution unit, so the fixture is structurally guaranteed to be CI-only.
+- **Epic 7 user-facing FR39 sample** — `_bmad-output/implementation-artifacts/sample-auto-001.md` (inside the user's BMAD project). Audience: practitioners onboarding to BMAD. Lifecycle: scaffolded once at install time by Epic 7's `init`; user-visible; lives under the user's BMAD project filesystem (View 3 line 1171), NOT inside the `bmad-autopilot/` source repo.
+
+The structural separation invariant: the Epic 2 smoke fixture is NEVER `init`-scaffolded. Epic 7's init code MUST NOT discover, copy, symlink, or reference `tools/loud-fail-harness/tests/fixtures/sample-story-walking-skeleton.md`. The View 2 distribution-unit boundary makes this structurally guaranteed; this note records the discipline explicitly so future contributors see the rationale.
+
+Review-time enforcement contract — a PR is a contract violation flagged at code review if it:
+
+- moves the smoke fixture under `bmad-autopilot/examples/` (e.g., `examples/sample-stories/...` or `examples/synthetic-stories/...`);
+- references the smoke fixture from `init`, from the user-facing onboarding-sample scaffolding, or from any deployed runtime artifact (skills, agents, hooks, schemas);
+- renames the smoke fixture to overlap with `sample-auto-001.md` (e.g., `sample-walking-skeleton-001.md` is fine; `sample-auto-001-skeleton.md` is not — the `sample-auto-` prefix belongs to the Epic 7 user-facing-sample namespace).
+
+The contributor-discipline note is review-enforced per `extension-audit.md`'s overall posture (ADR-003 line 292): there is no harness gate for this fixture-location invariant; the discipline lives in this document and in PR review.
