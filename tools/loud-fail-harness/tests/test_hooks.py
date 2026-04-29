@@ -13,10 +13,13 @@ subagent-stop.sh (AC-2, AC-3):
     [x] HEAD branch != run-state.branch_name → exit 1              → test_subagent_stop_exits_one_on_branch_mismatch
     [x] trunk branch in run-state → exit 1                          → test_subagent_stop_exits_one_on_trunk_branch_in_run_state
 
-stop.sh (AC-4):
-    [x] writes bundle to documented path with shape                → test_stop_writes_walking_skeleton_bundle_to_documented_path
+stop.sh (AC-4 of Story 2.7 + AC-6/AC-9 of Story 2.11):
+    [x] writes structured bundle to documented path                → test_stop_writes_walking_skeleton_bundle_to_documented_path
     [x] mkdir -p creates parent directories idempotently           → test_stop_creates_parent_directories_idempotently
-    [x] bundle includes walking-skeleton-bundle HTML anchor        → test_stop_bundle_content_includes_walking_skeleton_anchor
+    [x] bundle includes structured walking-skeleton-bundle marker  → test_stop_bundle_content_includes_walking_skeleton_anchor
+    [x] bundle includes H1 + metadata + H2 sections per AC-3       → test_stop_bundle_includes_structured_h2_sections
+    [x] bundle does not include the do-NOT-include sections (AC-3) → test_stop_bundle_omits_loud_fail_cost_retry_sections
+    [x] hook stays within 18-effective-line budget (AC-6)          → test_stop_hook_within_eighteen_line_budget
 
 session-start.sh (AC-5):
     [x] byte-stable verbatim 5-line literal stub                   → test_session_start_is_byte_stable_literal_stub
@@ -32,11 +35,14 @@ Cross-hook structural invariants (AC-1):
 
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import subprocess
+from typing import Any
 
 import pytest
+import yaml
 
 from loud_fail_harness.hook_budget_gate import count_effective_lines
 
@@ -155,6 +161,51 @@ def _invoke_hook(hook_path: pathlib.Path, cwd: pathlib.Path) -> subprocess.Compl
     )
 
 
+def _load_envelope(path: pathlib.Path) -> dict[str, Any]:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _seed_canonical_dispatch_logs(
+    repo: pathlib.Path,
+    *,
+    story_id: str,
+    run_id: str,
+) -> None:
+    """Seed Story 2.6-shaped dispatch logs at the canonical
+    `_bmad-output/qa-evidence/{story-id}/{run-id}/logs/{specialist}-1.log`
+    path using the canonical envelope corpus. Story 2.11's bundle
+    assembler reads the `return_envelope` field from each log.
+    """
+    from loud_fail_harness._shared import find_repo_root
+
+    envelopes_dir = find_repo_root() / "examples" / "envelopes"
+    envelopes = {
+        "dev": _load_envelope(envelopes_dir / "dev-pass.yaml"),
+        "review-bmad": _load_envelope(
+            envelopes_dir / "review-pass-acceptance-auditor.yaml"
+        ),
+        "qa": _load_envelope(envelopes_dir / "qa-pass-ac1-tier1.yaml"),
+    }
+    logs_dir = (
+        repo / "_bmad-output" / "qa-evidence" / story_id / run_id / "logs"
+    )
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    for specialist, envelope in envelopes.items():
+        log_payload = {
+            "dispatched_specialist": specialist,
+            "story_id": story_id,
+            "attempt_number": 1,
+            "agent_definition_path": f"agents/{specialist}.md",
+            "acceptance_criteria": [{"ac_id": "AC-1", "text": "stub"}],
+            "dispatch_timestamp": "2026-04-29T12:00:00+00:00",
+            "return_timestamp": "2026-04-29T12:01:00+00:00",
+            "return_envelope": envelope,
+        }
+        (logs_dir / f"{specialist}-1.log").write_text(
+            json.dumps(log_payload, indent=2), encoding="utf-8"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # subagent-stop.sh                                                            #
 # --------------------------------------------------------------------------- #
@@ -242,24 +293,35 @@ def test_subagent_stop_exits_one_on_trunk_branch_in_run_state(
 def test_stop_writes_walking_skeleton_bundle_to_documented_path(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
+    """Story 2.11 AC-9: relax Story 2.7's placeholder-string assertions.
+    The bundle is now the rich Story 2.11 shape — H1 title + metadata
+    block + dynamic Walking Skeleton Mode header + Per-AC results +
+    Review findings + Dev sections + structured marker.
+    """
     _write_run_state(fixture_repo, story_id="2-7-test", current_state="done")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-test", run_id="r1")
     result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
-    bundles_dir = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-test"
-    files = list(bundles_dir.glob("*.md"))
-    assert len(files) == 1
-    body = files[0].read_text(encoding="utf-8")
-    assert body.startswith("# PR bundle — story 2-7-test")
+    bundle = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-test" / "r1.md"
+    assert bundle.exists()
+    body = bundle.read_text(encoding="utf-8")
+    # H1 + metadata (AC-3).
+    assert body.startswith("# PR bundle — story 2-7-test (run r1)")
     assert "Branch: bmad-automation/story/2-7-test" in body
     assert "Final state: done" in body
+    assert "Generated:" in body
+    # Walking Skeleton Mode header (AC-3).
     assert "## ⚠️ Walking Skeleton Mode" in body
+    # Story 2.7 placeholder text MUST be gone.
+    assert "Placeholder bundle from Story 2.7" not in body
 
 
 def test_stop_creates_parent_directories_idempotently(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
     _write_run_state(fixture_repo, story_id="2-7-idem")
-    # Pre-create the directory; mkdir -p must remain idempotent.
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-idem", run_id="r1")
+    # Pre-create the directory; the assembler's atomic-write must remain idempotent.
     (fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-idem").mkdir(parents=True)
     result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
     assert result.returncode == 0
@@ -268,11 +330,65 @@ def test_stop_creates_parent_directories_idempotently(
 def test_stop_bundle_content_includes_walking_skeleton_anchor(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
+    """Story 2.11 AC-9: replace the legacy fragile-prose marker form
+    with the structured form per Story 2.11 AC-4.
+    """
     _write_run_state(fixture_repo, story_id="2-7-anchor")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-anchor", run_id="r1")
     result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
     assert result.returncode == 0
-    bundle = next((fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-anchor").glob("*.md"))
-    assert "<!-- walking-skeleton-bundle: marker_class -->" in bundle.read_text(encoding="utf-8")
+    bundle = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-anchor" / "r1.md"
+    body = bundle.read_text(encoding="utf-8")
+    # Structured form per AC-4.
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+    # Legacy placeholder form forbidden.
+    assert "<!-- walking-skeleton-bundle: marker_class -->" not in body
+
+
+def test_stop_bundle_includes_structured_h2_sections(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """AC-9 new assertion: the bundle's H2 sections appear in the
+    canonical order Walking-Skeleton-Mode → Per-AC-results →
+    Review-findings → Dev (AC-3)."""
+    _write_run_state(fixture_repo, story_id="2-7-sections")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-sections", run_id="r1")
+    result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    bundle = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-sections" / "r1.md"
+    body = bundle.read_text(encoding="utf-8")
+    h2_lines = [line for line in body.splitlines() if line.startswith("## ")]
+    assert h2_lines == [
+        "## ⚠️ Walking Skeleton Mode",
+        "## Per-AC results",
+        "## Review findings",
+        "## Dev",
+    ]
+
+
+def test_stop_bundle_omits_loud_fail_cost_retry_sections(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """AC-9 new assertion: Epic 5 retry-history + Epic 6 loud-fail
+    block + Epic 6 cost breakdown sections MUST NOT appear at Epic 2
+    substrate state (AC-3 explicit do-NOT-include list)."""
+    _write_run_state(fixture_repo, story_id="2-7-omits")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-omits", run_id="r1")
+    result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
+    assert result.returncode == 0
+    bundle = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-omits" / "r1.md"
+    body = bundle.read_text(encoding="utf-8")
+    assert "## Loud-fail" not in body
+    assert "## Cost breakdown" not in body
+    assert "## Per-specialist cost" not in body
+    assert "## Retry history" not in body
+
+
+def test_stop_hook_within_eighteen_line_budget(hooks_dir: pathlib.Path) -> None:
+    """AC-6: the rewritten stop.sh stays at ≤18 effective lines per
+    Story 1.9's hook_budget_gate counting rule (the lower-than-20
+    ceiling reserves margin for Epic 6's Story 6.1 thickening)."""
+    assert count_effective_lines(hooks_dir / "stop.sh") <= 18
 
 
 # --------------------------------------------------------------------------- #
