@@ -1,0 +1,129 @@
+# Review-BMAD specialist envelope — status=pass, canonical bucket × severity matrix coverage.
+# Source list (Story 3.2 AC-3): PRD Reference Artifacts (line 653) names canonical
+# envelope shapes. This fixture fills the bucket × severity coverage gap left by the
+# 5 existing review fixtures: decision_needed × {HIGH, MED, LOW}, patch × {MED, LOW},
+# defer × HIGH, dismiss × MED across status=pass (only patch:HIGH drives status=fail
+# per the wrapper's bucket-status pairing); failed_layers=[] (all three layers reached
+# a verdict — bucket-coverage is the fixture's primary purpose, not layer-failure).
+# Story: 3.2 (finding-taxonomy passthrough router; bucket-driven retry-router prep).
+# Validator: envelope-validator (harness CI gate).
+# Downstream consumer: Story 5.2's retry-router (`epics.md` lines 2264-2289) uses the
+# bucket field as a structural routing key directly (Story 3.2's passthrough invariant
+# makes that safe). Validated against: schemas/envelope.schema.yaml.
+
+status: pass
+artifacts:
+  - bmad-autopilot/_bmad-output/implementation-artifacts/3-2-finding-taxonomy-passthrough-bucket-driven-retry-router-prep.md
+findings:
+  - id: bcov-001
+    source: auditor
+    title: AC traceability matrix lacks an explicit row for the new bucket-coverage fixture
+    detail: >-
+      Acceptance Auditor flagged that the AC traceability prose names the new
+      fixture's coverage matrix but does not enumerate every (bucket, severity)
+      combination as a separate row; whether to expand the table or leave it
+      implicit is a human-input decision because the existing prose discipline
+      across Epic 3 stories has not standardized on either form.
+    location: bmad-autopilot/_bmad-output/implementation-artifacts/3-2-finding-taxonomy-passthrough-bucket-driven-retry-router-prep.md:46
+    bucket: decision_needed
+    severity: HIGH
+  - id: bcov-002
+    source: edge
+    title: Wrapper prose forward-compat path mentions schema bump but not the audit-doc-first ordering
+    detail: >-
+      Edge Case Hunter walked the forward-compat loud-fail path documented in
+      the wrapper's new Story-3.2 section and observed that the audit-doc
+      principle subsection's "record BEFORE bump" ordering is named in the
+      audit doc itself but not surfaced in the wrapper's prose; whether the
+      wrapper should restate the ordering or rely on the audit-doc cross-reference
+      is a contributor-discipline decision flagged for human review.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:91
+    bucket: decision_needed
+    severity: MED
+  - id: bcov-003
+    source: blind
+    title: patch × LOW routing rule not named in wrapper's passthrough section
+    detail: >-
+      The wrapper's new section names the four-row routing rule as
+      "patch (HIGH/MED) → trigger a Dev fix-only retry." This leaves
+      patch × LOW findings unaddressed — whether Story 5.2's retry-router
+      should also retry on patch × LOW or treat them differently (defer, record
+      as low-priority action items without a retry) requires a human decision;
+      the routing rule should be explicit about all patch × severity combinations.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:89
+    bucket: decision_needed
+    severity: LOW
+  - id: bcov-004
+    source: auditor
+    title: New section's bullet ordering differs from Story 3.1's thickening section
+    detail: >-
+      Acceptance Auditor observed that the Story 3.2 section opens with the
+      passthrough invariant before naming the downstream consumer, while the
+      Story 3.1 thickening section opens with the architectural commitment
+      before the post-aggregation testability pattern; small consistency-of-form
+      observation routed to patch bucket at MED severity (non-blocking — the
+      verdict still passes; cosmetic prose alignment is a follow-up nicety).
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:87
+    bucket: patch
+    severity: MED
+  - id: bcov-005
+    source: merged
+    title: Wrapper and architecture-doc addendum independently restate FR27 invariant
+    detail: >-
+      Blind Hunter and Acceptance Auditor independently observed that FR27 is
+      named in both the wrapper's new Story-3.2 section and the
+      architecture-doc addendum; step-03-triage.md step 2 deduplicated the two
+      findings into one merged-source finding; the duplication is intentional
+      (each artifact serves a different audience — implementer vs. architect)
+      and routed to patch at LOW severity (cosmetic non-blocker).
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:89
+    bucket: patch
+    severity: LOW
+  - id: bcov-006
+    source: edge
+    title: Forward-compat loud-fail path implicitly assumes upstream additions only
+    detail: >-
+      Edge Case Hunter walked the forward-compat path described in the
+      wrapper's new section and observed that the prose covers upstream
+      ADDITIONS (a future bmad-code-review release emits a new bucket or
+      severity value) but does not explicitly cover upstream RENAMES or
+      REMOVALS (e.g., upstream renames `dismiss` to `discarded`); the
+      schema's strict-enum still rejects, but the operational response to a
+      rename is more involved than a pure additive bump; flagged for deferred
+      consideration.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:93
+    bucket: defer
+    severity: HIGH
+  - id: bcov-007
+    source: auditor
+    title: Dismiss finding carried explicitly to test wrapper no-coercion invariant
+    detail: >-
+      Even though step-03-triage.md step 4 normally drops dismiss findings,
+      this finding is carried explicitly to test the wrapper's no-coercion /
+      no-normalization invariant — the wrapper-side passthrough discipline
+      preserves a `dismiss` finding if one ever survives upstream triage;
+      the wrapper does NOT coerce or drop it. This is a contract-test artifact,
+      not a representative-runtime sample.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:Finding-taxonomy-passthrough-discipline
+    bucket: dismiss
+    severity: MED
+  - id: bcov-008
+    source: auditor
+    title: additionalProperties guard test exercises only one extra-field name
+    detail: >-
+      The AC-5 forward-compat test for the additionalProperties guard
+      synthesizes a single extra-field name (`category`); whether to
+      parametrize across multiple plausible names (`subcategory`, `tags`,
+      `priority`) is a coverage-vs-runtime tradeoff; flagged for deferred
+      consideration as a test-coverage nicety rather than a blocking concern.
+    location: bmad-autopilot/tools/loud-fail-harness/tests/test_review_bmad_wrapper.py:test_finding_with_extra_classification_field_fails_envelope_schema_validation
+    bucket: defer
+    severity: LOW
+rationale: >-
+  No patch × HIGH findings emerged; all three layers (Blind Hunter, Edge Case
+  Hunter, Acceptance Auditor) reached a verdict across the full review pass.
+  Status is pass because no HIGH-severity patch-bucket findings were produced.
+  Eight findings span the canonical bucket × severity coverage matrix this
+  fixture exists primarily to cover (decision_needed × {HIGH, MED, LOW},
+  patch × {MED, LOW}, defer × HIGH, dismiss × MED) plus one defer × LOW finding.
+failed_layers: []

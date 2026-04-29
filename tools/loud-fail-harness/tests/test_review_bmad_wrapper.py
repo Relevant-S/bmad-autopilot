@@ -1,34 +1,47 @@
-"""Contract-coverage matrix for the Review-BMAD wrapper (Story 2.9 → Story 3.1).
+"""Contract-coverage matrix for the Review-BMAD wrapper (Story 2.9 → Story 3.1 → Story 3.2).
 
-This docstring IS the contract-coverage checklist required by AC-7 (Story 2.9)
-and AC-5 (Story 3.1). Reviewers verify every row maps to at least one passing
-test in this module. The matrix is review-enforced, NOT CI-enforced (parallel
-to stories 1.2-1.9 + 2.2-2.8). Story 3.1 thickens this file IN PLACE: the
-Story 2.9 single-layer assertions are RELAXED to Epic-3 three-layer scope and
-EXTENDED with new tests for the three new fixtures + cross-fixture invariants.
+This docstring IS the contract-coverage checklist required by AC-7 (Story 2.9),
+AC-5 (Story 3.1), and AC-5 (Story 3.2). Reviewers verify every row maps to at
+least one passing test in this module. The matrix is review-enforced, NOT
+CI-enforced (parallel to stories 1.2-1.9 + 2.2-2.8). Story 3.2 thickens this
+file IN PLACE: existing Story 3.1 tests are PRESERVED verbatim where the
+Story 3.2 wrapper-prose addition is APPENDED (not interleaved); new tests
+cover the 6th review fixture + bucket × severity matrix coverage +
+forward-compat loud-fail path + the wrapper's passthrough-discipline prose.
 
-Fixture-shape conformance (Story 2.9 AC-6/AC-7; Story 3.1 AC-5):
+Fixture-shape conformance (Story 2.9 AC-6/AC-7; Story 3.1 AC-5; Story 3.2 AC-5):
     [x] review-pass-acceptance-auditor.yaml validates against schema     → test_review_pass_acceptance_auditor_fixture_validates_against_schema
     [x] review-fail-layer-failure.yaml validates against schema          → test_review_fail_layer_failure_fixture_validates_against_schema
     [x] review-pass-three-layer.yaml validates against schema            → test_review_pass_three_layer_fixture_validates_against_schema
     [x] review-fail-three-layer-patch.yaml validates against schema      → test_review_fail_three_layer_patch_fixture_validates_against_schema
     [x] review-blocked-partial-layer-failure.yaml validates against schema → test_review_blocked_partial_layer_failure_fixture_validates_against_schema
+    [x] review-pass-bucket-coverage.yaml validates against schema +      → test_review_pass_bucket_coverage_fixture_validates_against_schema
+        spans bucket × severity matrix
 
-Cross-fixture invariants (Story 2.9 AC-4/AC-7, FR52, FR56; Story 3.1 AC-5):
-    [x] every review-*.yaml has failed_layers field present (5 fixtures) → test_all_review_fixtures_have_failed_layers_field_present
+Cross-fixture invariants (Story 2.9 AC-4/AC-7, FR52, FR56; Story 3.1 AC-5;
+Story 3.2 AC-5):
+    [x] every review-*.yaml has failed_layers field present (6 fixtures) → test_all_review_fixtures_have_failed_layers_field_present
     [x] every review-*.yaml failed_layers ⊆ {blind, edge, auditor, lad}  → test_all_review_fixtures_have_failed_layers_subset_of_schema_enum
     [x] every review-*.yaml finding source ∈ schema source enum          → test_all_review_fixtures_have_layer_attribution_preserved_on_findings
     [x] no review-*.yaml carries forbidden flow-policy fields            → test_all_review_fixtures_have_no_forbidden_flow_policy_fields
     [x] every Epic-3-scope review-*.yaml carries surviving findings      → test_epic3_review_fixtures_carry_surviving_findings
+    [x] every finding's bucket ∈ canonical FR27 taxonomy                 → test_all_review_fixtures_buckets_in_canonical_taxonomy
+    [x] every finding's severity ∈ canonical FR27 taxonomy               → test_all_review_fixtures_severities_in_canonical_taxonomy
+
+Forward-compat loud-fail path (Story 3.2 AC-5):
+    [x] unknown bucket value rejected at validate_return_envelope        → test_unknown_bucket_value_fails_envelope_schema_validation
+    [x] unknown severity value rejected at validate_return_envelope      → test_unknown_severity_value_fails_envelope_schema_validation
+    [x] extra classification field on finding rejected at validator      → test_finding_with_extra_classification_field_fails_envelope_schema_validation
 
 Wrapper-prose discipline (Story 2.9 AC-2/AC-3/AC-4/AC-5/AC-7/AC-8;
-Story 3.1 AC-1/AC-2/AC-3/AC-5):
+Story 3.1 AC-1/AC-2/AC-3/AC-5; Story 3.2 AC-1/AC-2/AC-5):
     [x] review-bmad-wrapper.md documents three-layer parallel-pass scope → test_review_bmad_wrapper_documents_three_layer_parallel_pass_scope
     [x] review-bmad-wrapper.md names failed_layers always-present        → test_review_bmad_wrapper_documents_failed_layers_invariant
     [x] review-bmad-wrapper.md has zero cross-specialist references      → test_review_bmad_wrapper_no_cross_specialist_references
     [x] review-bmad-wrapper.md documents bmad-code-review composition    → test_review_bmad_wrapper_documents_bmad_code_review_composition
     [x] review-bmad-wrapper.md documents required envelope fields        → test_review_bmad_wrapper_documents_required_envelope_fields
     [x] review-bmad-wrapper.md documents Acceptance Auditor rationale    → test_review_bmad_wrapper_documents_acceptance_auditor_rationale
+    [x] review-bmad-wrapper.md documents finding-taxonomy passthrough    → test_review_bmad_wrapper_documents_finding_taxonomy_passthrough
 
 Directory shape (Story 2.9 AC-1):
     [x] agents/ contains dev-wrapper.md AND review-bmad-wrapper.md at    → test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper_at_minimum
@@ -91,9 +104,10 @@ def _load_envelope(envelopes_dir: pathlib.Path, filename: str) -> dict[str, Any]
 
 
 def _all_review_envelope_filenames() -> tuple[str, ...]:
-    """Story 3.1 relaxation: the set spans all 5 review-*.yaml fixtures —
-    the 2 Epic-2-scope fixtures from Story 2.9 plus the 3 Epic-3-scope
-    fixtures from Story 3.1.
+    """Story 3.2 extension: the set grows to 6 review-*.yaml fixtures with the
+    addition of review-pass-bucket-coverage.yaml (the canonical bucket × severity
+    matrix coverage shape per Story 3.2 AC-3). Existing Epic-2-scope (Story 2.9)
+    and Epic-3-scope (Story 3.1) fixtures preserved verbatim.
     """
     return (
         "review-pass-acceptance-auditor.yaml",
@@ -101,6 +115,7 @@ def _all_review_envelope_filenames() -> tuple[str, ...]:
         "review-pass-three-layer.yaml",
         "review-fail-three-layer-patch.yaml",
         "review-blocked-partial-layer-failure.yaml",
+        "review-pass-bucket-coverage.yaml",
     )
 
 
@@ -108,6 +123,40 @@ _FAILED_LAYERS_ENUM: frozenset[str] = frozenset({"blind", "edge", "auditor", "la
 _FINDING_SOURCE_ENUM: frozenset[str] = frozenset(
     {"blind", "edge", "auditor", "qa", "lad", "merged"}
 )
+_CANONICAL_BUCKETS: frozenset[str] = frozenset(
+    {"decision_needed", "patch", "defer", "dismiss"}
+)
+_CANONICAL_SEVERITIES: frozenset[str] = frozenset({"HIGH", "MED", "LOW"})
+
+
+def _minimal_valid_finding() -> dict[str, Any]:
+    """Construct a minimal schema-valid finding dict for forward-compat
+    loud-fail tests. Caller mutates exactly one field to introduce the
+    out-of-enum / extra-field condition the test asserts is rejected.
+    """
+    return {
+        "id": "synth-001",
+        "source": "auditor",
+        "title": "synthesized finding for forward-compat loud-fail test",
+        "detail": "Test-only synthesized finding; not produced by any specialist.",
+        "location": "bmad-autopilot/tools/loud-fail-harness/tests/test_review_bmad_wrapper.py:1",
+        "bucket": "defer",
+        "severity": "LOW",
+    }
+
+
+def _minimal_valid_envelope() -> dict[str, Any]:
+    """Construct a minimal schema-valid Review-BMAD envelope wrapping the
+    synthesized finding. Caller mutates the finding's bucket/severity/extras
+    to introduce the loud-fail condition under test.
+    """
+    return {
+        "status": "pass",
+        "artifacts": ["bmad-autopilot/agents/review-bmad-wrapper.md"],
+        "findings": [_minimal_valid_finding()],
+        "rationale": "Synthesized envelope for forward-compat loud-fail test.",
+        "failed_layers": [],
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -473,6 +522,213 @@ def test_review_bmad_wrapper_documents_acceptance_auditor_rationale(
         "review-bmad-wrapper.md must document Acceptance Auditor "
         "seam-contract / aggregated-output rationale (clause b) per "
         "Story 2.9 AC-8 / Story 3.1 AC-1"
+    )
+
+
+def test_review_bmad_wrapper_documents_finding_taxonomy_passthrough(
+    review_wrapper_text: str,
+) -> None:
+    """Story 3.2 AC-5 item 8: the wrapper's new H2 section names the
+    bucket × severity passthrough invariant, the four canonical bucket
+    values, the three canonical severity values, the Story 5.2 / Epic 5
+    retry-router downstream consumer, the no-coercion language, and the
+    forward-compat loud-fail path — all within a single contract section.
+    """
+    text = review_wrapper_text
+    section_idx = text.find("## Finding-taxonomy passthrough")
+    assert section_idx >= 0, (
+        "review-bmad-wrapper.md must declare a Story-3.2 finding-taxonomy "
+        "passthrough section by H2 heading"
+    )
+    # Story 3.2 marker is within 100 chars of the passthrough/taxonomy heading
+    # (the AC accepts either substring as the proximity anchor).
+    heading_window = text[section_idx : section_idx + 100]
+    assert "Story 3.2" in heading_window, (
+        "the passthrough section's heading must name Story 3.2 within 100 "
+        "chars of 'passthrough' or 'taxonomy'"
+    )
+    section_window = text[section_idx : section_idx + 3000]
+    for bucket_value in ("decision_needed", "patch", "defer", "dismiss"):
+        assert bucket_value in section_window, (
+            f"Story 3.2 passthrough section must name bucket value "
+            f"{bucket_value!r} within the new section's 3000-char window"
+        )
+    for severity_value in ("HIGH", "MED", "LOW"):
+        assert severity_value in section_window, (
+            f"Story 3.2 passthrough section must name severity value "
+            f"{severity_value!r} within the new section's 3000-char window"
+        )
+    assert "Story 5.2" in section_window or "Epic 5" in section_window, (
+        "Story 3.2 passthrough section must name Story 5.2 or Epic 5 as the "
+        "downstream retry-router consumer of the bucket signal"
+    )
+    assert "verbatim" in section_window or "passthrough" in section_window, (
+        "Story 3.2 passthrough section must use the no-coercion language "
+        "('verbatim' or 'passthrough') within the new section"
+    )
+    assert (
+        "additionalProperties" in section_window
+        or "forward-compat" in section_window
+        or "forward-compatibility" in section_window
+    ), (
+        "Story 3.2 passthrough section must name the loud-fail path "
+        "('additionalProperties' or 'forward-compat' / 'forward-compatibility')"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Story 3.2 — bucket-coverage fixture shape                                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_review_pass_bucket_coverage_fixture_validates_against_schema(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.2 AC-5 item 2: the new bucket × severity matrix coverage
+    fixture validates against the schema and spans the gap-filling
+    (bucket, severity) combinations the existing 5 review fixtures
+    collectively under-cover.
+    """
+    envelope = _load_envelope(envelopes_dir, "review-pass-bucket-coverage.yaml")
+    result = validate_return_envelope(envelope)
+    assert result.valid, result.errors
+    assert envelope["status"] == "pass"
+    assert envelope["failed_layers"] == []
+    assert len(envelope["findings"]) >= 7, (
+        "review-pass-bucket-coverage fixture must carry at least seven "
+        "findings to span the bucket × severity matrix per Story 3.2 AC-3"
+    )
+    bucket_severity_pairs = {
+        (finding["bucket"], finding["severity"]) for finding in envelope["findings"]
+    }
+    required_pairs = {
+        ("decision_needed", "HIGH"),
+        ("decision_needed", "MED"),
+        ("decision_needed", "LOW"),
+        ("patch", "MED"),
+        ("patch", "LOW"),
+        ("defer", "HIGH"),
+        ("dismiss", "MED"),
+    }
+    missing = required_pairs - bucket_severity_pairs
+    assert not missing, (
+        f"review-pass-bucket-coverage fixture missing required (bucket, "
+        f"severity) combinations: {sorted(missing)}; got {sorted(bucket_severity_pairs)}"
+    )
+    sources = {finding["source"] for finding in envelope["findings"]}
+    assert len(sources) >= 2, (
+        "review-pass-bucket-coverage fixture must surface at least two "
+        "distinct source values per Story 3.2 AC-3 (layer-attribution discipline)"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Story 3.2 — canonical-taxonomy invariants (FR27)                            #
+# --------------------------------------------------------------------------- #
+
+
+def test_all_review_fixtures_buckets_in_canonical_taxonomy(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.2 AC-5 item 3: every review fixture's findings carry only
+    canonical FR27 bucket values. Schema-level enforcement is the structural
+    backstop ($defs/finding bucket enum at envelope.schema.yaml line 130);
+    this test is the explicit FR27 invariant making the canonical-taxonomy
+    commitment a named contract assertion.
+    """
+    for name in _all_review_envelope_filenames():
+        envelope = _load_envelope(envelopes_dir, name)
+        for finding in envelope["findings"]:
+            bucket = finding.get("bucket")
+            assert bucket in _CANONICAL_BUCKETS, (
+                f"{name} finding bucket {bucket!r} not in canonical FR27 "
+                f"taxonomy {sorted(_CANONICAL_BUCKETS)}"
+            )
+
+
+def test_all_review_fixtures_severities_in_canonical_taxonomy(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.2 AC-5 item 4: every review fixture's findings carry only
+    canonical FR27 severity values. Schema-level enforcement is the
+    structural backstop ($defs/finding severity enum at envelope.schema.yaml
+    line 132); this test is the explicit FR27 invariant.
+    """
+    for name in _all_review_envelope_filenames():
+        envelope = _load_envelope(envelopes_dir, name)
+        for finding in envelope["findings"]:
+            severity = finding.get("severity")
+            assert severity in _CANONICAL_SEVERITIES, (
+                f"{name} finding severity {severity!r} not in canonical FR27 "
+                f"taxonomy {sorted(_CANONICAL_SEVERITIES)}"
+            )
+
+
+# --------------------------------------------------------------------------- #
+# Story 3.2 — forward-compat loud-fail path                                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_unknown_bucket_value_fails_envelope_schema_validation() -> None:
+    """Story 3.2 AC-5 item 5: an envelope carrying a finding with an
+    out-of-enum bucket value is REJECTED at validate_return_envelope —
+    the substrate-seam loud-fail per Pattern 5. This is the architectural
+    mechanism that makes the wrapper's verbatim-passthrough commitment
+    safe: a future bmad-code-review release introducing a new bucket
+    value cannot survive the gate without an explicit schema bump
+    recorded in docs/extension-audit.md per Story 3.2 AC-4.
+    """
+    envelope = _minimal_valid_envelope()
+    envelope["findings"][0]["bucket"] = "unknown_future_bucket"
+    result = validate_return_envelope(envelope)
+    assert not result.valid, (
+        "envelope with out-of-enum bucket value must be rejected at the "
+        "substrate seam (forward-compat loud-fail per Pattern 5)"
+    )
+    error_text = " ".join(result.errors).lower()
+    assert "bucket" in error_text or "is not one of" in error_text, (
+        f"validation error must name the offending field/constraint; "
+        f"got {result.errors!r}"
+    )
+
+
+def test_unknown_severity_value_fails_envelope_schema_validation() -> None:
+    """Story 3.2 AC-5 item 6: an envelope carrying a finding with an
+    out-of-enum severity value is REJECTED at validate_return_envelope.
+    """
+    envelope = _minimal_valid_envelope()
+    envelope["findings"][0]["severity"] = "CRITICAL"
+    result = validate_return_envelope(envelope)
+    assert not result.valid, (
+        "envelope with out-of-enum severity value must be rejected at "
+        "the substrate seam (forward-compat loud-fail per Pattern 5)"
+    )
+    error_text = " ".join(result.errors).lower()
+    assert "severity" in error_text or "is not one of" in error_text, (
+        f"validation error must name the offending field/constraint; "
+        f"got {result.errors!r}"
+    )
+
+
+def test_finding_with_extra_classification_field_fails_envelope_schema_validation() -> None:
+    """Story 3.2 AC-5 item 7: an envelope carrying a finding with an extra
+    classification field (e.g., `category`) is REJECTED at
+    validate_return_envelope. The schema's $defs/finding additionalProperties:
+    false (envelope.schema.yaml line 110) is the structural enforcement of
+    the FR27 + FR62 no-introductions invariant.
+    """
+    envelope = _minimal_valid_envelope()
+    envelope["findings"][0]["category"] = "regression"
+    result = validate_return_envelope(envelope)
+    assert not result.valid, (
+        "envelope with extra classification field on a finding must be "
+        "rejected at the substrate seam (additionalProperties: false on "
+        "$defs/finding per envelope.schema.yaml line 110)"
+    )
+    error_text = " ".join(result.errors).lower()
+    assert "additional property" in error_text or "category" in error_text, (
+        f"validation error must name the additionalProperties constraint or "
+        f"the offending field; got {result.errors!r}"
     )
 
 
