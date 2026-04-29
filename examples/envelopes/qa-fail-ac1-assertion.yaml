@@ -1,0 +1,51 @@
+# QA specialist envelope — status=fail, AC-1 verification-failure Epic 2 scope.
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical envelope
+# corpus. This fixture lands with Story 2.10 (minimal QA subagent, AC-1 only,
+# Tier-1 evidence only) to extend the Story 1.2 + Story 2.8 + Story 2.9 corpus
+# with the QA verification-failure shape per FR24a: AC-1 verification ran and
+# the mechanical Tier-1 assertion did NOT hold; the captured evidence proves
+# the failure (e.g., wrong HTTP status). One finding surfaces the failed
+# assertion using bucket=decision_needed (NOT bucket=patch — verification-fail
+# implies semantic drift / gamed tests / integration gaps, not localized
+# fix-targets per FR24a's routing). The orchestrator-side escalation marker
+# emission (verification-fail) is Epic 4's Story 4.10 surface; THIS fixture
+# only proves the wrapper-side declaration shape.
+#
+# The third PRD-canonical QA fixture (`qa-blocked-env-setup.yaml`) is OUT of
+# THIS story's scope and lands with Epic 4 Story 4.10 when env-setup escalation
+# contracts land, per the Story 1.2 strategy "the rest land with whichever
+# story first needs them as fixtures".
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: fail
+artifacts:
+  - _bmad-output/qa-evidence/sample-001/run-2026-04-29-002/ac1-http-503.log
+findings:
+  - id: qa-001
+    source: qa
+    title: AC-1 mechanical assertion failed — HTTP /healthz returned 503
+    detail: >-
+      Expected HTTP POST /healthz to return status 200 per AC-1; observed
+      status 503 (service unavailable). Captured evidence at
+      _bmad-output/qa-evidence/sample-001/run-2026-04-29-002/ac1-http-503.log
+      shows the response body and timing. Per FR24a the orchestrator's flow
+      policy routes verification-fail through the decision_needed bucket
+      (this wrapper does not decide — it merely reports the failed AC).
+    location: _bmad-output/qa-evidence/sample-001/run-2026-04-29-002/ac1-http-503.log:1
+    bucket: decision_needed
+    severity: HIGH
+rationale: >-
+  AC-1 mechanical assertion did not hold: HTTP POST /healthz returned 503
+  instead of expected 200; evidence captured under the canonical qa-evidence
+  path. Orchestrator-side flow policy routes verification-fail per FR24a.
+ac_results:
+  - ac_id: AC-1
+    status: fail
+    assertions:
+      - HTTP POST /healthz returned status code 200
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-04-29-002/ac1-http-503.log
+    semantic_verification: not_applicable

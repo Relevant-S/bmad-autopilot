@@ -21,7 +21,8 @@ Wrapper-prose discipline (AC-2, AC-3, AC-4, AC-5, AC-7, AC-8):
     [x] review-bmad-wrapper.md documents Acceptance Auditor rationale  → test_review_bmad_wrapper_documents_acceptance_auditor_rationale
 
 Directory shape (AC-1):
-    [x] agents/ contains dev-wrapper.md AND review-bmad-wrapper.md     → test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper
+    [x] agents/ contains dev-wrapper.md AND review-bmad-wrapper.md at  → test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper_at_minimum
+        minimum (one of three+ specialist files at this point)
     [x] review-bmad-wrapper.md uses LF line endings                    → test_review_bmad_wrapper_has_lf_line_endings
 """
 
@@ -290,14 +291,14 @@ def test_review_bmad_wrapper_documents_acceptance_auditor_rationale(
 # --------------------------------------------------------------------------- #
 
 
-def test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper(
+def test_agents_directory_contains_dev_wrapper_and_review_bmad_wrapper_at_minimum(
     agents_dir: pathlib.Path,
 ) -> None:
     assert agents_dir.is_dir(), "agents/ directory must exist"
     md_files = sorted(p.name for p in agents_dir.glob("*.md"))
-    assert set(md_files) == {"dev-wrapper.md", "review-bmad-wrapper.md"}, (
-        "agents/ top-level must contain exactly dev-wrapper.md and "
-        f"review-bmad-wrapper.md; found {md_files}"
+    assert {"dev-wrapper.md", "review-bmad-wrapper.md"}.issubset(set(md_files)), (
+        "agents/ top-level must contain dev-wrapper.md and review-bmad-wrapper.md "
+        f"at minimum (additional sibling specialists permitted); found {md_files}"
     )
     subdirs = [p for p in agents_dir.iterdir() if p.is_dir()]
     assert subdirs == [], f"agents/ must have no subdirectories; found {subdirs}"
