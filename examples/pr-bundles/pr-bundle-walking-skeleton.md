@@ -1,14 +1,16 @@
 <!--
-Canonical example PR bundle fixture — Story 2.11 (basic merge-ready PR bundle assembly).
+Canonical example PR bundle fixture — regenerated at Story 3.4
+(PR-bundle review-section bucket × severity rendering with retained
+Walking Skeleton Mode marker).
 
-Source story: bmad-autopilot/_bmad-output/implementation-artifacts/2-11-basic-merge-ready-pr-bundle-assembly-with-machine-readable-walking-skeleton-header.md
-Source envelopes (canonical corpus):
-  - examples/envelopes/dev-pass.yaml         (Story 1.2)
-  - examples/envelopes/review-pass-acceptance-auditor.yaml (Story 2.9)
-  - examples/envelopes/qa-pass-ac1-tier1.yaml             (Story 2.10)
+Source story: bmad-autopilot/_bmad-output/implementation-artifacts/3-4-pr-bundle-review-section-rendering-with-retained-walking-skeleton-mode-marker.md
+Source envelopes (post-3.4 canonical corpus):
+  - examples/envelopes/dev-pass.yaml                 (Story 1.2)
+  - examples/envelopes/review-pass-three-layer.yaml  (Story 3.1)
+  - examples/envelopes/qa-pass-ac1-tier1.yaml        (Story 2.10)
 Assembler module: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py
 
-This fixture is a regression baseline. Subsequent epics (3 / 4 / 5 / 6)
+This fixture is a regression baseline. Subsequent epics (4 / 5 / 6)
 regenerate this fixture in place when bundle rendering thickens —
 review the diff before committing the regenerated fixture.
 -->
@@ -23,7 +25,6 @@ Generated: 2026-04-29T12:00:00+00:00
 This PR bundle is a walking-skeleton — it enumerates the structural shape of the BMAD automation loop while the following thickenings remain unfinished:
 
 - Tier-1 evidence only (Epic 4 thickens to Tier-2 + Tier-3-where-configured).
-- Single-layer review (Epic 3 thickens to 3-layer adversarial pass).
 - No retry (Epic 5 thickens with whole-story retry budget + bucket-driven action item derivation).
 - No loud-fail block (Epic 6 thickens with the dedicated top-of-bundle loud-fail block + per-specialist × per-retry cost breakdown + actionable how-to-enable pointers).
 
@@ -41,7 +42,15 @@ This PR bundle is a walking-skeleton — it enumerates the structural shape of t
 
 ## Review findings
 
-- **review-001** — Story doc references epics.md line numbers verbatim _(bucket: `defer`, severity: `LOW`)_
+### bucket: defer
+
+**MED:**
+- [blind] `review-001` — Diff-only adversarial pass surfaced no contract violations (`bmad-autopilot/agents/review-bmad-wrapper.md:1`)
+
+**LOW:**
+- [edge] `review-002` — Boundary condition on partial layer failure shape covered by fixtures (`bmad-autopilot/agents/review-bmad-wrapper.md:55`)
+- [auditor] `review-003` — Story doc references epics.md line numbers verbatim (`bmad-autopilot/_bmad-output/implementation-artifacts/3-1-three-layer-parallel-pass-wiring.md:1`)
+- [merged] `review-004` — Wrapper prose explicitly names all three layer identifiers (`bmad-autopilot/agents/review-bmad-wrapper.md:25`)
 
 Failed layers: (none)
 

@@ -1,8 +1,10 @@
 """Walking-skeleton thickening-status flag namespace (Story 2.11 AC-2).
 
 Four boolean-returning functions naming the four thickening features the
-Epic-2 substrate intentionally omits. At Epic 2 substrate state every
-function returns ``False`` unconditionally; downstream epics flip in
+Epic-2 substrate intentionally omits. At Epic 2 substrate state all
+four functions return ``False``; :func:`is_full_review_present` was
+flipped to ``True`` at Story 3.4 (the first production in-place flip);
+downstream epics flip in
 place — each Epic flips the corresponding flag in this same module
 (same module identity, same function signatures), only the function
 bodies thicken:
@@ -57,15 +59,23 @@ from __future__ import annotations
 
 
 def is_full_review_present() -> bool:
-    """``True`` once Epic 3's three-layer adversarial review pass lands.
+    """``True`` — Epic 3's three-layer adversarial review pass HAS LANDED.
 
-    Epic 2 substrate state: returns ``False`` unconditionally — the
-    Epic-2-era Review-BMAD wrapper (Story 2.9) ships a single-layer
-    Acceptance Auditor only. Epic 3's Story 3.1 lands the parallel
-    Blind Hunter + Edge Case Hunter + Acceptance Auditor wiring, at
-    which point this function flips in place.
+    Post-Story-3.4 substrate state: returns ``True``. Epic 3's Stories
+    3.1 (three-layer parallel-pass wiring) + 3.2 (finding-taxonomy
+    passthrough + bucket-driven retry-router prep) + 3.3 (failed_layers
+    graceful-degradation three-channel atomic emission) + 3.4 (PR-bundle
+    review-section bucket × severity rendering + this in-place flip)
+    collectively delivered the full three-layer adversarial review
+    surface; the flag flips per the in-place-flip pattern Story 2.11
+    AC-2 ratified (epics.md lines 1521-1522: "each downstream epic flips
+    its corresponding flag when its thickening lands"). The flip
+    cascades automatically through ``_render_walking_skeleton_header``
+    in :mod:`loud_fail_harness.bundle_assembly` — the
+    "Single-layer review (Epic 3 thickens to 3-layer adversarial pass)"
+    sentence is now omitted from the dynamic header body.
     """
-    return False
+    return True
 
 
 def is_full_qa_present() -> bool:

@@ -154,6 +154,14 @@ A `research-needed` classification entry on the per-convention table MUST name i
 
 ---
 
+## Marker emission rules — the structural-not-era-based principle (Story 3.4 worked instance)
+
+> **"The `walking-skeleton-bundle` marker emission rule is structural — predicated on whether `is_loud_fail_block_present()` returns `False` — NOT era-based — predicated on a hardcoded 'if Epic == 2' check. Epic 3 retains the marker emission rule unchanged. The marker continues to emit because `is_loud_fail_block_present()` continues to return `False` at Epic 3 substrate state; Epic 3 is NOT the era that triggers suppression. Epic 6 / Story 6.1 owns the loud-fail block landing that flips the predicating flag, at which point emission inverts without any edit to the bundle-assembly rendering code."**
+
+The principle is verifiable against the existing artifacts: `schemas/marker-taxonomy.yaml` lines 210-216's `walking-skeleton-bundle` `diagnostic_pointer` prose names the rule ("absent loud-fail block triggers the marker, NOT 'Epic 2 era triggers the marker' (rule clarified by Epic 6).") AND `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py`'s module docstring at lines 41-52 re-states it AND the runtime predicate at `_emit_walking_skeleton_marker` (lines 680-698) consults `thickening_flags.is_loud_fail_block_present()` directly. Story 3.4 is the first downstream test of the rule: at Epic 3 substrate state the renderer surfaces a thickened review-section bucket × severity grouping AND the `is_full_review_present` flag flips to `True`, but the `walking-skeleton-bundle` marker continues to emit because the predicating flag (`is_loud_fail_block_present`) stays `False`. The companion regression test `test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state` in `tests/test_bundle_assembly.py` is the baseline guard against accidental Epic-3 / 4 / 5 pre-emption of Epic 6's responsibility; the Story 2.11 AC-4 test `test_walking_skeleton_marker_suppressed_when_loud_fail_block_present` (which substitutes a stub flag namespace) is the structural witness that the inversion fires correctly when Epic 6 lands the production flag flip.
+
+---
+
 ## Contributor-discipline notes
 
 This subsection holds append-only contributor-discipline notes — fixture/file location invariants, naming overlaps to avoid, and similar review-time conventions that are NOT BMAD-extension classification events (those go in the per-convention table above). These notes are review-enforced per `extension-audit.md`'s overall posture (ADR-003 line 292), NOT CI-enforced; reviewers verify the discipline at PR review time.

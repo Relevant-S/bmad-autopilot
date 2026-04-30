@@ -111,7 +111,10 @@ import yaml
 from loud_fail_harness import thickening_flags as _default_thickening_flags
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
-from loud_fail_harness.review_layer_failure import REVIEW_LAYER_FAILED_MARKER
+from loud_fail_harness.review_layer_failure import (
+    META_REVIEW_COMPLETENESS,
+    REVIEW_LAYER_FAILED_MARKER,
+)
 from loud_fail_harness.run_state import RunState
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
@@ -433,49 +436,144 @@ def _render_per_ac_section(qa_envelope: dict[str, Any]) -> str:
     return "\n\n".join(blocks)
 
 
+#: Story 3.4 AC-1 fixed bucket order — the canonical FR27 enum from
+#: ``schemas/envelope.schema.yaml`` ``$defs/finding.bucket`` (lines 127-129).
+#: The renderer iterates this tuple to produce per-bucket sub-sections in
+#: deterministic order; out-of-enum values would have been rejected at
+#: ``validate_envelope`` upstream per the Story 3.2 passthrough invariant.
+_BUCKET_ORDER: tuple[str, ...] = ("decision_needed", "patch", "defer", "dismiss")
+
+#: Story 3.4 AC-1 fixed severity order — the canonical FR27 enum from
+#: ``schemas/envelope.schema.yaml`` ``$defs/finding.severity`` (lines 130-132).
+_SEVERITY_ORDER: tuple[str, ...] = ("HIGH", "MED", "LOW")
+
+
+def _render_finding_bullet(finding: dict[str, Any]) -> str:
+    """Render a single finding bullet with source-layer attribution.
+
+    Story 3.4 AC-1: each bullet surfaces the finding's ``id`` (rendered
+    as inline code), ``title``, ``source`` layer name (rendered as an
+    ``[<layer>]`` square-bracket prefix tag), and ``location`` (rendered
+    as inline code when non-empty). The ``source`` enum permits ``blind``
+    / ``edge`` / ``auditor`` / ``merged`` for the Review-BMAD wrapper's
+    own findings AND ``qa`` / ``lad`` for cross-specialist envelopes
+    (``envelope.schema.yaml`` lines 115-117); whatever value the finding
+    carries is rendered verbatim.
+    """
+    fid = finding.get("id", "(unknown)")
+    title = finding.get("title", "(no title)")
+    source = finding.get("source", "(unknown)")
+    location = finding.get("location", "")
+    if location:
+        return f"- [{source}] `{fid}` — {title} (`{location}`)"
+    return f"- [{source}] `{fid}` — {title}"
+
+
 def _render_review_findings_section(
     review_envelope: dict[str, Any],
     *,
     marker_registry: MarkerClassRegistry,
 ) -> str:
-    """Render the ``## Review findings`` section from Review-BMAD's
-    envelope's ``findings`` array (FR56) and ``failed_layers`` array.
+    """Render the ``## Review findings`` section grouped by ``bucket`` ×
+    ``severity`` with source-layer attribution (Story 3.4 AC-1).
 
-    On empty ``findings`` the section body is ``_(no findings)_``. On
-    non-empty array each finding is rendered with its ``id``,
-    ``title``, ``bucket``, ``severity`` per the schema's
-    ``$defs/finding`` shape. At Epic 2 scope ``failed_layers`` is empty
-    per Story 2.9; the renderer surfaces ``Failed layers: (none)``.
+    Layer-produced content findings (those whose ``meta`` field is NOT
+    set to the synthetic-meta-finding discriminator ``META_REVIEW_COMPLETENESS``
+    imported from :mod:`loud_fail_harness.review_layer_failure`) are
+    partitioned by ``bucket`` ∈ ``(decision_needed, patch, defer,
+    dismiss)`` in fixed order, then by ``severity`` ∈
+    ``(HIGH, MED, LOW)`` within each non-empty bucket.
+    Empty bucket/severity slots are elided (no orphan headers). Each
+    bullet carries its ``source`` layer name as a ``[<layer>]`` prefix
+    tag per Story 3.1's layer-attribution discipline preserved through
+    triage.
 
-    Story 3.3 thickening (AC-4): when ``failed_layers`` is non-empty,
-    one ``<!-- bmad-automation:marker review-layer-failed: <layer> -->``
-    HTML-comment marker is rendered per failed layer co-located with
-    the existing "Failed layers: ..." prose. The marker class is
-    pre-validated against ``marker_registry`` at render time per the
-    dispatch substrate's defense-in-depth pattern (the wrapper-side
-    ``surface_failed_layers`` already validates; the assembler
-    validates again here per the same Pattern 5 discipline that
-    governs the walking-skeleton-bundle marker emission). When
-    ``failed_layers`` is empty, ZERO marker comments are rendered
-    (silent at channel 2 for the zero-failure path; per Story 3.3
-    AC-1 channel-2 silence invariant).
+    Synthetic findings carrying the ``META_REVIEW_COMPLETENESS``
+    discriminator on their ``meta`` field (Story 3.3 AC-2 schema bump;
+    emitted by ``surface_failed_layers``) are rendered in a SEPARATE
+    sub-section appearing AFTER the bucket × severity sections under a
+    dedicated heading naming the synthetic-meta-finding nature so the
+    human reviewer can distinguish "the wrapper synthesized this because
+    a layer crashed" (Story 3.3 channel-3 surface) from "a layer
+    observed this in the diff" (the Blind Hunter / Edge Case Hunter /
+    Acceptance Auditor content findings).
+
+    On empty ``findings`` AND empty ``failed_layers`` the section body is
+    ``_(no findings)_`` + ``Failed layers: (none)`` (legacy placeholders
+    preserved per Story 3.4 AC-1 (d)).
+
+    Story 3.3 thickening (AC-4) PRESERVED VERBATIM: when ``failed_layers``
+    is non-empty, one ``<!-- bmad-automation:marker review-layer-failed:
+    <layer> -->`` HTML-comment marker is rendered per failed layer
+    co-located with the existing "Failed layers: ..." prose, with the
+    per-layer ``validate_marker_emission`` defense-in-depth call firing
+    exactly once per failed layer (the AC-9 CI lint
+    ``review-layer-failure-emission-gate`` structurally allowlists this
+    canonical site). When ``failed_layers`` is empty, ZERO marker
+    comments are rendered (silent at channel 2 for the zero-failure
+    path; per Story 3.3 AC-1 channel-2 silence invariant).
     """
     findings = review_envelope.get("findings") or []
     failed_layers = review_envelope.get("failed_layers") or []
 
-    if findings:
-        finding_blocks: list[str] = []
-        for finding in findings:
-            fid = finding.get("id", "(unknown)")
-            title = finding.get("title", "(no title)")
-            bucket = finding.get("bucket", "(unknown)")
-            severity = finding.get("severity", "(unknown)")
-            finding_blocks.append(
-                f"- **{fid}** — {title} _(bucket: `{bucket}`, severity: `{severity}`)_"
+    # Story 3.4 AC-1 partition: layer-produced content findings vs
+    # synthetic meta-findings carrying the META_REVIEW_COMPLETENESS
+    # discriminator (the Story 3.3 channel-3 surface). The discriminator
+    # is the partitioning key per the verbatim Story 3.4 AC at epics.md
+    # line 1729; a synthetic meta finding's bucket is decision_needed by
+    # Story 3.3 AC-1 contract, but it does NOT render in the bucket
+    # sub-section — it renders in the dedicated meta sub-section.
+    content_findings: list[dict[str, Any]] = [
+        f for f in findings if f.get("meta") != META_REVIEW_COMPLETENESS
+    ]
+    meta_findings: list[dict[str, Any]] = [
+        f for f in findings if f.get("meta") == META_REVIEW_COMPLETENESS
+    ]
+
+    section_chunks: list[str] = []
+
+    # Bucket × severity grouping for layer-produced content findings.
+    bucket_chunks: list[str] = []
+    for bucket in _BUCKET_ORDER:
+        in_bucket = [f for f in content_findings if f.get("bucket") == bucket]
+        if not in_bucket:
+            continue
+        severity_chunks: list[str] = []
+        for severity in _SEVERITY_ORDER:
+            in_severity = [f for f in in_bucket if f.get("severity") == severity]
+            if not in_severity:
+                continue
+            severity_chunks.append(
+                f"**{severity}:**\n"
+                + "\n".join(_render_finding_bullet(f) for f in in_severity)
             )
-        findings_body = "\n".join(finding_blocks)
-    else:
+        if severity_chunks:
+            bucket_chunks.append(
+                f"### bucket: {bucket}\n\n" + "\n\n".join(severity_chunks)
+            )
+    if bucket_chunks:
+        section_chunks.append("\n\n".join(bucket_chunks))
+
+    # Synthetic meta-finding sub-section (rendered AFTER bucket sections
+    # so layer-produced content findings read first per the AC-1 (b)
+    # recommended placement).
+    if meta_findings:
+        meta_lines = [
+            "### Review-completeness meta-findings (synthetic; per Story 3.3)",
+            "",
+        ]
+        meta_lines.extend(_render_finding_bullet(f) for f in meta_findings)
+        section_chunks.append("\n".join(meta_lines))
+
+    if not content_findings and not meta_findings:
+        # AC-1 (d) empty-array case: preserve the legacy placeholder when
+        # no findings exist at all. (When `failed_layers` is non-empty
+        # but `findings` is empty, this branch still applies — the
+        # findings body renders the placeholder, and the failed_layers
+        # prose + per-layer markers render below.)
         findings_body = "_(no findings)_"
+    else:
+        findings_body = "\n\n".join(section_chunks)
 
     if failed_layers:
         failed_layers_body_lines = [

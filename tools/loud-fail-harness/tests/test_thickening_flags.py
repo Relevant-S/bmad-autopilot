@@ -2,11 +2,19 @@
 
 This docstring IS the contract-coverage matrix per AC-2.
 
-AC-2 — four-flag namespace at Epic 2 substrate state:
-    [x] all four flags return False                                → test_thickening_flags_all_return_false_at_epic_2_substrate_state
+AC-2 — four-flag namespace (post-Story-3.4 substrate state per AC-7):
+    [x] post-3.4 substrate state: 3 flags False + 1 flag True      → test_thickening_flags_at_epic_3_substrate_state
     [x] module docstring documents the in-place-flip pattern       → test_thickening_flags_module_documents_in_place_flip_pattern
     [x] each function takes zero args and returns bool             → test_thickening_flags_signatures_take_zero_args_return_bool
     [x] flags are functions, not constants                         → test_thickening_flags_are_functions_not_constants
+
+Story 3.4 AC-7: the all-False-at-Epic-2 baseline is RELAXED IN PLACE.
+Story 3.4 flipped ``is_full_review_present`` to ``True`` per the
+Story 2.11 in-place-flip pattern; the test that asserted the all-False
+baseline is renamed to reflect the post-3.4 substrate state where
+exactly one flag (``is_full_review_present``) returns ``True`` and
+exactly three flags (``is_full_qa_present`` / ``is_retry_present`` /
+``is_loud_fail_block_present``) continue to return ``False``.
 """
 
 from __future__ import annotations
@@ -16,8 +24,13 @@ import inspect
 from loud_fail_harness import thickening_flags
 
 
-def test_thickening_flags_all_return_false_at_epic_2_substrate_state() -> None:
-    assert thickening_flags.is_full_review_present() is False
+def test_thickening_flags_at_epic_3_substrate_state() -> None:
+    """Post-Story-3.4 substrate state: ``is_full_review_present`` is the
+    single flipped flag (Story 3.4 AC-2). The remaining three flags
+    continue to return ``False`` until their respective Epics' lead
+    stories land (Epic 4 / 5 / 6).
+    """
+    assert thickening_flags.is_full_review_present() is True
     assert thickening_flags.is_full_qa_present() is False
     assert thickening_flags.is_retry_present() is False
     assert thickening_flags.is_loud_fail_block_present() is False

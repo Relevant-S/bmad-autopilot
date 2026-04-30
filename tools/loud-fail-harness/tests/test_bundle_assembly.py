@@ -53,6 +53,15 @@ AC-7 — canonical example bundle fixture:
 
 Review patches (2026-04-29):
     [x] dynamic fence prevents triple-backtick commit msg breakage  → test_dev_section_renders_backtick_containing_commit_message_without_breaking_fence
+
+Story 3.4 — bucket × severity grouped review-section rendering:
+    [x] groups by bucket then severity in fixed order; elides empties → test_review_findings_section_groups_by_bucket_then_severity
+    [x] tags each finding with its source layer                       → test_review_findings_section_tags_each_finding_with_source_layer
+    [x] segregates synthetic meta-findings from layer findings       → test_review_findings_section_segregates_meta_findings_from_layer_findings
+    [x] meta-only envelope renders only meta sub-section              → test_review_findings_section_meta_only_envelope_renders_only_meta_subsection
+    [x] header drops "Single-layer review" sentence at Epic 3        → test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3
+    [x] walking-skeleton-bundle marker still emits at Epic 3         → test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state
+    [x] per-layer review-layer-failed marker emission preserved      → test_review_findings_section_per_layer_marker_emission_preserved
 """
 
 from __future__ import annotations
@@ -107,8 +116,13 @@ def canonical_dev_envelope(envelopes_dir: pathlib.Path) -> dict[str, Any]:
 
 @pytest.fixture(scope="module")
 def canonical_review_envelope(envelopes_dir: pathlib.Path) -> dict[str, Any]:
+    # Story 3.4 AC-5: canonical review envelope is now the Story-3.1
+    # three-layer-pass shape (four findings sourced from blind / edge /
+    # auditor / merged); the Story-2.9 single-layer fixture
+    # `review-pass-acceptance-auditor.yaml` is preserved as a corpus
+    # entry but is no longer the canonical bundle-fixture input.
     return yaml.safe_load(
-        (envelopes_dir / "review-pass-acceptance-auditor.yaml").read_text(encoding="utf-8")
+        (envelopes_dir / "review-pass-three-layer.yaml").read_text(encoding="utf-8")
     )
 
 
@@ -495,13 +509,22 @@ def test_walking_skeleton_mode_body_enumerates_all_four_missing_thickenings_at_e
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
+    """Structural test: with ALL FOUR flags returning ``False`` (the
+    Epic-2 substrate state), the renderer enumerates all four missing
+    thickenings. Story 3.4 AC-3 flipped ``is_full_review_present`` to
+    ``True`` in production ``thickening_flags``, so this test now
+    injects an explicit all-False namespace via ``_flags_namespace()``
+    to cover the structural-not-era-based emission path. The
+    post-3.4-substrate-state behavior is covered by the companion test
+    ``test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3``.
+    """
     result, _ = _assemble(
         tmp_path=tmp_path,
         canonical_dev_envelope=canonical_dev_envelope,
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
-        flags=thickening_flags,  # default — all four return False
+        flags=_flags_namespace(),  # all four return False — Epic-2 baseline
     )
     header = result.header_text
     assert "Tier-1 evidence only" in header
@@ -569,6 +592,14 @@ def test_review_findings_section_renders_non_empty_findings(
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
+    """Story 3.4 AC-1 relaxation: this test, originally written against
+    the flat-list rendering shape (Story 2.11 era), is updated in place
+    to assert the new bucket × severity grouped shape against the
+    canonical three-layer envelope (Story 3.1; AC-5 swap). The
+    layer-attribution invariant is covered in
+    ``test_review_findings_section_tags_each_finding_with_source_layer``
+    below.
+    """
     _, bundle_path = _assemble(
         tmp_path=tmp_path,
         canonical_dev_envelope=canonical_dev_envelope,
@@ -577,11 +608,16 @@ def test_review_findings_section_renders_non_empty_findings(
         runtime_marker_registry=runtime_marker_registry,
     )
     body = bundle_path.read_text(encoding="utf-8")
-    # Canonical review envelope has a single 'review-001' finding.
+    # Canonical three-layer review envelope has four findings; all four
+    # are bucket: defer with severities {MED, LOW, LOW, LOW}.
     assert "review-001" in body
-    assert "Story doc references epics.md line numbers verbatim" in body
-    assert "bucket: `defer`" in body
-    assert "severity: `LOW`" in body
+    assert "review-004" in body
+    # New bucket × severity grouped sub-headers.
+    assert "### bucket: defer" in body
+    assert "**MED:**" in body
+    assert "**LOW:**" in body
+    # Old flat-list rendering shape is gone (Story 3.4 AC-1 relaxation).
+    assert "_(bucket: `defer`, severity: `LOW`)_" not in body
 
 
 def test_review_findings_section_renders_failed_layers_empty_at_epic_2(
@@ -942,7 +978,9 @@ def test_assemble_bundle_reads_three_specialist_logs(
     body = bundle_path.read_text(encoding="utf-8")
     # Dev surface (proposed_commit_message)
     assert canonical_dev_envelope["proposed_commit_message"] in body
-    # Review surface (finding id)
+    # Review surface (finding id; the post-3.4 three-layer fixture carries
+    # review-001 through review-004, all sourced from the four layer
+    # identifiers — see Story 3.4 AC-5).
     assert "review-001" in body
     # QA surface (AC-1 assertion)
     assert "HTTP POST /healthz returned status code 200" in body
@@ -1371,3 +1409,332 @@ def test_dev_section_renders_backtick_containing_commit_message_without_breaking
     )
     # Structured marker must still appear after the Dev section (bundle is intact).
     assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+
+
+# --------------------------------------------------------------------------- #
+# Story 3.4 — bucket × severity grouped review-section rendering              #
+# --------------------------------------------------------------------------- #
+
+
+def _synthesize_finding(
+    *,
+    fid: str,
+    source: str,
+    bucket: str,
+    severity: str,
+    title: str = "synth title",
+    detail: str = "synth detail",
+    location: str = "agents/x.md:1",
+    meta: str | None = None,
+) -> dict[str, Any]:
+    finding: dict[str, Any] = {
+        "id": fid,
+        "source": source,
+        "title": title,
+        "detail": detail,
+        "location": location,
+        "bucket": bucket,
+        "severity": severity,
+    }
+    if meta is not None:
+        finding["meta"] = meta
+    return finding
+
+
+def test_review_findings_section_groups_by_bucket_then_severity(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 3.4 AC-1: findings spanning all four buckets × three
+    severities render under bucket sub-headers in fixed order
+    (decision_needed, patch, defer, dismiss); within each non-empty
+    bucket, severity sub-headers appear in fixed order (HIGH, MED,
+    LOW); empty bucket × severity slots are elided.
+    """
+    review_envelope: dict[str, Any] = {
+        "status": "pass",
+        "artifacts": ["bmad-autopilot/x.md"],
+        "findings": [
+            _synthesize_finding(
+                fid="f-dn-h",
+                source="auditor",
+                bucket="decision_needed",
+                severity="HIGH",
+            ),
+            _synthesize_finding(
+                fid="f-pa-m",
+                source="blind",
+                bucket="patch",
+                severity="MED",
+            ),
+            _synthesize_finding(
+                fid="f-de-l",
+                source="edge",
+                bucket="defer",
+                severity="LOW",
+            ),
+            _synthesize_finding(
+                fid="f-di-l",
+                source="merged",
+                bucket="dismiss",
+                severity="LOW",
+            ),
+        ],
+        "rationale": "synthesized for grouping test",
+        "failed_layers": [],
+    }
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+
+    # Each non-empty bucket renders a sub-header.
+    for bucket in ("decision_needed", "patch", "defer", "dismiss"):
+        assert f"### bucket: {bucket}" in body, f"missing bucket sub-header: {bucket}"
+
+    # Bucket sub-headers appear in fixed canonical order.
+    bucket_positions = [
+        body.index(f"### bucket: {bucket}")
+        for bucket in ("decision_needed", "patch", "defer", "dismiss")
+    ]
+    assert bucket_positions == sorted(bucket_positions), (
+        "bucket sub-headers must render in fixed canonical order "
+        "(decision_needed, patch, defer, dismiss)"
+    )
+
+    # Empty severity slots are elided — there is no `**MED:**` under
+    # `decision_needed` (which only contains HIGH), no `**HIGH:**`
+    # under `patch` (which only contains MED), etc. Validate by
+    # counting that exactly four severity sub-headers render in total.
+    severity_header_counts = sum(
+        body.count(f"**{sev}:**") for sev in ("HIGH", "MED", "LOW")
+    )
+    assert severity_header_counts == 4, (
+        f"expected 4 severity sub-headers (one per finding); got {severity_header_counts}"
+    )
+
+
+def test_review_findings_section_tags_each_finding_with_source_layer(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 3.4 AC-1: each finding bullet carries a `[<source-layer>]`
+    tag identifying its origin. The canonical three-layer fixture
+    carries one finding from each of {blind, edge, auditor, merged}.
+    """
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    for source in ("blind", "edge", "auditor", "merged"):
+        assert f"[{source}]" in body, (
+            f"source-layer tag [{source}] missing from rendered review section"
+        )
+
+
+def test_review_findings_section_segregates_meta_findings_from_layer_findings(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.4 AC-1: synthetic findings carrying `meta:
+    review-completeness` (Story 3.3 channel-3 surface) render in a
+    dedicated sub-section visually distinct from layer-produced
+    content findings. The meta finding is NOT rendered in the
+    `decision_needed` bucket section even though its bucket value is
+    decision_needed.
+    """
+    review_envelope = yaml.safe_load(
+        (envelopes_dir / "review-pass-partial-layer-failure-with-meta.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+
+    # Layer-produced content findings appear in bucket sections.
+    assert "### bucket: defer" in body
+    assert "review-001" in body  # source: blind, bucket: defer, sev: LOW
+    assert "review-002" in body  # source: auditor, bucket: defer, sev: LOW
+
+    # Synthetic meta finding renders in dedicated sub-section.
+    assert "### Review-completeness meta-findings" in body
+    assert "review-layer-failed-edge" in body
+
+    # The meta finding is NOT placed in the decision_needed bucket
+    # section: there is no `### bucket: decision_needed` header
+    # because no NON-meta finding has that bucket.
+    assert "### bucket: decision_needed" not in body
+
+
+def test_review_findings_section_meta_only_envelope_renders_only_meta_subsection(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.4 AC-1 (d) edge case: an envelope whose findings are
+    ONLY synthetic meta findings (the Story 3.3 all-three-layers-failed
+    shape) renders the meta sub-section as the sole content; bucket
+    × severity sub-headers are elided (no orphan `### bucket:` headers);
+    `failed_layers` prose + per-layer markers ARE rendered (the Story
+    3.3 AC-4 invariant is preserved through the rendering thickening).
+    """
+    review_envelope = yaml.safe_load(
+        (envelopes_dir / "review-blocked-three-layer-failure-with-meta.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+
+    # No bucket sub-headers (no orphan headers; no layer-produced findings).
+    for bucket in ("decision_needed", "patch", "defer", "dismiss"):
+        assert f"### bucket: {bucket}" not in body, (
+            f"bucket sub-header `{bucket}` rendered with no layer findings"
+        )
+
+    # Meta sub-section IS rendered with all three meta findings.
+    assert "### Review-completeness meta-findings" in body
+    assert "review-layer-failed-auditor" in body
+    assert "review-layer-failed-blind" in body
+    assert "review-layer-failed-edge" in body
+
+    # failed_layers prose + per-layer marker comments preserved.
+    assert "Failed layers:" in body
+    assert "review-layer-failed: auditor" in body
+    assert "review-layer-failed: blind" in body
+    assert "review-layer-failed: edge" in body
+
+
+def test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 3.4 AC-3: with the post-3.4 production thickening_flags
+    (`is_full_review_present` returns ``True``), the Walking Skeleton
+    Mode body enumerates EXACTLY THREE missing-thickening sentences;
+    the "Single-layer review (Epic 3 thickens to 3-layer adversarial
+    pass)." sentence is OMITTED.
+    """
+    result, _ = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+        flags=thickening_flags,  # production module — post-3.4 substrate state
+    )
+    header = result.header_text
+
+    # Bullet count: exactly three sentences (lines beginning with `- `).
+    bullets = [line for line in header.splitlines() if line.startswith("- ")]
+    assert len(bullets) == 3, (
+        f"expected 3 missing-thickening bullets at post-3.4 substrate state; "
+        f"got {len(bullets)}: {bullets!r}"
+    )
+
+    # The dropped sentence is the structural witness of the flag flip.
+    assert "Single-layer review (Epic 3 thickens" not in header
+
+    # The remaining three sentences are present.
+    assert "Tier-1 evidence only" in header
+    assert "No retry" in header
+    assert "No loud-fail block" in header
+
+
+def test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 3.4 AC-4 regression baseline: with the post-3.4 production
+    thickening_flags (``is_loud_fail_block_present`` continues to
+    return ``False``), the ``walking-skeleton-bundle`` marker continues
+    to emit. The emission rule is structural (`absent loud-fail block
+    triggers the marker`), NOT era-based; Epic 3 is NOT the era that
+    triggers suppression — Epic 6 / Story 6.1 owns the loud-fail block
+    landing that flips the flag. This test guards against accidental
+    pre-emption of Epic 6's responsibility in the Epic 3 / 4 / 5
+    timeframes.
+    """
+    result, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+        flags=thickening_flags,  # production module — post-3.4 substrate state
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+    assert "walking-skeleton-bundle" in result.emitted_markers
+
+
+def test_review_findings_section_per_layer_marker_emission_preserved(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.4 AC-1 + Story 3.3 AC-4 preservation: the per-layer
+    ``<!-- bmad-automation:marker review-layer-failed: <layer> -->``
+    emission and the per-layer ``validate_marker_emission`` defense-in-depth
+    call are preserved verbatim through the rendering thickening. With
+    one failed layer (edge) in the partial-failure-with-meta fixture,
+    exactly one review-layer-failed marker comment renders.
+    """
+    review_envelope = yaml.safe_load(
+        (envelopes_dir / "review-pass-partial-layer-failure-with-meta.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    # Exactly one review-layer-failed marker (one failed layer).
+    assert (
+        len(re.findall(r"bmad-automation:marker review-layer-failed: edge", body))
+        == 1
+    )
+    # The marker is co-located with the failed_layers prose.
+    assert "Failed layers: `edge`" in body
