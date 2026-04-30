@@ -1,0 +1,76 @@
+# Review-BMAD specialist envelope — total three-layer failure with the
+# Story 3.3 three-channel atomic emission landed: failed_layers populated +
+# synthetic decision_needed:HIGH meta-findings appended (one per failed
+# layer; meta: review-completeness discriminator) + the wrapper-side
+# review-layer-failed marker emission record consumed by Story 3.4's
+# bundle assembler.
+#
+# Source list (Story 3.3 AC-5): PRD Reference Artifacts (line 653) names
+# canonical envelope shapes. This fixture lands with Story 3.3 to extend
+# the canonical Review-BMAD corpus with the post-3.3 contract shape — the
+# all-three-layers-fail case where status is blocked AND the synthetic
+# meta-findings surface the per-layer failure to the human reviewer.
+# Story: 3.3 (failed_layers graceful degradation; review-layer-failed
+# marker emission; decision_needed-finding surfacing).
+# Validator: envelope-validator (harness CI gate).
+# Downstream consumer: Epic 6 / Story 6.1's cross-channel reconciliation
+# gate asserts the three projections (failed_layers field + marker emission
+# + synthetic meta-findings) agree by construction. Story 3.4 consumes
+# the meta: review-completeness discriminator for PR-bundle review-section
+# rendering. Validated against: schemas/envelope.schema.yaml (post-3.3
+# bump — $defs/finding.properties.meta optional enum-restricted property).
+
+status: blocked
+artifacts: []
+findings:
+  - id: review-layer-failed-auditor
+    source: merged
+    title: Review layer `auditor` failed; review findings are incomplete
+    detail: >-
+      Review layer `auditor` did not reach a verdict (structural failure:
+      crash / timeout / non-zero exit per FR28 graceful degradation). The
+      reviewer must decide whether to proceed with the partial review or
+      trigger a re-run; orchestrator-side flow policy (Epic 5 / Story 5.2)
+      routes this finding's `decision_needed` bucket per FR27.
+    location: agents/review-bmad-wrapper.md:failed_layer=auditor
+    bucket: decision_needed
+    severity: HIGH
+    meta: review-completeness
+  - id: review-layer-failed-blind
+    source: merged
+    title: Review layer `blind` failed; review findings are incomplete
+    detail: >-
+      Review layer `blind` did not reach a verdict (structural failure:
+      crash / timeout / non-zero exit per FR28 graceful degradation). The
+      reviewer must decide whether to proceed with the partial review or
+      trigger a re-run; orchestrator-side flow policy (Epic 5 / Story 5.2)
+      routes this finding's `decision_needed` bucket per FR27.
+    location: agents/review-bmad-wrapper.md:failed_layer=blind
+    bucket: decision_needed
+    severity: HIGH
+    meta: review-completeness
+  - id: review-layer-failed-edge
+    source: merged
+    title: Review layer `edge` failed; review findings are incomplete
+    detail: >-
+      Review layer `edge` did not reach a verdict (structural failure:
+      crash / timeout / non-zero exit per FR28 graceful degradation). The
+      reviewer must decide whether to proceed with the partial review or
+      trigger a re-run; orchestrator-side flow policy (Epic 5 / Story 5.2)
+      routes this finding's `decision_needed` bucket per FR27.
+    location: agents/review-bmad-wrapper.md:failed_layer=edge
+    bucket: decision_needed
+    severity: HIGH
+    meta: review-completeness
+rationale: >-
+  All three review layers (Blind Hunter, Edge Case Hunter, Acceptance
+  Auditor) failed structurally; no AC verdict was reached. The wrapper
+  emitted three synthetic decision_needed:HIGH meta-findings (one per
+  failed layer; meta: review-completeness) so the human reviewer at
+  PR-bundle reading time sees the per-layer failure surface alongside
+  the failed_layers envelope-field declaration; orchestrator-side flow
+  policy decides whether to retry the layers per FR28.
+failed_layers:
+  - auditor
+  - blind
+  - edge

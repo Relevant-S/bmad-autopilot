@@ -1,15 +1,16 @@
-"""Contract-coverage matrix for the Review-BMAD wrapper (Story 2.9 → Story 3.1 → Story 3.2).
+"""Contract-coverage matrix for the Review-BMAD wrapper (Story 2.9 → Story 3.1 → Story 3.2 → Story 3.3).
 
 This docstring IS the contract-coverage checklist required by AC-7 (Story 2.9),
-AC-5 (Story 3.1), and AC-5 (Story 3.2). Reviewers verify every row maps to at
-least one passing test in this module. The matrix is review-enforced, NOT
-CI-enforced (parallel to stories 1.2-1.9 + 2.2-2.8). Story 3.2 thickens this
-file IN PLACE: existing Story 3.1 tests are PRESERVED verbatim where the
-Story 3.2 wrapper-prose addition is APPENDED (not interleaved); new tests
-cover the 6th review fixture + bucket × severity matrix coverage +
-forward-compat loud-fail path + the wrapper's passthrough-discipline prose.
+AC-5 (Story 3.1), AC-5 (Story 3.2), and AC-7 (Story 3.3). Reviewers verify
+every row maps to at least one passing test in this module. The matrix is
+review-enforced, NOT CI-enforced (parallel to stories 1.2-1.9 + 2.2-2.8).
+Story 3.3 thickens this file IN PLACE: existing Story 3.1 + 3.2 tests are
+PRESERVED verbatim where the Story 3.3 additions are APPENDED (not
+interleaved); new tests cover the 2 new envelope fixtures (the post-3.3
+contract shape) + the AC-2 schema bump shape + the meta-field invariant
+across review fixtures + the AC-3 wrapper-prose H2 section.
 
-Fixture-shape conformance (Story 2.9 AC-6/AC-7; Story 3.1 AC-5; Story 3.2 AC-5):
+Fixture-shape conformance (Story 2.9 AC-6/AC-7; Story 3.1 AC-5; Story 3.2 AC-5; Story 3.3 AC-7):
     [x] review-pass-acceptance-auditor.yaml validates against schema     → test_review_pass_acceptance_auditor_fixture_validates_against_schema
     [x] review-fail-layer-failure.yaml validates against schema          → test_review_fail_layer_failure_fixture_validates_against_schema
     [x] review-pass-three-layer.yaml validates against schema            → test_review_pass_three_layer_fixture_validates_against_schema
@@ -17,6 +18,16 @@ Fixture-shape conformance (Story 2.9 AC-6/AC-7; Story 3.1 AC-5; Story 3.2 AC-5):
     [x] review-blocked-partial-layer-failure.yaml validates against schema → test_review_blocked_partial_layer_failure_fixture_validates_against_schema
     [x] review-pass-bucket-coverage.yaml validates against schema +      → test_review_pass_bucket_coverage_fixture_validates_against_schema
         spans bucket × severity matrix
+    [x] review-blocked-three-layer-failure-with-meta.yaml validates +    → test_review_blocked_three_layer_failure_with_meta_validates_against_schema
+        carries 3 synthetic meta findings (Story 3.3 post-contract)
+    [x] review-pass-partial-layer-failure-with-meta.yaml validates +     → test_review_pass_partial_layer_failure_with_meta_validates_against_schema
+        carries 1 synthetic meta finding (Story 3.3 post-contract)
+
+Story 3.3 schema-shape + meta-field invariants (Story 3.3 AC-7):
+    [x] $defs/finding.properties.meta optional enum=[review-completeness] → test_envelope_schema_finding_meta_property_optional_with_review_completeness_enum
+    [x] unknown meta value rejected at validate_return_envelope          → test_finding_with_unknown_meta_value_fails_envelope_schema_validation
+    [x] post-3.3 review fixtures with failed_layers carry synthetic meta → test_synthetic_findings_carry_meta_review_completeness_in_post_3_3_fixtures
+    [x] review-bmad-wrapper.md documents three-channel surface H2        → test_review_bmad_wrapper_documents_failed_layers_three_channel_surface
 
 Cross-fixture invariants (Story 2.9 AC-4/AC-7, FR52, FR56; Story 3.1 AC-5;
 Story 3.2 AC-5):
@@ -104,10 +115,10 @@ def _load_envelope(envelopes_dir: pathlib.Path, filename: str) -> dict[str, Any]
 
 
 def _all_review_envelope_filenames() -> tuple[str, ...]:
-    """Story 3.2 extension: the set grows to 6 review-*.yaml fixtures with the
-    addition of review-pass-bucket-coverage.yaml (the canonical bucket × severity
-    matrix coverage shape per Story 3.2 AC-3). Existing Epic-2-scope (Story 2.9)
-    and Epic-3-scope (Story 3.1) fixtures preserved verbatim.
+    """Story 3.3 extension: the set grows to 8 review-*.yaml fixtures with
+    the addition of two new fixtures carrying the post-Story-3.3 synthetic
+    meta-finding emission shape. Existing 6 fixtures (Story 2.9 + 3.1 + 3.2)
+    preserved verbatim — the 2 new fixtures are additive.
     """
     return (
         "review-pass-acceptance-auditor.yaml",
@@ -116,6 +127,24 @@ def _all_review_envelope_filenames() -> tuple[str, ...]:
         "review-fail-three-layer-patch.yaml",
         "review-blocked-partial-layer-failure.yaml",
         "review-pass-bucket-coverage.yaml",
+        "review-blocked-three-layer-failure-with-meta.yaml",
+        "review-pass-partial-layer-failure-with-meta.yaml",
+    )
+
+
+def _post_3_3_review_envelope_filenames() -> tuple[str, ...]:
+    """The post-Story-3.3 fixtures whose synthetic meta-finding emission
+    is the AC-7 invariant target. Pre-3.3 fixtures
+    (review-blocked-partial-layer-failure.yaml + review-fail-layer-failure
+    .yaml) pre-date the synthetic-finding emission and are intentionally
+    excluded from the meta-field invariant test — they remain valid
+    against the post-3.3 schema because `meta` is optional, but they do
+    NOT carry the synthetic finding (back-compat carve-out per AC-7
+    item 3).
+    """
+    return (
+        "review-blocked-three-layer-failure-with-meta.yaml",
+        "review-pass-partial-layer-failure-with-meta.yaml",
     )
 
 
@@ -127,6 +156,7 @@ _CANONICAL_BUCKETS: frozenset[str] = frozenset(
     {"decision_needed", "patch", "defer", "dismiss"}
 )
 _CANONICAL_SEVERITIES: frozenset[str] = frozenset({"HIGH", "MED", "LOW"})
+_CANONICAL_META_VALUES: frozenset[str] = frozenset({"review-completeness"})
 
 
 def _minimal_valid_finding() -> dict[str, Any]:
@@ -758,4 +788,220 @@ def test_review_bmad_wrapper_has_lf_line_endings(
     )
     assert b"\r" not in review_wrapper_bytes, (
         "review-bmad-wrapper.md must use LF line endings"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Story 3.3 — post-3.3 fixture-shape conformance + schema bump invariants     #
+# --------------------------------------------------------------------------- #
+
+
+def test_review_blocked_three_layer_failure_with_meta_validates_against_schema(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.3 AC-7 item 2: the new all-three-layers-fail fixture
+    validates against the post-AC-2 schema and carries exactly 3
+    synthetic meta-findings (one per failed layer).
+    """
+    envelope = _load_envelope(
+        envelopes_dir, "review-blocked-three-layer-failure-with-meta.yaml"
+    )
+    result = validate_return_envelope(envelope)
+    assert result.valid, result.errors
+    assert envelope["status"] == "blocked"
+    assert envelope["artifacts"] == [], (
+        "all-three-layers-fail fixture has empty artifacts (no review output)"
+    )
+    assert envelope["failed_layers"] == ["auditor", "blind", "edge"], (
+        "failed_layers must be sorted alphabetically per Story 3.3 AC-1"
+    )
+    meta_findings = [
+        f
+        for f in envelope["findings"]
+        if f.get("meta") == "review-completeness"
+    ]
+    assert len(meta_findings) == 3, (
+        "all-three-layers-fail fixture must carry exactly 3 synthetic "
+        "meta findings (one per failed layer)"
+    )
+    for finding in meta_findings:
+        assert finding["bucket"] == "decision_needed"
+        assert finding["severity"] == "HIGH"
+        assert finding["meta"] == "review-completeness"
+    finding_ids = {f["id"] for f in meta_findings}
+    assert finding_ids == {
+        "review-layer-failed-auditor",
+        "review-layer-failed-blind",
+        "review-layer-failed-edge",
+    }
+
+
+def test_review_pass_partial_layer_failure_with_meta_validates_against_schema(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.3 AC-7 item 2: the new partial-layer-failure-with-meta
+    fixture validates against the post-AC-2 schema and carries exactly
+    1 synthetic meta-finding for the failed layer alongside the
+    surviving layers' content findings.
+    """
+    envelope = _load_envelope(
+        envelopes_dir, "review-pass-partial-layer-failure-with-meta.yaml"
+    )
+    result = validate_return_envelope(envelope)
+    assert result.valid, result.errors
+    assert envelope["status"] == "pass"
+    assert envelope["failed_layers"] == ["edge"]
+    meta_findings = [
+        f
+        for f in envelope["findings"]
+        if f.get("meta") == "review-completeness"
+    ]
+    assert len(meta_findings) == 1, (
+        "partial-layer-failure-with-meta fixture must carry exactly 1 "
+        "synthetic meta finding (for the single failed layer)"
+    )
+    assert meta_findings[0]["id"] == "review-layer-failed-edge"
+    assert meta_findings[0]["bucket"] == "decision_needed"
+    assert meta_findings[0]["severity"] == "HIGH"
+    # Surviving layers' content findings flow through normally per FR28.
+    content_findings = [
+        f for f in envelope["findings"] if f.get("meta") is None
+    ]
+    assert len(content_findings) >= 1, (
+        "FR28 graceful degradation: surviving layers' content findings "
+        "must flow through alongside the synthetic meta finding"
+    )
+
+
+def test_synthetic_findings_carry_meta_review_completeness_in_post_3_3_fixtures(
+    envelopes_dir: pathlib.Path,
+) -> None:
+    """Story 3.3 AC-7 item 3: post-Story-3.3 review fixtures with non-empty
+    failed_layers carry AT LEAST ONE finding with meta: review-completeness
+    (the post-Story-3.3 invariant). Pre-3.3 fixtures
+    (review-blocked-partial-layer-failure.yaml +
+    review-fail-layer-failure.yaml) are excluded by name — they pre-date
+    the synthetic-finding emission and remain valid against the post-3.3
+    schema because `meta` is optional (back-compat carve-out per AC-7
+    item 3).
+    """
+    for name in _post_3_3_review_envelope_filenames():
+        envelope = _load_envelope(envelopes_dir, name)
+        assert envelope["failed_layers"], (
+            f"{name} should carry non-empty failed_layers; the post-3.3 "
+            "invariant is meaningful only when failed_layers is non-empty"
+        )
+        meta_findings = [
+            f
+            for f in envelope["findings"]
+            if f.get("meta") == "review-completeness"
+        ]
+        assert len(meta_findings) == len(envelope["failed_layers"]), (
+            f"{name} must carry exactly len(failed_layers)="
+            f"{len(envelope['failed_layers'])} synthetic meta findings; "
+            f"got {len(meta_findings)}"
+        )
+        for finding in meta_findings:
+            assert finding["meta"] in _CANONICAL_META_VALUES, (
+                f"{name} synthetic finding meta value "
+                f"{finding['meta']!r} not in canonical "
+                f"{sorted(_CANONICAL_META_VALUES)}"
+            )
+
+
+def test_envelope_schema_finding_meta_property_optional_with_review_completeness_enum(
+    repo_root: pathlib.Path,
+) -> None:
+    """Story 3.3 AC-7 item 4: the schema bump at AC-2 lands the optional
+    `meta` property with enum=[review-completeness], preserves
+    additionalProperties=false on $defs/finding, and does NOT add `meta`
+    to the required list.
+    """
+    schema = yaml.safe_load(
+        (repo_root / "schemas" / "envelope.schema.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    finding_def = schema["$defs"]["finding"]
+    assert finding_def["additionalProperties"] is False, (
+        "$defs/finding.additionalProperties must remain False after the "
+        "Story 3.3 AC-2 schema bump"
+    )
+    assert "meta" not in finding_def["required"], (
+        "meta is OPTIONAL on $defs/finding; it MUST NOT be in the "
+        "required list (layer-produced findings continue to validate "
+        "without it)"
+    )
+    meta_prop = finding_def["properties"]["meta"]
+    assert meta_prop["type"] == "string", (
+        "$defs/finding.properties.meta must have type=string"
+    )
+    assert meta_prop["enum"] == ["review-completeness"], (
+        "$defs/finding.properties.meta enum must be exactly "
+        "[review-completeness] at this story; future meta-finding kinds "
+        "extend the enum via a follow-on schema bump per the audit-doc "
+        "no-introductions principle"
+    )
+
+
+def test_finding_with_unknown_meta_value_fails_envelope_schema_validation() -> None:
+    """Story 3.3 AC-7 item 5: a finding carrying meta value not in the
+    enum is REJECTED at validate_return_envelope. Forward-compat
+    loud-fail mirroring Story 3.2's bucket / severity tests; the
+    substrate-seam loud-fail is the architectural backstop per Pattern 5.
+    """
+    envelope = _minimal_valid_envelope()
+    envelope["findings"][0]["meta"] = "future-meta-kind"
+    result = validate_return_envelope(envelope)
+    assert not result.valid, (
+        "envelope with out-of-enum meta value must be rejected at the "
+        "substrate seam (forward-compat loud-fail per Pattern 5)"
+    )
+    error_text = " ".join(result.errors).lower()
+    assert "meta" in error_text or "is not one of" in error_text or "enum" in error_text, (
+        f"validation error must name the offending field/constraint; "
+        f"got {result.errors!r}"
+    )
+
+
+def test_review_bmad_wrapper_documents_failed_layers_three_channel_surface(
+    review_wrapper_text: str,
+) -> None:
+    """Story 3.3 AC-7 item 6: the wrapper's new H2 section documents the
+    three-channel atomic emission contract, the `surface_failed_layers`
+    function name, the `meta: review-completeness` discriminator, and
+    cross-references Story 3.4 / Epic 6 / Story 6.1 as downstream
+    consumers.
+    """
+    text = review_wrapper_text
+    section_idx = text.find("## Failed-layers three-channel surface")
+    assert section_idx >= 0, (
+        "review-bmad-wrapper.md must declare a Story-3.3 H2 section "
+        "named 'Failed-layers three-channel surface'"
+    )
+    heading_window = text[section_idx : section_idx + 100]
+    assert "Story 3.3" in heading_window, (
+        "the H2 section's heading must name Story 3.3 within 100 chars "
+        "of 'three-channel' or 'failed-layers'"
+    )
+    section_window = text[section_idx : section_idx + 5000]
+    for substring in (
+        "failed_layers",
+        "review-layer-failed",
+        "meta: review-completeness",
+        "decision_needed",
+        "HIGH",
+        "surface_failed_layers",
+    ):
+        assert substring in section_window, (
+            f"Story 3.3 three-channel-surface section must name "
+            f"{substring!r} within the section's 5000-char window"
+        )
+    assert "Story 3.4" in section_window or "Epic 6" in section_window, (
+        "Story 3.3 section must name Story 3.4 or Epic 6 as the "
+        "downstream consumer"
+    )
+    assert "Story 6.1" in section_window, (
+        "Story 3.3 section must name Story 6.1 as the cross-channel "
+        "reconciliation gate consumer"
     )

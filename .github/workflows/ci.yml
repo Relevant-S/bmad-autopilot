@@ -269,3 +269,34 @@ jobs:
         # No positional arguments — the script discovers agents/ from
         # disk via find_repo_root.
         run: uv run pluggability-gate
+
+      - name: Review-layer-failure emission gate (story 3.3; FR28 + FR56)
+        # Story 3.3 AC-9: enforces the three-channel atomic-emission
+        # code-structure invariant — surface_failed_layers (at
+        # tools/loud-fail-harness/src/loud_fail_harness/review_layer_failure.py)
+        # is the SINGLE source-of-truth emission path for the failed_layers
+        # envelope field, the review-layer-failed marker class string
+        # literal, and the meta: review-completeness synthetic-finding
+        # discriminator. The gate scans the harness source tree
+        # (tools/loud-fail-harness/src/loud_fail_harness/*.py) plus the
+        # named-contract documentation (agents/review-bmad-wrapper.md);
+        # canonical emission sites are exempted via the allowlist
+        # documented in the gate's docstring.
+        # Architectural reference: ADR-002 cell-1 invariant + Story 2.2's
+        # atomic-write helper pattern (NFR-R8 enforced by API shape, not
+        # by developer discipline) + Story 1.10a's pluggability_gate.py
+        # regex-rule precedent.
+        # Operational meaning of a CI failure:
+        # (a) a forbidden direct write to the failed_layers envelope
+        #     field outside surface_failed_layers;
+        # (b) a forbidden literal occurrence of the review-layer-failed
+        #     marker class string outside the canonical emission site;
+        # (c) a forbidden append of a finding carrying meta:
+        #     review-completeness outside the canonical emission site.
+        # Remediation: route the offending emission through
+        # surface_failed_layers; or, if the call site is bundle rendering,
+        # import REVIEW_LAYER_FAILED_MARKER symbolically rather than
+        # using the string literal.
+        # No positional arguments — the script discovers the inner repo
+        # root from disk via find_repo_root.
+        run: uv run review-layer-failure-emission-gate

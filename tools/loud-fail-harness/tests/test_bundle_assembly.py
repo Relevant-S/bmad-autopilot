@@ -21,6 +21,8 @@ AC-3 — bundle markdown shape:
     [x] Review findings empty placeholder                           → test_review_findings_section_renders_empty_placeholder_on_zero_findings
     [x] Review findings render non-empty array shape                → test_review_findings_section_renders_non_empty_findings
     [x] failed_layers empty surfaces                                → test_review_findings_section_renders_failed_layers_empty_at_epic_2
+    [x] failed_layers non-empty renders marker comment (Story 3.3) → test_review_findings_section_renders_failed_layers_non_empty_with_marker_comments
+    [x] two failed_layers render two marker comments (Story 3.3)   → test_review_findings_section_renders_two_failed_layers_with_two_marker_comments
     [x] Dev section renders proposed_commit_message verbatim        → test_dev_section_renders_proposed_commit_message_verbatim
     [x] scope_expanded_to empty surfaces                            → test_dev_section_renders_scope_expanded_to_empty_at_epic_2
     [x] bundle does NOT contain loud-fail / cost / retry sections   → test_bundle_does_not_contain_loud_fail_block_section
@@ -598,6 +600,65 @@ def test_review_findings_section_renders_failed_layers_empty_at_epic_2(
     )
     body = bundle_path.read_text(encoding="utf-8")
     assert "Failed layers: (none)" in body
+
+
+def test_review_findings_section_renders_failed_layers_non_empty_with_marker_comments(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 3.3 AC-4: a single failed layer renders one HTML-comment marker
+    co-located with the 'Failed layers: ...' prose.
+
+    This test exercises the non-empty failed_layers branch added to
+    _render_review_findings_section at Story 3.3 AC-4 — the branch that
+    emits <!-- bmad-automation:marker review-layer-failed: <layer> -->.
+    """
+    review_with_failed_layer: dict[str, Any] = {
+        "status": "pass",
+        "artifacts": ["bmad-autopilot/some-file.md"],
+        "findings": [],
+        "rationale": "edge layer failed; surviving layers passed",
+        "failed_layers": ["edge"],
+    }
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=review_with_failed_layer,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    assert "review-layer-failed: edge" in body
+    assert "Failed layers: `edge`" in body
+    assert "<!--" in body
+
+
+def test_review_findings_section_renders_two_failed_layers_with_two_marker_comments(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 3.3 AC-4: two failed layers render two HTML-comment markers (one per layer)."""
+    review_two_failed: dict[str, Any] = {
+        "status": "blocked",
+        "artifacts": [],
+        "findings": [],
+        "rationale": "blind and edge layers failed",
+        "failed_layers": ["blind", "edge"],
+    }
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=review_two_failed,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    assert "review-layer-failed: blind" in body
+    assert "review-layer-failed: edge" in body
 
 
 def test_dev_section_renders_proposed_commit_message_verbatim(

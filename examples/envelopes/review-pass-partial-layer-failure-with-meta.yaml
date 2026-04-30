@@ -1,0 +1,72 @@
+# Review-BMAD specialist envelope — partial layer failure with the
+# Story 3.3 three-channel atomic emission landed: failed_layers populated
+# with the failed layer + ONE synthetic decision_needed:HIGH meta-finding
+# appended (meta: review-completeness discriminator) + the surviving
+# layers' findings flowing through normally per FR28 graceful degradation.
+#
+# Source list (Story 3.3 AC-5): PRD Reference Artifacts (line 653) names
+# canonical envelope shapes. This fixture extends the existing
+# `review-blocked-partial-layer-failure.yaml` precedent with the post-3.3
+# contract shape — partial-layer-failure WITH the synthetic meta-finding
+# emission. Existing pre-3.3 fixtures (review-blocked-partial-layer-failure
+# .yaml + review-fail-layer-failure.yaml) are PRESERVED VERBATIM; they
+# represent envelopes from the wrapper's pre-Story-3.3 behavior and remain
+# valid against the post-3.3 schema because `meta` is optional.
+# Story: 3.3 (failed_layers graceful degradation; review-layer-failed
+# marker emission; decision_needed-finding surfacing).
+# Validator: envelope-validator (harness CI gate).
+# Downstream consumer: Epic 6 / Story 6.1's cross-channel reconciliation
+# gate. Story 3.4 consumes the meta: review-completeness discriminator
+# for PR-bundle review-section rendering. Validated against:
+# schemas/envelope.schema.yaml (post-3.3 bump).
+
+status: pass
+artifacts:
+  - bmad-autopilot/_bmad-output/implementation-artifacts/3-3-failed-layers-graceful-degradation-review-layer-failed-marker-emission-decision-needed-finding-surfacing.md
+findings:
+  - id: review-001
+    source: blind
+    title: Diff-only adversarial pass identified no contract violations
+    detail: >-
+      Blind Hunter inspected the diff in isolation (no spec, no project
+      context) and found no contract violations; one LOW-severity
+      informational observation about prose density was triaged to defer.
+    location: bmad-autopilot/agents/review-bmad-wrapper.md:1
+    bucket: defer
+    severity: LOW
+  - id: review-002
+    source: auditor
+    title: Story-doc acceptance criteria covered by surviving layers' verdict
+    detail: >-
+      Acceptance Auditor reviewed the diff against the story-doc acceptance
+      criteria and the spec context docs; the layer ran to completion and
+      reported one LOW-severity informational finding. Layer-attribution
+      preserved (source=auditor); the layer reached a verdict despite Edge
+      Case Hunter's structural failure.
+    location: bmad-autopilot/_bmad-output/implementation-artifacts/3-3-failed-layers-graceful-degradation-review-layer-failed-marker-emission-decision-needed-finding-surfacing.md:1
+    bucket: defer
+    severity: LOW
+  - id: review-layer-failed-edge
+    source: merged
+    title: Review layer `edge` failed; review findings are incomplete
+    detail: >-
+      Review layer `edge` did not reach a verdict (structural failure:
+      crash / timeout / non-zero exit per FR28 graceful degradation). The
+      reviewer must decide whether to proceed with the partial review or
+      trigger a re-run; orchestrator-side flow policy (Epic 5 / Story 5.2)
+      routes this finding's `decision_needed` bucket per FR27.
+    location: agents/review-bmad-wrapper.md:failed_layer=edge
+    bucket: decision_needed
+    severity: HIGH
+    meta: review-completeness
+rationale: >-
+  Edge Case Hunter failed structurally; Blind Hunter and Acceptance Auditor
+  returned successfully with two LOW-severity defer-bucket findings; the
+  wrapper-side surface_failed_layers emitted ONE synthetic
+  decision_needed:HIGH meta-finding (meta: review-completeness) for the
+  failed layer so the human reviewer sees the per-layer failure surface
+  alongside the failed_layers envelope-field declaration. Surviving
+  layers' verdict is `status: pass`; no HIGH-severity patch-bucket
+  findings.
+failed_layers:
+  - edge

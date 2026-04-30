@@ -111,6 +111,7 @@ import yaml
 from loud_fail_harness import thickening_flags as _default_thickening_flags
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
+from loud_fail_harness.review_layer_failure import REVIEW_LAYER_FAILED_MARKER
 from loud_fail_harness.run_state import RunState
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
@@ -432,7 +433,11 @@ def _render_per_ac_section(qa_envelope: dict[str, Any]) -> str:
     return "\n\n".join(blocks)
 
 
-def _render_review_findings_section(review_envelope: dict[str, Any]) -> str:
+def _render_review_findings_section(
+    review_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
     """Render the ``## Review findings`` section from Review-BMAD's
     envelope's ``findings`` array (FR56) and ``failed_layers`` array.
 
@@ -441,6 +446,19 @@ def _render_review_findings_section(review_envelope: dict[str, Any]) -> str:
     ``title``, ``bucket``, ``severity`` per the schema's
     ``$defs/finding`` shape. At Epic 2 scope ``failed_layers`` is empty
     per Story 2.9; the renderer surfaces ``Failed layers: (none)``.
+
+    Story 3.3 thickening (AC-4): when ``failed_layers`` is non-empty,
+    one ``<!-- bmad-automation:marker review-layer-failed: <layer> -->``
+    HTML-comment marker is rendered per failed layer co-located with
+    the existing "Failed layers: ..." prose. The marker class is
+    pre-validated against ``marker_registry`` at render time per the
+    dispatch substrate's defense-in-depth pattern (the wrapper-side
+    ``surface_failed_layers`` already validates; the assembler
+    validates again here per the same Pattern 5 discipline that
+    governs the walking-skeleton-bundle marker emission). When
+    ``failed_layers`` is empty, ZERO marker comments are rendered
+    (silent at channel 2 for the zero-failure path; per Story 3.3
+    AC-1 channel-2 silence invariant).
     """
     findings = review_envelope.get("findings") or []
     failed_layers = review_envelope.get("failed_layers") or []
@@ -460,9 +478,21 @@ def _render_review_findings_section(review_envelope: dict[str, Any]) -> str:
         findings_body = "_(no findings)_"
 
     if failed_layers:
-        failed_layers_body = "Failed layers: " + ", ".join(
-            f"`{layer}`" for layer in failed_layers
-        )
+        failed_layers_body_lines = [
+            "Failed layers: "
+            + ", ".join(f"`{layer}`" for layer in failed_layers)
+        ]
+        for layer in failed_layers:
+            # Defense-in-depth re-validation per Pattern 5 — wrapper-side
+            # surface_failed_layers already validated; the assembler
+            # validates again at render time. Per-layer call mirrors the
+            # AC-1 "exactly once per failed layer" invariant the AC-9
+            # CI lint structurally enforces upstream.
+            validate_marker_emission(marker_registry, REVIEW_LAYER_FAILED_MARKER)
+            failed_layers_body_lines.append(
+                _render_per_layer_marker(REVIEW_LAYER_FAILED_MARKER, layer)
+            )
+        failed_layers_body = "\n".join(failed_layers_body_lines)
     else:
         failed_layers_body = "Failed layers: (none)"
 
@@ -527,6 +557,27 @@ def _render_marker(marker_class: str) -> str:
     returning the emission count.
     """
     return f"{_MARKER_COMMENT_PREFIX}{marker_class}{_MARKER_COMMENT_SUFFIX}"
+
+
+def _render_per_layer_marker(marker_class: str, sub_classification: str) -> str:
+    """Render the per-layer marker comment for Story 3.3's
+    ``review-layer-failed`` channel-2 surface.
+
+    Reuses the existing :data:`_MARKER_COMMENT_PREFIX` /
+    :data:`_MARKER_COMMENT_SUFFIX` constants verbatim per AC-4's
+    "introduce a per-layer rendering helper that reuses the existing
+    prefix/suffix constants" option, producing the form
+    ``<!-- bmad-automation:marker review-layer-failed: <layer> -->``.
+    The substring ``review-layer-failed: <layer>`` is the
+    machine-readable identifier downstream tooling (Story 1.5's
+    ``enumeration_check`` + Story 1.8's ``fr33-fixture-gate``) already
+    enumerates against; the bundle-comment form is the canonical
+    emission target per Story 1.4's marker-taxonomy commitment.
+    """
+    return (
+        f"{_MARKER_COMMENT_PREFIX}{marker_class}: "
+        f"{sub_classification}{_MARKER_COMMENT_SUFFIX}"
+    )
 
 
 def _emit_walking_skeleton_marker(
@@ -679,7 +730,9 @@ def assemble_bundle(
     # Step 4: Render header + section bodies.
     header_text = _render_walking_skeleton_header(flags)
     per_ac_body = _render_per_ac_section(envelopes["qa"])
-    review_body = _render_review_findings_section(envelopes["review-bmad"])
+    review_body = _render_review_findings_section(
+        envelopes["review-bmad"], marker_registry=registry
+    )
     dev_body = _render_dev_section(envelopes["dev"])
 
     # Step 5: Assemble the markdown body.

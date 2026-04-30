@@ -134,6 +134,17 @@ $defs:
       # via discriminator at this story (no specialist field exists in the contract).
       retry_likely_to_resolve:
         type: boolean
+      # Optional Review-BMAD wrapper-layer-only discriminator (Story 3.3 + FR28 + FR56).
+      # Distinguishes synthetic meta-findings emitted by `surface_failed_layers`
+      # (the three-channel atomic emission for per-layer failure) from layer-produced
+      # content findings. The enum is intentionally narrow at this story; future
+      # meta-finding kinds (e.g., the Story 4.9 `verification_mode` precedent at
+      # epics.md line 2068) extend the enum via a follow-on schema bump recorded in
+      # `docs/extension-audit.md` per the no-introductions principle. Closed-by-default
+      # invariant ($defs/finding.additionalProperties: false above) is preserved.
+      meta:
+        type: string
+        enum: [review-completeness]
 
   ac_result:
     type: object
