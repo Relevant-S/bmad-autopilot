@@ -162,6 +162,14 @@ The principle is verifiable against the existing artifacts: `schemas/marker-taxo
 
 ---
 
+## Rationale Validations
+
+This subsection holds pointers to per-rationale validation artifacts under `docs/rationale-validations/`. Each artifact validates a documented rationale clause from a prior story against the actual landed substrate that exercises the rationale, evaluates whether the rationale held in practice, and records a verdict drawn from the canonical enum `{rationale-holds, rationale-invalidated, partial}`. The pattern — **rationale → validation → written artifact** — is referenceable for future epics per `epics.md` lines 1774-1776 (future single-layer-choice re-litigations, e.g., Phase 1.5 LAD per FR29, reference Story 3.5's pattern rather than re-inventing the audit shape).
+
+- **Story 2.9 — Acceptance Auditor as Epic-2 single layer.** Artifact: `docs/rationale-validations/2.9-acceptance-auditor.md`. Verdict: `rationale-holds`. Audited by: Story 3.5 (Epic 3).
+
+---
+
 ## Contributor-discipline notes
 
 This subsection holds append-only contributor-discipline notes — fixture/file location invariants, naming overlaps to avoid, and similar review-time conventions that are NOT BMAD-extension classification events (those go in the per-convention table above). These notes are review-enforced per `extension-audit.md`'s overall posture (ADR-003 line 292), NOT CI-enforced; reviewers verify the discipline at PR review time.
