@@ -1,0 +1,46 @@
+# QA specialist envelope — status=pass, AC-1-only Tier-1-evidence-only Epic 2
+# scope, WITH non-null `plan_drift` diagnostic context (Story 4.2).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical envelope
+# corpus. This fixture lands with Story 4.2 (AC-hash plan-drift detection +
+# `plan_status` reset) to exercise the Story-4.1-era + Story-4.2 wrapper
+# combination — the `drift-suspected` action token from Story 4.1's
+# `persist_or_reuse_plan` flows into Story 4.2's `surface_plan_drift`, which
+# atomically (a) regenerates a fresh plan with `plan_status="generated"`,
+# (b) emits the `plan-drift-detected` marker through Story 2.6's registry,
+# (c) populates this `plan_drift` envelope field with the four-field
+# diagnostic context per the verbatim epic AC at
+# `_bmad-output/planning-artifacts/epics.md` line 1851.
+#
+# The `plan_drift` field is consumed by `bundle_assembly.py`'s QA-section
+# render (Story 4.2 AC-5) — when non-null, the assembler renders an
+# `### Plan drift detected` H3 sub-section with the four diagnostic items
+# in human-readable form and emits the structured marker comment
+# `<!-- bmad-automation:marker plan-drift-detected -->` co-located.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-001/run-2026-04-30-001/ac1-http-200.log
+findings: []
+rationale: >-
+  AC-1 verified mechanically: HTTP POST to /healthz returned 200 within the
+  expected timeout; one Tier-1 evidence artifact captured under the canonical
+  qa-evidence path. AC-hash drift detected from the prior plan; the plan was
+  regenerated with `plan_status` reset to `generated`, and the
+  `plan-drift-detected` marker was emitted with diagnostic context.
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - HTTP POST /healthz returned status code 200
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-04-30-001/ac1-http-200.log
+    semantic_verification: not_applicable
+plan_drift:
+  story_id: sample-auto-001
+  prior_plan_status: human-reviewed
+  prior_ac_hash: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  current_ac_hash: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210

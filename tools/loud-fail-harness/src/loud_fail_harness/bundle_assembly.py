@@ -111,6 +111,7 @@ import yaml
 from loud_fail_harness import thickening_flags as _default_thickening_flags
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
+from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.review_layer_failure import (
     META_REVIEW_COMPLETENESS,
     REVIEW_LAYER_FAILED_MARKER,
@@ -394,46 +395,129 @@ def _render_walking_skeleton_header(flags: ModuleType) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def _render_per_ac_section(qa_envelope: dict[str, Any]) -> str:
+def _render_per_ac_section(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
     """Render the ``## Per-AC results`` section from QA's envelope's
-    ``ac_results`` array (FR55).
+    ``ac_results`` array (FR55), followed by the optional Story-4.2
+    ``### Plan drift detected`` sub-section when QA's envelope's
+    ``plan_drift`` field is non-null.
 
     At Epic 2 scope ``ac_results`` carries exactly one entry per Story
     2.10's AC-2; the renderer is structurally agnostic to the array
     length. Each entry surfaces ``ac_id``, ``status``, ``assertions``,
     ``evidence_refs``, ``semantic_verification``.
+
+    Story 4.2 thickening (AC-5): when ``qa_envelope.get("plan_drift")``
+    is a non-null object the renderer appends an
+    ``### Plan drift detected`` H3 sub-section AFTER the ``ac_results``
+    blocks, carrying the four diagnostic-context bullets in human-
+    readable form + the structured marker comment
+    ``<!-- bmad-automation:marker plan-drift-detected -->`` co-located.
+    The per-emission :func:`validate_marker_emission` defense-in-depth
+    call (mirroring Story 3.3's pattern at line 589) fires once when
+    the field is non-null. When the field is absent or ``None`` ZERO
+    marker comments are rendered AND no sub-section appears (silent at
+    the bundle-side path; the structural-not-era-based emission rule
+    from Story 3.4's architecture.md addendum at line 1581 is
+    structurally mirrored — emit iff the field is non-null).
     """
     entries = qa_envelope.get("ac_results") or []
     if not entries:
-        return "_(no ac_results in QA envelope)_"
-    blocks: list[str] = []
-    for entry in entries:
-        ac_id = entry.get("ac_id", "(unknown)")
-        status = entry.get("status", "(unknown)")
-        assertions = entry.get("assertions") or []
-        evidence_refs = entry.get("evidence_refs") or []
-        semantic_verification = entry.get("semantic_verification", "not_applicable")
-        block_lines = [
-            f"### {ac_id} — status: `{status}`",
-            "",
-            "**Assertions:**",
-        ]
-        if assertions:
-            block_lines.extend(f"- {assertion}" for assertion in assertions)
-        else:
-            block_lines.append("- _(none)_")
-        block_lines.append("")
-        block_lines.append("**Evidence:**")
-        if evidence_refs:
-            block_lines.extend(f"- `{ref}`" for ref in evidence_refs)
-        else:
-            block_lines.append("- _(none)_")
-        block_lines.append("")
-        block_lines.append(
-            f"**Semantic verification:** `{semantic_verification}`"
-        )
-        blocks.append("\n".join(block_lines))
-    return "\n\n".join(blocks)
+        ac_results_body = "_(no ac_results in QA envelope)_"
+    else:
+        blocks: list[str] = []
+        for entry in entries:
+            ac_id = entry.get("ac_id", "(unknown)")
+            status = entry.get("status", "(unknown)")
+            assertions = entry.get("assertions") or []
+            evidence_refs = entry.get("evidence_refs") or []
+            semantic_verification = entry.get("semantic_verification", "not_applicable")
+            block_lines = [
+                f"### {ac_id} — status: `{status}`",
+                "",
+                "**Assertions:**",
+            ]
+            if assertions:
+                block_lines.extend(f"- {assertion}" for assertion in assertions)
+            else:
+                block_lines.append("- _(none)_")
+            block_lines.append("")
+            block_lines.append("**Evidence:**")
+            if evidence_refs:
+                block_lines.extend(f"- `{ref}`" for ref in evidence_refs)
+            else:
+                block_lines.append("- _(none)_")
+            block_lines.append("")
+            block_lines.append(
+                f"**Semantic verification:** `{semantic_verification}`"
+            )
+            blocks.append("\n".join(block_lines))
+        ac_results_body = "\n\n".join(blocks)
+
+    plan_drift_body = _render_qa_plan_drift_subsection(
+        qa_envelope, marker_registry=marker_registry
+    )
+    if plan_drift_body:
+        return ac_results_body + "\n\n" + plan_drift_body
+    return ac_results_body
+
+
+def _render_qa_plan_drift_subsection(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-4.2 ``### Plan drift detected`` H3 sub-section
+    when QA's envelope ``plan_drift`` field is non-null; return the empty
+    string otherwise (silent at the bundle-side path).
+
+    The sub-section carries the four diagnostic-context items in human-
+    readable form (``story_id``, ``prior_plan_status``, ``prior_ac_hash``,
+    ``current_ac_hash``) per the verbatim epic AC at ``epics.md``
+    line 1851 + the structured marker comment
+    ``<!-- bmad-automation:marker plan-drift-detected -->`` co-located
+    so the bundle carries the marker per the verbatim epic AC at
+    ``epics.md`` line 1850. The full 64-char SHA-256 hex digests are
+    rendered verbatim for tooling consumers (no truncation; the
+    diagnostic surface is fidelity-preserving).
+
+    Defense-in-depth re-validation per Pattern 5 (mirrors Story 3.3 at
+    line 589): :func:`validate_marker_emission` fires once when
+    ``plan_drift`` is non-null. The wrapper-side
+    :func:`loud_fail_harness.qa_plan_drift.surface_plan_drift` already
+    validated; the assembler validates again at render time. Registry
+    rejection raises :exc:`UnknownMarkerClass` per Pattern 5.
+
+    Story 3.4's ``walking-skeleton-bundle`` marker emission rule and
+    Story 3.3's ``review-layer-failed`` per-layer marker emission are
+    NOT modified — both continue to emit independently per their own
+    structural predicates.
+    """
+    plan_drift = qa_envelope.get("plan_drift")
+    if plan_drift is None:
+        return ""
+
+    validate_marker_emission(marker_registry, PLAN_DRIFT_DETECTED_MARKER)
+
+    story_id = plan_drift.get("story_id", "(unknown)")
+    prior_plan_status = plan_drift.get("prior_plan_status", "(unknown)")
+    prior_ac_hash = plan_drift.get("prior_ac_hash", "(unknown)")
+    current_ac_hash = plan_drift.get("current_ac_hash", "(unknown)")
+
+    lines = [
+        "### Plan drift detected",
+        "",
+        _render_marker(PLAN_DRIFT_DETECTED_MARKER),
+        "",
+        f"- Story ID: `{story_id}`",
+        f"- Prior plan_status: `{prior_plan_status}`",
+        f"- Prior ac_hash: `{prior_ac_hash}`",
+        f"- Current ac_hash: `{current_ac_hash}`",
+    ]
+    return "\n".join(lines)
 
 
 #: Story 3.4 AC-1 fixed bucket order — the canonical FR27 enum from
@@ -827,7 +911,9 @@ def assemble_bundle(
 
     # Step 4: Render header + section bodies.
     header_text = _render_walking_skeleton_header(flags)
-    per_ac_body = _render_per_ac_section(envelopes["qa"])
+    per_ac_body = _render_per_ac_section(
+        envelopes["qa"], marker_registry=registry
+    )
     review_body = _render_review_findings_section(
         envelopes["review-bmad"], marker_registry=registry
     )

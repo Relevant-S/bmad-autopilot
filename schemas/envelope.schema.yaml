@@ -6,8 +6,12 @@
 #   - FR52 (sensor-not-advisor — forbidden flow-policy fields, e.g. next_action / recommendation)
 #   - FR53 (CI gate rejects envelopes carrying forbidden fields)
 #   - FR54 (Dev-specific extensions: proposed_commit_message, scope_expanded_to)
-#   - FR55 (QA-specific extensions: ac_results)
+#   - FR55 (QA-specific extensions: ac_results, plan_drift)
 #   - FR56 (Review-BMAD-specific extensions: failed_layers)
+#   - FR23 (Story 4.2: AC-hash plan-drift detection — optional `plan_drift`
+#     diagnostic-context carrier surfaced when QA's `surface_plan_drift`
+#     consumes Story 4.1's `drift-suspected` action token; per-convention
+#     audit-trail row in `docs/extension-audit.md`)
 #   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
 #
 # This file encodes a contract validated by CI; modify with care.
@@ -96,6 +100,17 @@ properties:
       type: string
       enum: [blind, edge, auditor, lad]
 
+  plan_drift:
+    # QA-specific (FR23 + Story 4.2). Diagnostic context surfaced when QA's
+    # `surface_plan_drift` consumes Story 4.1's `drift-suspected` action token
+    # AND emits the `plan-drift-detected` marker. Optional non-null shape: the
+    # field is absent on no-drift runs (write-new / reuse-existing branches);
+    # present-and-object-conforming-to-$defs/plan_drift on drift runs. The
+    # field is consumed by the bundle assembler's QA-section render to
+    # surface the four-field diagnostic + the structured marker comment.
+    # Recorded in `docs/extension-audit.md` per the no-introductions principle.
+    $ref: "#/$defs/plan_drift"
+
 $defs:
   finding:
     type: object
@@ -176,3 +191,34 @@ $defs:
         oneOf:
           - type: object
           - type: string
+
+  plan_drift:
+    # QA-specific (FR23 + Story 4.2) diagnostic context carried on the
+    # envelope when QA's `surface_plan_drift` detects an AC-hash drift and
+    # emits the `plan-drift-detected` marker. The four required fields
+    # mirror the verbatim epic AC at `_bmad-output/planning-artifacts/epics.md`
+    # line 1851 (`story_id`, `prior_plan_status`, `prior_ac_hash`,
+    # `current_ac_hash`). The `prior_plan_status` enum mirrors Story 4.1's
+    # `PlanStatus` Literal at `qa_behavioral_plan.py` line 170. The
+    # `*_ac_hash` patterns mirror Story 4.1's 64-char SHA-256 hex digest
+    # contract from `docs/architecture.md` line 1591.
+    type: object
+    required:
+      - story_id
+      - prior_plan_status
+      - prior_ac_hash
+      - current_ac_hash
+    additionalProperties: false
+    properties:
+      story_id:
+        type: string
+        minLength: 1
+      prior_plan_status:
+        type: string
+        enum: [generated, human-reviewed]
+      prior_ac_hash:
+        type: string
+        pattern: "^[0-9a-f]{64}$"
+      current_ac_hash:
+        type: string
+        pattern: "^[0-9a-f]{64}$"
