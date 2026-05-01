@@ -1,0 +1,58 @@
+# QA specialist envelope — status=fail, api project type, HTTP-driver
+# AC verification-fail path (Story 4.5 — project-type-specific api driver
+# substrate landing; FR24a verification-fail per epics.md line 1947).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical envelope
+# corpus. This fixture surfaces the wrapper-side `status: fail` envelope shape
+# Story 4.10 routes via the verification-fail escalation contract: an
+# `ApiAssertion(passed=False, observed="500", expected="200", kind="status")`
+# returned by `ApiDriver.assert_status` produces an `AcResult` with
+# `status="fail"` carrying the failed assertion + the captured request/response
+# trace. Per FR24a, the verification-fail surface routes through the
+# `bucket=decision_needed` finding bucket with `severity=HIGH` — distinct
+# from the env-setup-fail surface (qa-blocked-api-service-broken.yaml in
+# this directory) where the API service itself is broken. THIS fixture is
+# the verification-fail proof; the env-setup-fail fixture proves the
+# structurally-distinct route per epics.md line 1947 ("separate code paths,
+# separate envelopes").
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: fail
+artifacts:
+  - _bmad-output/qa-evidence/sample-auto-001/run-001/network-trace-ac1.json
+findings:
+  - id: qa-001
+    source: qa
+    title: AC-1 verification failed — HTTP status mismatch
+    detail: >-
+      AC-1 expected a 200 OK response from `GET /` but the HTTP api driver
+      observed a 500 Internal Server Error. The captured network-trace
+      records the full request + response cycle (with masked-selector
+      redaction applied per the `MaskedSelectorPolicy`). Because the
+      response WAS received (the API service answered, just with the wrong
+      status code), this is a verification-fail (FR24a) NOT an
+      env-setup-fail (FR24b) — the API is up, the AC simply doesn't hold
+      against the current behaviour. Story 4.10's escalation routing
+      consumes this `status: fail` envelope and routes through the
+      verification-fail escalation contract.
+    location: _bmad-output/qa-evidence/sample-auto-001/run-001/network-trace-ac1.json:1
+    bucket: decision_needed
+    severity: HIGH
+rationale: >-
+  AC-1 verification failed mechanically via the HTTP api driver: the GET /
+  request returned status 500 instead of the expected 200. The response was
+  received (the API service is up), so this is a verification-fail per
+  FR24a — distinct from the env-setup-fail path where the API service
+  itself is broken. The captured request/response trace is preserved
+  under the canonical qa-evidence path.
+ac_results:
+  - ac_id: AC-1
+    status: fail
+    assertions:
+      - "status: GET / returned 500 instead of expected 200"
+      - "status: observed='500' expected='200' passed=False"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-auto-001/run-001/network-trace-ac1.json
+    semantic_verification: not_applicable

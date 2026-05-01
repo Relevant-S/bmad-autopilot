@@ -1,0 +1,67 @@
+# QA specialist envelope — status=blocked, api project type, mid-run
+# API-service-broken path (Story 4.5 — project-type-specific api driver
+# substrate landing; FR24b env-setup-fail per epics.md line 1947).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical envelope
+# corpus. This fixture surfaces the wrapper-side `status: blocked` envelope
+# shape Story 4.10 routes via the env-setup-fail escalation contract: an
+# `ApiDriver.request` call that raises `ApiServiceBroken` (the production
+# impl raises this on `ConnectionRefusedError` / `socket.timeout` /
+# 5xx-unrelated-to-AC-content) is caught by the QA wrapper, which calls
+# `loud_fail_harness.env_provisioning.surface_env_setup_failure` AS-IS
+# reusing Story 4.3's existing helper — NO new emission helper because the
+# marker class re-used is the existing `env-setup-failed` from Story 1.4 /
+# Story 4.3 (the asymmetry vs Story 4.4 — which DID introduce
+# `surface_playwright_mcp_unavailable` because its mid-run path needed a
+# distinct `playwright-mcp-unavailable` marker class — is recorded in
+# docs/extension-audit.md). The wrapper preserves already-captured evidence
+# in `evidence_refs` per the verbatim epic AC at epics.md line 1942
+# ("evidence already captured is preserved") and aborts the current AC's
+# verification with `status="blocked"`. One finding surfaces the
+# `env-setup-failed` / `dev-server-not-ready` diagnostic detail with
+# `bucket=decision_needed` + `severity=HIGH` (per FR24b — env-setup-fail /
+# verification-fail routing is decision_needed). The orchestrator-side
+# escalation routing in Story 4.10 consumes the `EnvSetupFailureEmission`;
+# THIS fixture only proves the wrapper-side declaration shape.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: blocked
+artifacts:
+  - _bmad-output/qa-evidence/sample-auto-001/run-002/prior-network-trace-ac1.json
+findings:
+  - id: qa-002
+    source: qa
+    title: API service broken mid-run during AC-1 verification
+    detail: >-
+      The API service became unreachable mid-AC-iteration: `ApiDriver.request`
+      raised `ApiServiceBroken("connection refused")` while issuing
+      `GET /`. The substrate's mid-run service-broken path re-uses Story
+      4.3's existing `surface_env_setup_failure` AS-IS (no new emission
+      helper) and produces an `EnvSetupFailureEmission` with
+      `marker_class="env-setup-failed"` and `sub_cause="dev-server-not-ready"`.
+      Already-captured evidence (the prior network-trace from a successful
+      earlier request) is preserved in `evidence_refs` per epics.md line
+      1942. Story 4.10's escalation routing consumes the
+      `EnvSetupFailureEmission` and routes through the env-setup-fail /
+      verification-fail escalation contracts.
+    location: _bmad-output/qa-evidence/sample-auto-001/run-002/prior-network-trace-ac1.json:1
+    bucket: decision_needed
+    severity: HIGH
+rationale: >-
+  AC-1 verification aborted: API service broken mid-run (connection refused
+  on GET /). The substrate emitted the `env-setup-failed` marker via the
+  AS-IS reused `surface_env_setup_failure` with `sub_cause="dev-server-not-ready"`;
+  already-captured evidence (the prior network-trace) is preserved per the
+  FR-AC commitment. Orchestrator-side flow policy routes env-setup-fail /
+  verification-fail per FR24b; this wrapper merely reports the blocked
+  state.
+ac_results:
+  - ac_id: AC-1
+    status: blocked
+    assertions:
+      - "api service broken mid-run: connection refused"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-auto-001/run-002/prior-network-trace-ac1.json
+    semantic_verification: not_applicable
