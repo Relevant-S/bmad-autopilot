@@ -69,6 +69,7 @@ def validate_file(
 def format_errors(
     errors: Sequence[ValidationError],
     envelope_path: pathlib.Path | None = None,
+    envelope: dict | None = None,
 ) -> str:
     """Render validation errors as a human-readable, CI-log-friendly string.
 
@@ -76,6 +77,16 @@ def format_errors(
     future entry in :data:`FORBIDDEN_FLOW_POLICY_FIELDS`) are rewritten to a
     named, FR52-anchored message. Other errors keep their default phrasing,
     prefixed with their JSON-pointer path.
+
+    The optional ``envelope`` argument enables AC-id resolution for the
+    AC-assertion-evidence triple invariant rewrite (FR19; Story 4.7): when a
+    ``minItems`` error fires at ``ac_results[<int>]/assertions`` or
+    ``ac_results[<int>]/evidence_refs``, the rendered diagnostic names the
+    invariant explicitly and (if ``envelope`` is provided) substitutes the
+    offending entry's ``ac_id`` for the bare index. Resolution is defensive —
+    any structural mismatch (missing key, out-of-range index, non-dict value)
+    falls back to the index form rather than masking the original validation
+    error with a downstream formatter bug.
     """
     if not errors:
         return ""
@@ -93,6 +104,34 @@ def format_errors(
 
     for err in errors:
         path_list = list(err.absolute_path)
+
+        # AC-assertion-evidence triple invariant rewrite (FR19; Story 4.7).
+        # Path-conditional, not validator-name-only — robust to future schema
+        # additions that surface `minItems` errors elsewhere.
+        if (
+            err.validator == "minItems"
+            and len(path_list) == 3
+            and path_list[0] == "ac_results"
+            and isinstance(path_list[1], int)
+            and path_list[2] in ("assertions", "evidence_refs")
+        ):
+            index = path_list[1]
+            array_name = path_list[2]
+            ac_label = f"ac_results[{index}]"
+            if envelope is not None:
+                try:
+                    ac_id = envelope["ac_results"][index]["ac_id"]
+                except (KeyError, IndexError, TypeError):
+                    pass  # fall back to index form
+                else:
+                    if isinstance(ac_id, str) and ac_id:
+                        ac_label = ac_id
+            lines.append(
+                f"{ac_label}: AC-assertion-evidence triple invariant: "
+                f"passing AC requires ≥ 1 entry in `{array_name}` "
+                "(see FR19)"
+            )
+            continue
 
         if err.validator == "additionalProperties" and not path_list:
             for key in _ADDITIONAL_PROPERTY_KEY_PATTERN.findall(err.message):
@@ -210,14 +249,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     any_failed = False
     for envelope_path in args.envelopes:
+        # Inlined YAML load (mirrors validate_file's behavior) so the parsed
+        # envelope dict is in scope at format_errors time — enables the
+        # AC-assertion-evidence triple invariant rewrite (Story 4.7) to
+        # resolve `ac_id` labels rather than fall back to bare indices.
         try:
-            errors = validate_file(envelope_path, schema)
+            raw_text = envelope_path.read_text(encoding="utf-8")
         except OSError as exc:
             print(
                 f"harness-level error: envelope unreadable: {envelope_path}: {exc}",
                 file=sys.stderr,
             )
             return 2
+        try:
+            raw = yaml.safe_load(raw_text)
         except yaml.YAMLError as exc:
             print(
                 f"harness-level error: envelope YAML parse failure: "
@@ -226,9 +271,26 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 2
 
+        if not isinstance(raw, dict):
+            errors = [
+                ValidationError(
+                    f"envelope at {envelope_path} did not parse to a YAML mapping at top level"
+                )
+            ]
+            envelope_for_format: dict | None = None
+        else:
+            errors = validate_envelope(raw, schema)
+            envelope_for_format = raw
+
         if errors:
             any_failed = True
-            print(format_errors(errors, envelope_path=envelope_path))
+            print(
+                format_errors(
+                    errors,
+                    envelope_path=envelope_path,
+                    envelope=envelope_for_format,
+                )
+            )
 
     return 1 if any_failed else 0
 

@@ -57,6 +57,23 @@ Format edge cases:
     [x] nested additionalProperties (inside finding) formatted   → test_format_errors_nested_additional_property
     [x] `not`-only schema produces generic forbidden message     → test_format_errors_not_clause_only
     [x] non-additional-properties error includes path pointer    → test_format_errors_path_pointer
+
+Negative-path — AC-assertion-evidence triple invariant (FR19; Story 4.7):
+    [x] passing AC with empty `assertions` rejected              → test_ac_triple_pass_empty_assertions_rejected
+    [x] passing AC with empty `evidence_refs` rejected           → test_ac_triple_pass_empty_evidence_refs_rejected
+    [x] passing AC with both arrays empty: 2 errors              → test_ac_triple_pass_both_empty_rejected
+    [x] failing/blocked AC with empty arrays accepted            → test_ac_triple_failing_empty_arrays_accepted
+    [x] failing AC with assertions + evidence accepted           → test_ac_triple_failing_with_evidence_accepted
+    [x] existing qa-*.yaml fixtures validate clean post-bump     → test_existing_corpus_qa_fixtures_validate_clean
+    [x] CLI exit 1 for passing AC with empty assertions (AC-2)  → test_cli_triple_invariant_pass_empty_assertions_exits_one
+    [x] CLI exit 0 for fail/blocked AC with empty arrays (AC-5) → test_cli_triple_invariant_failing_empty_arrays_exits_zero
+
+format_errors AC-id resolution (Story 4.7):
+    [x] minItems on ac_results triggers FR19 diagnostic line     → test_format_errors_renames_ac_triple_minitems
+    [x] envelope kwarg resolves ac_id literal in diagnostic      → test_format_errors_resolves_ac_id_when_envelope_passed
+    [x] non-minItems errors not mangled by FR19 rewrite          → test_format_errors_does_not_mangle_non_minitems_errors
+    [x] AC-id resolution is defensive on missing/odd shapes      → test_format_errors_resilient_to_missing_ac_results_lookup
+    [x] envelope_validator.py contains no CR characters          → test_lf_line_endings_envelope_validator
 """
 
 from __future__ import annotations
@@ -107,6 +124,32 @@ def _minimal_finding(**overrides: object) -> dict:
     }
     base.update(overrides)
     return base
+
+
+
+def _minimal_qa_envelope(
+    ac_status: str = "pass",
+    assertions: tuple[str, ...] = ("login button visible",),
+    evidence_refs: tuple[str, ...] = ("evidence/screen-001.png",),
+    ac_id: str = "AC-1",
+) -> dict:
+    """Return a minimal valid QA envelope with one parametrizable `ac_results` entry.
+
+    The default-argument tuples are immutable (no mutable-default-argument
+    pitfall). Tests pass `()` explicitly to construct empty-array shapes that
+    exercise the AC-assertion-evidence triple invariant (Story 4.7).
+    """
+    return _minimal_valid_envelope() | {
+        "ac_results": [
+            {
+                "ac_id": ac_id,
+                "status": ac_status,
+                "assertions": list(assertions),
+                "evidence_refs": list(evidence_refs),
+                "semantic_verification": {"checked_by": "playwright"},
+            }
+        ],
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -481,3 +524,252 @@ def test_cli_invalid_then_valid_still_returns_one(
         ]
     )
     assert rc == 1
+
+
+
+# --------------------------------------------------------------------------- #
+# Negative-path: AC-assertion-evidence triple invariant (FR19; Story 4.7)     #
+# --------------------------------------------------------------------------- #
+
+
+def test_ac_triple_pass_empty_assertions_rejected(schema: dict) -> None:
+    """A passing AC with an empty `assertions` array fires the FR19 conditional."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass", assertions=(), evidence_refs=("e/1.png",)
+    )
+    errors = validate_envelope(envelope, schema)
+    minitems_errors = [
+        e
+        for e in errors
+        if e.validator == "minItems"
+        and list(e.absolute_path) == ["ac_results", 0, "assertions"]
+    ]
+    assert len(minitems_errors) == 1, (
+        f"expected exactly one minItems error at ac_results[0]/assertions; got: "
+        f"{[(e.validator, list(e.absolute_path), e.message) for e in errors]}"
+    )
+    assert any(phrase in minitems_errors[0].message for phrase in ("too short", "non-empty")), (
+        f"expected minItems diagnostic in message; got: {minitems_errors[0].message!r}"
+    )
+
+
+def test_ac_triple_pass_empty_evidence_refs_rejected(schema: dict) -> None:
+    """A passing AC with an empty `evidence_refs` array fires the FR19 conditional."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass", assertions=("a",), evidence_refs=()
+    )
+    errors = validate_envelope(envelope, schema)
+    minitems_errors = [
+        e
+        for e in errors
+        if e.validator == "minItems"
+        and list(e.absolute_path) == ["ac_results", 0, "evidence_refs"]
+    ]
+    assert len(minitems_errors) == 1, (
+        f"expected exactly one minItems error at ac_results[0]/evidence_refs; got: "
+        f"{[(e.validator, list(e.absolute_path), e.message) for e in errors]}"
+    )
+    assert any(phrase in minitems_errors[0].message for phrase in ("too short", "non-empty")), (
+        f"expected minItems diagnostic in message; got: {minitems_errors[0].message!r}"
+    )
+
+
+def test_ac_triple_pass_both_empty_rejected(schema: dict) -> None:
+    """A passing AC with BOTH arrays empty surfaces both gaps in one validation pass."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass", assertions=(), evidence_refs=()
+    )
+    errors = validate_envelope(envelope, schema)
+    triple_signature = {
+        (list(e.absolute_path)[-1], e.validator)
+        for e in errors
+        if e.validator == "minItems"
+        and len(list(e.absolute_path)) == 3
+        and list(e.absolute_path)[0] == "ac_results"
+    }
+    assert ("assertions", "minItems") in triple_signature, (
+        f"expected `assertions` minItems error; saw: {triple_signature}"
+    )
+    assert ("evidence_refs", "minItems") in triple_signature, (
+        f"expected `evidence_refs` minItems error; saw: {triple_signature}"
+    )
+
+    # Diagnostic surface: format_errors mentions BOTH array names AND the
+    # invariant text so the FR19 rewrite branch is confirmed to have fired (AC-4).
+    output = format_errors(errors)
+    assert "AC-assertion-evidence triple invariant" in output, (
+        f"expected FR19 invariant text in format_errors output; got: {output!r}"
+    )
+    assert "`assertions`" in output and "`evidence_refs`" in output
+
+
+@pytest.mark.parametrize("status", ["fail", "blocked"])
+def test_ac_triple_failing_empty_arrays_accepted(schema: dict, status: str) -> None:
+    """The triple invariant applies ONLY to status==pass; failing/blocked permit empty arrays."""
+    envelope = _minimal_qa_envelope(
+        ac_status=status, assertions=(), evidence_refs=()
+    )
+    assert validate_envelope(envelope, schema) == [], (
+        f"status={status!r} with empty assertions/evidence_refs must validate clean"
+    )
+
+
+def test_ac_triple_failing_with_evidence_accepted(schema: dict) -> None:
+    """A failing AC PERMITS assertions + evidence — the invariant is one-way."""
+    envelope = _minimal_qa_envelope(
+        ac_status="fail", assertions=("a",), evidence_refs=("e",)
+    )
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_existing_corpus_qa_fixtures_validate_clean(schema: dict) -> None:
+    """Regression guard: every existing qa-*.yaml fixture validates under the bumped schema."""
+    qa_fixtures = sorted((REPO_ROOT / "examples" / "envelopes").glob("qa-*.yaml"))
+    assert qa_fixtures, "no qa-*.yaml fixtures discovered — corpus inspection broke"
+    for fixture in qa_fixtures:
+        errors = validate_file(fixture, schema)
+        assert errors == [], (
+            f"fixture {fixture.name} regressed under FR19 triple invariant: "
+            f"{format_errors(errors)}"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# format_errors — AC-id resolution + diagnostic refinement (Story 4.7)        #
+# --------------------------------------------------------------------------- #
+
+
+def test_format_errors_renames_ac_triple_minitems(schema: dict) -> None:
+    """The FR19 rewrite renames the diagnostic and includes the array name."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass", assertions=(), evidence_refs=("e",)
+    )
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(errors, envelope_path=pathlib.Path("/tmp/x.yaml"))
+    assert "AC-assertion-evidence triple invariant" in output
+    assert "`assertions`" in output
+    # Either bare-index form OR resolved AC-id is acceptable here (AC-7);
+    # the AC-id-resolution path is exercised independently below.
+    assert "ac_results[0]" in output or "AC-1" in output
+
+
+def test_format_errors_resolves_ac_id_when_envelope_passed(schema: dict) -> None:
+    """Passing the envelope through enables AC-id resolution in the diagnostic."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass", assertions=(), evidence_refs=("e",), ac_id="AC-7"
+    )
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(
+        errors,
+        envelope_path=pathlib.Path("/tmp/x.yaml"),
+        envelope=envelope,
+    )
+    assert "AC-7" in output, (
+        f"expected resolved AC-id 'AC-7' in diagnostic; got: {output!r}"
+    )
+    # The bare index form must NOT leak through when resolution succeeds.
+    assert "ac_results[0]" not in output
+
+
+def test_format_errors_does_not_mangle_non_minitems_errors(schema: dict) -> None:
+    """The FR19 rewrite is path-conditional; existing additionalProperties output is byte-identical."""
+    envelope = _minimal_valid_envelope() | {"unknown_field": "x"}
+    output = format_errors(validate_envelope(envelope, schema))
+    assert "additional property 'unknown_field' not allowed" in output
+
+
+def test_format_errors_resilient_to_missing_ac_results_lookup(schema: dict) -> None:
+    """Defensive fallback: any structural mismatch falls back to index form without raising."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass", assertions=(), evidence_refs=("e",)
+    )
+    errors = validate_envelope(envelope, schema)
+
+    # Case A: envelope=None → index form.
+    out_none = format_errors(errors, envelope=None)
+    assert "ac_results[0]" in out_none
+
+    # Case B: envelope is empty dict (missing `ac_results`) → falls back without raising.
+    out_empty = format_errors(errors, envelope={})
+    assert "ac_results[0]" in out_empty
+
+    # Case C: index out of range → falls back without raising.
+    out_oob = format_errors(errors, envelope={"ac_results": []})
+    assert "ac_results[0]" in out_oob
+
+
+def test_lf_line_endings_envelope_validator() -> None:
+    """The modified envelope_validator.py contains no CR characters (LF discipline)."""
+    module_path = (
+        REPO_ROOT
+        / "tools"
+        / "loud-fail-harness"
+        / "src"
+        / "loud_fail_harness"
+        / "envelope_validator.py"
+    )
+    raw = module_path.read_bytes()
+    assert b"\r" not in raw, (
+        "envelope_validator.py contains CR characters; expected pure LF endings"
+    )
+
+
+# --------------------------------------------------------------------------- #
+# CLI exit-code verification — AC-triple invariant (AC-2 / AC-3 / AC-5)       #
+# --------------------------------------------------------------------------- #
+
+
+def test_cli_triple_invariant_pass_empty_assertions_exits_one(
+    tmp_path: pathlib.Path,
+) -> None:
+    """CLI returns exit 1 when a passing AC has an empty `assertions` array (AC-2)."""
+    envelope_file = tmp_path / "qa-triple-fail.yaml"
+    envelope_file.write_text(
+        textwrap.dedent("""\
+            status: pass
+            artifacts:
+              - src/foo.py
+            findings: []
+            rationale: all green
+            ac_results:
+              - ac_id: AC-1
+                status: pass
+                assertions: []
+                evidence_refs:
+                  - evidence/screen-001.png
+                semantic_verification:
+                  checked_by: playwright
+        """),
+        encoding="utf-8",
+    )
+    rc = main(["--schema", str(SCHEMA_PATH), str(envelope_file)])
+    assert rc == 1, f"expected exit 1 for passing AC with empty assertions; got {rc}"
+
+
+def test_cli_triple_invariant_failing_empty_arrays_exits_zero(
+    tmp_path: pathlib.Path,
+) -> None:
+    """CLI returns exit 0 for fail/blocked ACs with empty arrays — invariant is one-way (AC-5)."""
+    for ac_status in ("fail", "blocked"):
+        envelope_file = tmp_path / f"qa-{ac_status}-empty.yaml"
+        envelope_file.write_text(
+            textwrap.dedent(f"""\
+                status: pass
+                artifacts:
+                  - src/foo.py
+                findings: []
+                rationale: all green
+                ac_results:
+                  - ac_id: AC-1
+                    status: {ac_status}
+                    assertions: []
+                    evidence_refs: []
+                    semantic_verification:
+                      checked_by: playwright
+            """),
+            encoding="utf-8",
+        )
+        rc = main(["--schema", str(SCHEMA_PATH), str(envelope_file)])
+        assert rc == 0, (
+            f"expected exit 0 for {ac_status!r} AC with empty arrays; got {rc}"
+        )

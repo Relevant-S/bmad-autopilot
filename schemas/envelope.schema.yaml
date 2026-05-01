@@ -12,6 +12,11 @@
 #     diagnostic-context carrier surfaced when QA's `surface_plan_drift`
 #     consumes Story 4.1's `drift-suspected` action token; per-convention
 #     audit-trail row in `docs/extension-audit.md`)
+#   - FR19 (Story 4.7: AC-assertion-evidence triple structural enforcement —
+#     passing AC results require ≥ 1 entry in `assertions` AND
+#     `evidence_refs` arrays via if/then conditional in $defs/ac_result;
+#     failing/blocked AC results are unconstrained per epics.md lines
+#     2009-2012)
 #   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
 #
 # This file encodes a contract validated by CI; modify with care.
@@ -170,6 +175,26 @@ $defs:
       - evidence_refs
       - semantic_verification
     additionalProperties: false
+    # FR19 (Story 4.7): the AC-assertion-evidence triple is structurally
+    # enforced — passing AC results require ≥ 1 entry in `assertions` AND
+    # `evidence_refs`. Failing / blocked AC results are unconstrained per
+    # epics.md lines 2009-2012 (failures may have partial evidence, which
+    # is fine for diagnostic purposes). The `required: [status]` inside
+    # the `if` clause is the JSON-Schema idiom for "this conditional
+    # applies WHEN the property is present" so an `ac_result` lacking
+    # `status` does not vacuously match `if` and trigger `then`.
+    allOf:
+      - if:
+          properties:
+            status:
+              const: pass
+          required: [status]
+        then:
+          properties:
+            assertions:
+              minItems: 1
+            evidence_refs:
+              minItems: 1
     properties:
       ac_id:
         type: string
