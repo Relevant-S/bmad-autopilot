@@ -116,7 +116,7 @@ def repo_root() -> pathlib.Path:
 def _make_run_state(current_state: CurrentState = "ready-for-dev", **overrides: Any) -> RunState:
     """Build a minimal valid :class:`RunState` instance for tests."""
     base: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "story_id": "2-4-test",
         "run_id": "run-001",
         "current_state": current_state,

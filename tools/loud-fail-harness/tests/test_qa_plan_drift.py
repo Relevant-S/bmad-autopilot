@@ -577,7 +577,7 @@ def _seed_dispatch_log(
 def _write_run_state(rs_path: pathlib.Path, story_id: str) -> pathlib.Path:
     rs_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "story_id": story_id,
         "run_id": _CANONICAL_RUN_ID,
         "current_state": "done",

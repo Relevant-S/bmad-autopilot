@@ -154,7 +154,7 @@ def _write_run_state_yaml(
     """Write a minimal-valid run-state YAML the bundle assembler can load."""
     rs_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "story_id": story_id,
         "run_id": "run-2026-04-29-001",
         "current_state": current_state,

@@ -1,0 +1,23 @@
+# Canonical `env-torn-down` event (orphan-process-cleanup sweep summary).
+#
+# Sources:
+#   - PRD NFR-S6 (orphaned processes from prior crashed runs are detected on
+#     subsequent runs and cleaned up with a diagnostic
+#     `orphan-process-cleanup: {port}`)
+#   - Story 4.3 (full env provisioning lifecycle, orchestrator-owned;
+#     `loud_fail_harness.env_provisioning.cleanup_orphan_processes`
+#     produces this single sweep-summary event after terminating ≥ 1 orphan
+#     and emitting one `orphan-process-cleanup` marker per orphan via the
+#     marker registry — the event is a single seam summary, NOT one per
+#     orphan)
+#
+# Per Pattern 3, event class names are kebab-case; field names within events
+# are snake_case. Identifier-value enums (`env_kind`, `outcome`) are
+# kebab-case per Pattern 1. Validates against schemas/orchestrator-event.yaml.
+
+event_class: env-torn-down
+event_id: ev-4-3-env-torn-down-orphan-cleanup-0001
+timestamp: "2026-04-30T10:00:00Z"
+story_id: "4-3"
+env_kind: web
+outcome: orphan-process-cleanup

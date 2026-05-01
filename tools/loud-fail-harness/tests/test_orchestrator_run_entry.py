@@ -201,7 +201,7 @@ def _make_run_state(
     current_state: CurrentState = "ready-for-dev", **overrides: Any
 ) -> RunState:
     base: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "story_id": "2-5-test",
         "run_id": "run-2-5-001",
         "current_state": current_state,
@@ -1008,7 +1008,7 @@ def test_initial_run_state_validates_against_schema(
     schema_validator: Draft202012Validator,
 ) -> None:
     initial = RunState(
-        schema_version="1.0",
+        schema_version="1.1",
         story_id="2-5-test",
         run_id="run-2-5-001",
         current_state="ready-for-dev",
@@ -1027,7 +1027,7 @@ def test_post_advance_run_state_validates_against_schema(
     schema_validator: Draft202012Validator,
 ) -> None:
     advanced = RunState(
-        schema_version="1.0",
+        schema_version="1.1",
         story_id="2-5-test",
         run_id="run-2-5-001",
         current_state="in-progress",

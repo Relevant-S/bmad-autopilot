@@ -133,7 +133,7 @@ def _write_run_state(
         scope_line = "  scope_expanded_to: [" + ",".join(repr(p) for p in scope_items) + "]\n"
         envelope = "last_envelope:\n  status: green\n  rationale: x\n" + msg_line + scope_line
     rs.write_text(
-        f"schema_version: '1.0'\n"
+        f"schema_version: '1.1'\n"
         f"story_id: {story_id}\n"
         f"run_id: r1\n"
         f"current_state: {current_state}\n"

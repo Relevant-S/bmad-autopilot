@@ -120,7 +120,7 @@
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://bmad-autopilot.local/schemas/run-state.yaml"
-schema_version: "1.0"
+schema_version: "1.1"
 title: "Run-State"
 description: >-
   Orchestrator-domain canonical cache of flow-control state for the in-flight
@@ -149,7 +149,7 @@ additionalProperties: false
 properties:
   schema_version:
     type: string
-    enum: ["1.0"]
+    enum: ["1.1"]
     description: >-
       Schema version of this run-state document. Closed enum at MVP so a
       future MINOR/MAJOR bump (per the contract-header versioning rules)
@@ -326,3 +326,61 @@ properties:
         description: >-
           Cumulative cost attributed to the Phase-1.5 LAD specialist
           across this run.
+
+  provisioned_env:
+    oneOf:
+      - $ref: "#/$defs/provisioned_env"
+      - type: "null"
+    description: >-
+      The orchestrator-domain canonical record of a provisioned QA env
+      between `provision_env` success and `teardown_env` success per FR7
+      (PRD line 815) + NFR-S6 (PRD line 974). Populated by Story 4.3's
+      `loud_fail_harness.env_provisioning.provision_env` at the
+      `review → qa` seam BEFORE QA dispatch; cleared (key removed from
+      the YAML document) by `teardown_env` after QA completion. Optional
+      top-level field — absent on `current_state ∈ {ready-for-dev,
+      in-progress, review, done}` AND between teardown success and the
+      next story's provisioning. Bumped by Story 4.3 per the contract-
+      header MINOR-version-additive discipline; recorded in
+      `bmad-autopilot/docs/extension-audit.md` per the no-introductions
+      principle Story 3.2 codified.
+
+$defs:
+  provisioned_env:
+    type: object
+    additionalProperties: false
+    required:
+      - env_kind
+      - port
+      - pid
+      - started_at
+    properties:
+      env_kind:
+        type: string
+        enum: [web, api]
+        description: >-
+          Mirrors the orchestrator-event schema's existing `env_kind`
+          enum at orchestrator-event.yaml lines 318 + 343 byte-for-byte.
+          Kebab-case identifiers per Pattern 1.
+      port:
+        type: integer
+        minimum: 1
+        maximum: 65535
+        description: >-
+          The integer ephemeral TCP port the dev/API server is bound to.
+          Allocated dynamically per NFR-S6; matches the event schema's
+          `port` field at line 320.
+      pid:
+        type: integer
+        minimum: 1
+        description: >-
+          The integer process ID of the dev/API server spawned by the
+          project-type-specific provisioner (Stories 4.4 / 4.5).
+          Matches the event schema's `pid` field at line 322.
+      started_at:
+        type: string
+        format: date-time
+        description: >-
+          ISO-8601 timestamp marking when provisioning completed.
+          Mirrors the orchestrator-event schema's `timestamp` field's
+          `format: date-time` discipline at line 110.

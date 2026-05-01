@@ -141,7 +141,7 @@ def schema_validator(
 def _minimal_run_state(**overrides: Any) -> RunState:
     """Minimal valid RunState for positive-path testing."""
     base: dict[str, Any] = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "story_id": "2-2-test",
         "run_id": "run-001",
         "current_state": "ready-for-dev",
@@ -180,7 +180,7 @@ def test_schema_meta_validates(run_state_schema: dict[str, Any]) -> None:
     Draft202012Validator.check_schema(run_state_schema)
     assert run_state_schema.get("$schema", "").endswith("/draft/2020-12/schema")
     assert run_state_schema.get("$id", "").endswith("schemas/run-state.yaml")
-    assert run_state_schema.get("schema_version") == "1.0"
+    assert run_state_schema.get("schema_version") == "1.1"
     assert run_state_schema.get("type") == "object"
     assert run_state_schema.get("additionalProperties") is False
 

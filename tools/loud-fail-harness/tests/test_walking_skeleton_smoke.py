@@ -348,7 +348,7 @@ def _make_stub_dispatch_callback(
 
 def _make_run_state(current_state: str) -> RunState:
     return RunState(
-        schema_version="1.0",
+        schema_version="1.1",
         story_id=_STORY_ID,
         run_id=_RUN_ID,
         current_state=current_state,  # type: ignore[arg-type]

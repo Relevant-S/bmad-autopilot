@@ -1,0 +1,21 @@
+# Canonical positive `env-torn-down` event (clean teardown after QA return).
+#
+# Sources:
+#   - PRD FR7 (orchestrator tears down the QA runtime environment after QA
+#     completion)
+#   - Story 4.3 (full env provisioning lifecycle, orchestrator-owned;
+#     `loud_fail_harness.env_provisioning.make_env_torn_down_event`
+#     produces this shape at runtime via `teardown_env` after QA return —
+#     unconditional teardown regardless of envelope status per epics.md
+#     line 1869)
+#
+# Per Pattern 3, event class names are kebab-case; field names within events
+# are snake_case. Identifier-value enums (`env_kind`, `outcome`) are
+# kebab-case per Pattern 1. Validates against schemas/orchestrator-event.yaml.
+
+event_class: env-torn-down
+event_id: ev-4-3-env-torn-down-clean-0001
+timestamp: "2026-04-30T10:05:00Z"
+story_id: "4-3"
+env_kind: web
+outcome: clean

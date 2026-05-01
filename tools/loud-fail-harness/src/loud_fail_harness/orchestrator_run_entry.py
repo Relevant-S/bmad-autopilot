@@ -1352,7 +1352,7 @@ def run_story_loop_entry(
     # exists per step (1)'s locate; no story-doc write is structurally
     # needed at init time.
     initial_run_state = RunState(
-        schema_version="1.0",
+        schema_version="1.1",
         story_id=story_id,
         run_id=run_id,
         current_state="ready-for-dev",
@@ -1374,7 +1374,7 @@ def run_story_loop_entry(
     # The factory is invoked HERE (not at module top-level; not at step
     # 4) so the callback closes over the resolved story_id specifically.
     next_state = RunState(
-        schema_version="1.0",
+        schema_version="1.1",
         story_id=story_id,
         run_id=run_id,
         current_state="in-progress",

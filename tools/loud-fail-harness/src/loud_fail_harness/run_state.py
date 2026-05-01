@@ -374,7 +374,7 @@ class RunState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    schema_version: Literal["1.0"]
+    schema_version: Literal["1.1"]
     story_id: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
     current_state: CurrentState

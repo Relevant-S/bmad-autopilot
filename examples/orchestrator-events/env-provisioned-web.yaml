@@ -1,0 +1,23 @@
+# Canonical positive `env-provisioned` event (web project type).
+#
+# Sources:
+#   - PRD FR7 (orchestrator provisions the QA runtime environment before QA
+#     dispatch and tears it down after QA completion)
+#   - PRD NFR-S6 (QA env provisioning uses ephemeral ports and tears down
+#     completely after QA completion)
+#   - Story 4.3 (full env provisioning lifecycle, orchestrator-owned;
+#     `loud_fail_harness.env_provisioning.make_env_provisioned_event`
+#     produces this shape at runtime)
+#
+# Per Pattern 3, event class names are kebab-case; field names within events
+# are snake_case. Identifier-value enums (`env_kind`) are kebab-case per
+# Pattern 1. Validates against schemas/orchestrator-event.yaml.
+
+event_class: env-provisioned
+event_id: ev-4-3-env-provisioned-web-0001
+timestamp: "2026-04-30T10:00:00Z"
+story_id: "4-3"
+env_kind: web
+port: 51234
+pid: 84321
+env_diagnostic: ""
