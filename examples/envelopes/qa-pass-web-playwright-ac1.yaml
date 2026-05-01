@@ -1,0 +1,36 @@
+# QA specialist envelope — status=pass, web project type, Playwright-MCP-driver
+# AC-1 mechanical Tier-1 verification (Story 4.4 — project-type-specific web
+# driver substrate landing).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical envelope
+# corpus. This fixture extends the Story 2.10 `qa-pass-ac1-tier1.yaml` baseline
+# with the web-project-specific evidence shape produced by Story 4.4's
+# Playwright MCP driver: a screenshot evidence_ref captured via
+# `WebDriver.screenshot` and a `WebDriver.assert_dom_text` assertion on the
+# DOM textual content. The `ac_results` array shape is identical to the Story
+# 2.10 baseline (the substrate's `AcResult` model serializes byte-for-byte to
+# `schemas/envelope.schema.yaml` `$defs/ac_result`); the fixture differs only
+# in its evidence path (under `_bmad-output/qa-evidence/sample-auto-001/run-001/`
+# per the cross-fixture path discipline) and its assertion vocabulary
+# (DOM textual content rather than HTTP response code).
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-auto-001/run-001/screenshot-ac1.png
+findings: []
+rationale: >-
+  AC-1 verified mechanically via the Playwright MCP web driver: navigated to
+  the running dev server, asserted the DOM textual content matched the
+  expected AC-1 string, and captured a screenshot under the canonical
+  qa-evidence path. No AC violations observed.
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - DOM text at body matched the expected AC-1 string verbatim
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-auto-001/run-001/screenshot-ac1.png
+    semantic_verification: not_applicable

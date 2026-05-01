@@ -1,0 +1,64 @@
+# QA specialist envelope — status=blocked, web project type, mid-run
+# Playwright-MCP-unavailability path (Story 4.4 — project-type-specific web
+# driver substrate landing; mid-run graceful-degrade per ADR-002).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical envelope
+# corpus. This fixture extends the Story 2.10 / Story 4.2 envelope corpus with
+# the web-project-specific blocked-state shape produced when Story 4.4's
+# Playwright MCP driver hits a mid-run MCP-tool-call exception during AC
+# verification: the wrapper invokes `surface_playwright_mcp_unavailable`,
+# which atomically (a) validates the `playwright-mcp-unavailable` marker
+# class against the registry, (b) constructs the
+# `PlaywrightMcpUnavailableDiagnostic` carrying the three-field structured
+# context (`story_id`, `action_kind`, `prior_evidence_refs`), (c) constructs
+# the `MarkerEmissionRecord` with `marker_class="playwright-mcp-unavailable"`
+# and `sub_cause=null` (the marker has empty `sub_classifications: []` per
+# `schemas/marker-taxonomy.yaml` line 234). The wrapper preserves
+# already-captured evidence in `evidence_refs` per the verbatim epic AC at
+# epics.md line 1912 ("evidence already captured is preserved") and aborts
+# the current AC's verification with `status="blocked"`. One finding surfaces
+# the mid-run unavailability diagnostic with `bucket=decision_needed` +
+# `severity=HIGH` (per FR24b — env-setup-fail / verification-fail routing
+# is decision_needed). The orchestrator-side escalation routing in Story
+# 4.10 consumes the `PlaywrightMcpUnavailableEmission`; THIS fixture only
+# proves the wrapper-side declaration shape.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: blocked
+artifacts:
+  - _bmad-output/qa-evidence/sample-auto-001/run-002/prior-screenshot-ac1.png
+findings:
+  - id: qa-002
+    source: qa
+    title: Playwright MCP unavailable mid-run during AC-1 click verification
+    detail: >-
+      The Playwright MCP tool surface became unreachable mid-AC-iteration
+      while invoking `mcp__playwright__browser_click`. The substrate's
+      `surface_playwright_mcp_unavailable` constructed a structured
+      diagnostic (`action_kind="click"`,
+      `prior_evidence_refs=["_bmad-output/qa-evidence/sample-auto-001/run-002/prior-screenshot-ac1.png"]`)
+      and emitted the `playwright-mcp-unavailable` marker. Already-captured
+      evidence (the prior screenshot) is preserved in `evidence_refs` per
+      epics.md line 1912. Story 4.10's escalation routing consumes the
+      `PlaywrightMcpUnavailableEmission` and routes through the
+      verification-fail / env-setup-fail escalation contracts.
+    location: _bmad-output/qa-evidence/sample-auto-001/run-002/prior-screenshot-ac1.png:1
+    bucket: decision_needed
+    severity: HIGH
+rationale: >-
+  AC-1 verification aborted: Playwright MCP became unavailable mid-run during
+  the click action. The substrate emitted the `playwright-mcp-unavailable`
+  marker with the three-field structured diagnostic; already-captured
+  evidence (the prior screenshot) is preserved per the FR-AC commitment.
+  Orchestrator-side flow policy routes env-setup-fail / verification-fail
+  per FR24b; this wrapper merely reports the blocked state.
+ac_results:
+  - ac_id: AC-1
+    status: blocked
+    assertions:
+      - playwright-mcp-unavailable mid-run during action_kind=click
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-auto-001/run-002/prior-screenshot-ac1.png
+    semantic_verification: not_applicable
