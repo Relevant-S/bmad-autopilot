@@ -1,0 +1,55 @@
+# QA specialist envelope — status=pass, full multi-AC happy-path
+# (Story 4.6 — plan-driven AC iteration framework AC-2 — happy-path
+# semantics for the full multi-AC iteration).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical
+# envelope corpus. THIS fixture demonstrates the wrapper-side envelope
+# shape that the QA wrapper produces post-Epic-4-thickening when
+# `iterate_acs` walks the full plan and every AC passes.
+#
+# The fixture carries 3 ACs (AC-1, AC-2, AC-3) in story-doc order per
+# Story 4.1's `generate_plan` byte-stable ordering + FR22b's "execute
+# acceptance criteria in story-doc order" invariant. Every entry's
+# status=pass; one Tier-1 mechanical evidence ref captured per AC.
+# NO `smoke-first-abort` marker — abort fires only on AC-1 fail.
+# `findings: []` because there are no AC violations to report.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac1-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac2-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac3-dom-snapshot.txt
+findings: []
+rationale: >-
+  All three acceptance criteria verified mechanically in story-doc
+  order per FR22b: AC-1 (registration with email), AC-2 (form rejects
+  invalid email syntax), AC-3 (unauthenticated /dashboard redirects to
+  /login). One Tier-1 evidence artifact captured per AC under the
+  canonical qa-evidence path. No AC violations observed; no
+  smoke-first abort fired (smoke-first abort fires only on AC-1 fail
+  per FR22b).
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "verify: User can register with email"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac1-dom-snapshot.txt
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "verify: Form rejects invalid email syntax"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac2-dom-snapshot.txt
+    semantic_verification: not_applicable
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "verify: Unauthenticated /dashboard redirects to /login"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac3-dom-snapshot.txt
+    semantic_verification: not_applicable

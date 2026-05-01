@@ -1,0 +1,81 @@
+# QA specialist envelope — status=fail, mid-iteration AC failure with
+# NO smoke-first abort (Story 4.6 — plan-driven AC iteration framework
+# AC-4 — non-AC-1 failure semantics per FR22b).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical
+# envelope corpus. THIS fixture demonstrates the wrapper-side envelope
+# shape when AC-1 passes but a later AC fails — per the verbatim epic
+# AC at epics.md line 1976 ("only AC-1 'fail' triggers smoke-first
+# abort; AC-2..AC-N 'fail' continues iteration to completion").
+#
+# The iteration framework walks the full plan (4 ACs in this fixture);
+# AC-1 passes, AC-2 passes, AC-3 fails, AC-4 still passes (iteration
+# does NOT abort on the AC-3 fail — only AC-1 fail aborts). The
+# envelope carries every iterated `AcResult` per FR22b's continuation
+# semantics. ONE `bucket: decision_needed` `severity: HIGH` finding
+# names the failed AC-3 assertion. NO `smoke-first-abort` marker
+# annotation — the marker is NOT emitted on non-AC-1 failure.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: fail
+artifacts:
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac1-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac2-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac3-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac4-dom-snapshot.txt
+findings:
+  - id: qa-003
+    source: qa
+    title: AC-3 mechanical assertion failed — form rejection text missing
+    detail: >-
+      Expected form to display rejection text on invalid email syntax;
+      observed page accepted the input without warning. Captured
+      evidence at
+      _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac3-dom-snapshot.txt
+      shows the rendered DOM after submission. Per FR22b non-AC-1
+      failures do NOT trigger smoke-first abort — iteration continued
+      through AC-4 (which passed). Per FR24a the orchestrator's flow
+      policy routes verification-fail through the decision_needed
+      bucket.
+    location: _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac3-dom-snapshot.txt:1
+    bucket: decision_needed
+    severity: HIGH
+rationale: >-
+  AC-1 / AC-2 / AC-4 verified mechanically; AC-3 mechanical assertion
+  did not hold (form rejection text missing on invalid input). Per
+  FR22b the iteration framework continued through the full plan because
+  the failure was NOT on AC-1 (smoke-first abort fires only on AC-1
+  fail). The orchestrator-side flow policy routes verification-fail
+  per FR24a.
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "verify: User can register with email"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac1-dom-snapshot.txt
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "verify: Registration form displays email field"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac2-dom-snapshot.txt
+    semantic_verification: not_applicable
+  - ac_id: AC-3
+    status: fail
+    assertions:
+      - "verify: Form rejects invalid email syntax"
+      - "observed='form accepted invalid input' expected='form shows rejection text'"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac3-dom-snapshot.txt
+    semantic_verification: not_applicable
+  - ac_id: AC-4
+    status: pass
+    assertions:
+      - "verify: Unauthenticated /dashboard redirects to /login"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac4-dom-snapshot.txt
+    semantic_verification: not_applicable

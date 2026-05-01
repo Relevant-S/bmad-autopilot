@@ -1,0 +1,78 @@
+# QA specialist envelope — status=fail, AC-1 verification-fail with
+# smoke-first abort fired (Story 4.6 — plan-driven AC iteration with
+# smoke-first ordering per FR22b).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical
+# envelope corpus. THIS fixture extends the post-Story-4.5 corpus
+# (qa-pass-ac1-tier1.yaml, qa-fail-ac1-assertion.yaml,
+# qa-blocked-playwright-mcp-unavailable.yaml,
+# qa-blocked-api-service-broken.yaml, qa-pass-with-plan-drift.yaml,
+# qa-pass-web-playwright-ac1.yaml, qa-pass-api-http-ac1.yaml,
+# qa-fail-api-http-status-mismatch.yaml) with the smoke-first-abort
+# wrapper-side shape.
+#
+# Per FR22b ("QA executes acceptance criteria in story-doc order, using
+# AC numbering as criticality signal. On AC-1 failure, QA aborts
+# remaining AC execution and surfaces `smoke-first-abort: AC-1-failed`")
+# AND the verbatim epic AC at epics.md line 1976 ("the envelope's
+# `ac_results` contains the single AC-1 failure result + the marker,
+# NOT a wall of cascading failures"): when AC-1 returns status=fail,
+# the iteration framework calls `surface_smoke_first_abort` and stops
+# walking the plan — AC-2 through AC-N are NOT exercised. The envelope
+# carries EXACTLY ONE entry in `ac_results` (the failed AC-1) plus one
+# `bucket: decision_needed` `severity: HIGH` finding naming the failed
+# assertion. The `smoke-first-abort` marker comment annotation below
+# documents the wrapper-side declaration shape; the marker itself is
+# emitted via the orchestrator-event log + rendered in the PR bundle's
+# QA section by Story 4.11's bundle-side render of the diagnostic.
+#
+# THIS fixture is the canonical fixture-coverage anchor for the
+# `smoke-first-abort` marker class (closes the post-Story-4.5
+# fixture-coverage gap — `fixture-coverage` reports 29 covered classes
+# pre-Story-4.6 and 30 post-Story-4.6).
+#
+# bmad-automation:marker smoke-first-abort
+# (Story 4.11 owns bundle-side render; THIS fixture demonstrates the
+# wrapper-side envelope shape AFTER smoke-first abort fires.)
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: fail
+artifacts:
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-001/ac1-dom-snapshot.txt
+findings:
+  - id: qa-001
+    source: qa
+    title: AC-1 mechanical assertion failed — smoke-first abort fired
+    detail: >-
+      Expected DOM body to contain the AC-1 acceptance text; observed
+      page reported a 500 error instead. Captured evidence at
+      _bmad-output/qa-evidence/sample-001/run-2026-05-01-001/ac1-dom-snapshot.txt
+      shows the rendered DOM. Per FR22b the iteration framework called
+      `surface_smoke_first_abort` and aborted remaining AC execution —
+      AC-2 through AC-N were NOT exercised because the smoke-first
+      surface is broken. Per FR24a the orchestrator's flow policy
+      routes verification-fail through the decision_needed bucket
+      (this wrapper does not decide — it merely reports the failed
+      AC-1 + the abort marker).
+    location: _bmad-output/qa-evidence/sample-001/run-2026-05-01-001/ac1-dom-snapshot.txt:1
+    bucket: decision_needed
+    severity: HIGH
+rationale: >-
+  AC-1 mechanical assertion did not hold: expected acceptance text was
+  absent from the rendered DOM; evidence captured under the canonical
+  qa-evidence path. Per FR22b the iteration framework aborted AC-2
+  through AC-N (smoke-first ordering — AC numbering is the criticality
+  signal). The orchestrator-side `smoke-first-abort` marker emission
+  routes through Story 4.10's verification-fail escalation contract
+  (rendered in the PR bundle's QA section by Story 4.11).
+ac_results:
+  - ac_id: AC-1
+    status: fail
+    assertions:
+      - "verify: AC-1 acceptance text appears in rendered DOM"
+      - "observed='500 Internal Server Error' expected='User can register with email'"
+    evidence_refs:
+      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-001/ac1-dom-snapshot.txt
+    semantic_verification: not_applicable
