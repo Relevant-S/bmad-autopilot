@@ -272,6 +272,10 @@ from loud_fail_harness.env_provisioning import (
     ProvisionedEnv,
 )
 from loud_fail_harness.qa_behavioral_plan import QABehavioralPlanEntry
+from loud_fail_harness.qa_evidence_tier import (
+    EvidenceRef,
+    SemanticVerificationResult,
+)
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
@@ -397,9 +401,11 @@ class AcResult(BaseModel):
     """The per-AC verification record produced by :func:`verify_ac`.
 
     The Pydantic-v2 projection's ``model_dump()`` JSON shape mirrors
-    ``schemas/envelope.schema.yaml`` ``$defs/ac_result`` lines
-    164-194 byte-for-byte (the five required fields with the same
-    types and the same enum bounds).
+    ``schemas/envelope.schema.yaml`` ``$defs/ac_result`` byte-for-byte
+    (the five required fields with the same types and the same enum
+    bounds; post-Story-4.8 the ``evidence_refs`` items carry the
+    bumped ``$defs/evidence_ref`` ``{path, tier}`` shape and
+    ``semantic_verification`` is the bumped closed string enum).
 
     Frozen for hashability + determinism. Field declaration order is
     load-bearing for byte-stable ``model_dump_json()`` output.
@@ -414,14 +420,23 @@ class AcResult(BaseModel):
           the verification ran (≥ 1 entry on ``pass`` /
           ``fail``; on ``blocked`` may carry the diagnostic of
           the precondition failure that prevented verification).
-        * ``evidence_refs`` — tuple of repo-relative evidence-path
-          strings; ≥ 1 entry on ``pass`` / ``fail`` / ``blocked``
-          when prior evidence was captured before the precondition
-          failure.
-        * ``semantic_verification`` — the literal string
-          ``"not_applicable"`` at THIS story's scope (the schema's
-          ``oneOf: [object, string]`` accepts the string form;
-          Story 4.8 thickens to an object shape).
+        * ``evidence_refs`` — tuple of :class:`EvidenceRef` entries
+          (each carrying a repo-relative ``path`` + an
+          ``EvidenceTier`` ∈ {tier-1-mechanical, tier-2-outcome,
+          tier-3-semantic}). At driver-projection time (THIS module +
+          :mod:`http_driver`) every entry is captured at
+          ``tier-1-mechanical`` because drivers capture mechanical
+          evidence by definition; Tier-2 outcome elevation is a
+          wrapper composition concern deferred to Story 4.13.
+        * ``semantic_verification`` — one of ``"verified" |
+          "not_configured" | "not_applicable"`` (the FR21 closed
+          string enum from Story 4.8). Drivers do not run semantic
+          verification; the wrapper composes
+          :func:`loud_fail_harness.qa_evidence_tier.evaluate_semantic_verification`
+          and projects the result onto the envelope-level AC entry.
+          The default ``"not_applicable"`` is the wrapper-side default
+          for the existing AC-1-only Tier-1-only Epic-2-scope wrapper
+          usage at ``agents/qa.md`` line 35 (Story 2.10 contract).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -429,8 +444,8 @@ class AcResult(BaseModel):
     ac_id: str = Field(min_length=1)
     status: Literal["pass", "fail", "blocked"]
     assertions: tuple[str, ...]
-    evidence_refs: tuple[str, ...]
-    semantic_verification: Literal["not_applicable"] = "not_applicable"
+    evidence_refs: tuple[EvidenceRef, ...]
+    semantic_verification: SemanticVerificationResult = "not_applicable"
 
 
 class PlaywrightMcpUnavailableDiagnostic(BaseModel):
@@ -1127,7 +1142,7 @@ def verify_ac(
             ac_id=ac_id,
             status="blocked",
             assertions=(assertion_str, f"blocked: {exc!r}"),
-            evidence_refs=(evidence_ref,),
+            evidence_refs=(EvidenceRef(path=evidence_ref, tier="tier-1-mechanical"),),
             semantic_verification="not_applicable",
         )
 
@@ -1144,7 +1159,7 @@ def verify_ac(
             ac_id=ac_id,
             status="pass",
             assertions=(assertion_str,),
-            evidence_refs=(evidence_ref,),
+            evidence_refs=(EvidenceRef(path=evidence_ref, tier="tier-1-mechanical"),),
             semantic_verification="not_applicable",
         )
 
@@ -1155,7 +1170,7 @@ def verify_ac(
             assertion_str,
             f"observed={assertion.observed!r} expected={assertion.expected!r}",
         ),
-        evidence_refs=(evidence_ref,),
+        evidence_refs=(EvidenceRef(path=evidence_ref, tier="tier-1-mechanical"),),
         semantic_verification="not_applicable",
     )
 

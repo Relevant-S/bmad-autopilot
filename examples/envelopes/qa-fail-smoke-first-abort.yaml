@@ -74,5 +74,6 @@ ac_results:
       - "verify: AC-1 acceptance text appears in rendered DOM"
       - "observed='500 Internal Server Error' expected='User can register with email'"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-001/ac1-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-001/ac1-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

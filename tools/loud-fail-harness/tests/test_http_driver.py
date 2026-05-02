@@ -35,6 +35,7 @@ Test enumeration (Story 4.5 AC-9 — 22+ tests):
 
 from __future__ import annotations
 
+import copy
 import pathlib
 import signal
 import unittest.mock as mock
@@ -135,6 +136,11 @@ def _make_ac_result_validator(
 ) -> Draft202012Validator:
     """Build a Draft 2020-12 validator scoped to the ``$defs/ac_result``
     sub-schema (mirrors `test_playwright_driver.py`'s helper byte-for-byte).
+
+    Story 4.8: ``$defs/ac_result.evidence_refs.items`` references
+    ``#/$defs/evidence_ref`` which lives at the parent envelope-schema's
+    ``$defs`` level. The scoped sub-schema gets a ``$defs`` sibling
+    inlined from the parent so the relative ``$ref`` resolves locally.
     """
     registry = Registry().with_resources(
         [
@@ -144,7 +150,8 @@ def _make_ac_result_validator(
             ),
         ]
     )
-    ac_result_schema = envelope_schema["$defs"]["ac_result"]
+    ac_result_schema = dict(envelope_schema["$defs"]["ac_result"])
+    ac_result_schema["$defs"] = copy.deepcopy(envelope_schema["$defs"])
     return Draft202012Validator(ac_result_schema, registry=registry)
 
 

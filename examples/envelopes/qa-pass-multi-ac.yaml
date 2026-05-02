@@ -37,19 +37,22 @@ ac_results:
     assertions:
       - "verify: User can register with email"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac1-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac1-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable
   - ac_id: AC-2
     status: pass
     assertions:
       - "verify: Form rejects invalid email syntax"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac2-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac2-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable
   - ac_id: AC-3
     status: pass
     assertions:
       - "verify: Unauthenticated /dashboard redirects to /login"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac3-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-003/ac3-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

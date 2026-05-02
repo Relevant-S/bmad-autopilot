@@ -55,14 +55,16 @@ ac_results:
     assertions:
       - "verify: User can register with email"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac1-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac1-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable
   - ac_id: AC-2
     status: pass
     assertions:
       - "verify: Registration form displays email field"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac2-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac2-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable
   - ac_id: AC-3
     status: fail
@@ -70,12 +72,14 @@ ac_results:
       - "verify: Form rejects invalid email syntax"
       - "observed='form accepted invalid input' expected='form shows rejection text'"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac3-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac3-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable
   - ac_id: AC-4
     status: pass
     assertions:
       - "verify: Unauthenticated /dashboard redirects to /login"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac4-dom-snapshot.txt
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-002/ac4-dom-snapshot.txt
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

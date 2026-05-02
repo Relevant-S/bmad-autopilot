@@ -1,0 +1,66 @@
+# QA specialist envelope — status=pass, three-AC happy path with the
+# canonical Tier-3-not-configured wrapper-shape demonstration on AC-2
+# (Story 4.8 — three-tier evidence hierarchy + Tier-3 not_configured
+# marker; epics.md lines 2034-2038).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical
+# envelope corpus. THIS fixture is the canonical envelope-corpus
+# demonstration of the wrapper-side projection when the QA Behavioral
+# Plan declared semantic_verification_requirement=required for AC-2 but
+# the runbook's tier_3_semantic_verification flag is not set —
+# `evaluate_semantic_verification` returns ("not_configured",
+# Tier3NotConfiguredEmissionRecord), the wrapper writes
+# `semantic_verification: not_configured` on the AC entry, and the
+# bundle assembler (Story 4.11) renders the structured marker comment
+# from the emission record.
+#
+# Per the verbatim epic AC at epics.md line 2038: "the marker signals
+# visibility of the gap, not a failure" — Tier-1+Tier-2 still determine
+# pass/fail. AC-2 PASSES at the mechanical tier despite Tier-3 being
+# not_configured; envelope-level status=pass; findings=[] (Tier-3-not-
+# configured is a marker, not a finding — the FR30 vs FR55 distinction).
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-004/ac1-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-004/ac2-dom-snapshot.txt
+  - _bmad-output/qa-evidence/sample-001/run-2026-05-01-004/ac3-dom-snapshot.txt
+findings: []
+rationale: >-
+  All three acceptance criteria verified mechanically in story-doc
+  order per FR22b. AC-2's QA Behavioral Plan declared
+  semantic_verification_requirement=required, but the runbook's
+  tier_3_semantic_verification flag is not set; per FR21 the
+  per-AC semantic_verification field is set to not_configured and
+  a Tier-3-not-configured marker is emitted (visibility of the
+  gap, not a failure — Tier-1+Tier-2 evidence determined the
+  AC-2 pass per epics.md line 2038). Envelope-level pass; no AC
+  violations to report.
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "verify: User can register with email"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-004/ac1-dom-snapshot.txt
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "verify: Form rejects invalid email syntax"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-004/ac2-dom-snapshot.txt
+        tier: tier-1-mechanical
+    semantic_verification: not_configured
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "verify: Unauthenticated /dashboard redirects to /login"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-05-01-004/ac3-dom-snapshot.txt
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable

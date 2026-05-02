@@ -74,6 +74,20 @@ format_errors AC-id resolution (Story 4.7):
     [x] non-minItems errors not mangled by FR19 rewrite          → test_format_errors_does_not_mangle_non_minitems_errors
     [x] AC-id resolution is defensive on missing/odd shapes      → test_format_errors_resilient_to_missing_ac_results_lookup
     [x] envelope_validator.py contains no CR characters          → test_lf_line_endings_envelope_validator
+
+Negative-path — three-tier evidence hierarchy + semantic_verification enum (FR20 + FR21; Story 4.8):
+    [x] string-form evidence_refs item rejected (type)           → test_evidence_refs_pre_bump_string_form_rejected
+    [x] object-form item with valid tier accepted (parametrized) → test_evidence_refs_object_form_with_valid_tier_accepted
+    [x] unknown tier value rejected (enum)                       → test_evidence_refs_object_form_unknown_tier_rejected
+    [x] extra property in evidence_ref rejected                  → test_evidence_refs_object_form_extra_property_rejected
+    [x] missing path in evidence_ref rejected                    → test_evidence_refs_object_form_missing_path_rejected
+    [x] semantic_verification "required" string rejected (enum)  → test_semantic_verification_pre_bump_required_string_rejected
+    [x] semantic_verification object form rejected (type)        → test_semantic_verification_pre_bump_object_form_rejected
+    [x] three valid semantic_verification values accepted        → test_semantic_verification_three_valid_enum_values_accepted
+    [x] format_errors renames tier-enum violation                → test_format_errors_renames_tier_enum_violation
+    [x] format_errors renames semantic_verification enum         → test_format_errors_renames_semantic_verification_enum_violation
+    [x] format_errors does not mangle unrelated enum errors      → test_format_errors_does_not_mangle_non_evidence_ref_enum_errors
+    [x] migrated qa-*.yaml fixtures validate clean post-Story-4.8 → test_existing_corpus_qa_fixtures_validate_clean (in-place updated)
 """
 
 from __future__ import annotations
@@ -130,23 +144,37 @@ def _minimal_finding(**overrides: object) -> dict:
 def _minimal_qa_envelope(
     ac_status: str = "pass",
     assertions: tuple[str, ...] = ("login button visible",),
-    evidence_refs: tuple[str, ...] = ("evidence/screen-001.png",),
+    evidence_refs: tuple = ("evidence/screen-001.png",),
     ac_id: str = "AC-1",
+    semantic_verification: object = "not_applicable",
 ) -> dict:
     """Return a minimal valid QA envelope with one parametrizable `ac_results` entry.
 
     The default-argument tuples are immutable (no mutable-default-argument
     pitfall). Tests pass `()` explicitly to construct empty-array shapes that
     exercise the AC-assertion-evidence triple invariant (Story 4.7).
+
+    Story 4.8: ``evidence_refs`` items are auto-wrapped to the bumped
+    object form ``{path, tier: tier-1-mechanical}`` when callers pass
+    string-form items (the pre-Story-4.8 convention); pre-bumped object-
+    form items pass through verbatim. ``semantic_verification`` defaults
+    to ``"not_applicable"`` (the bumped FR21 closed-enum value) instead
+    of the previously-permitted-by-the-loose-``oneOf`` object form.
     """
+    refs: list[object] = []
+    for r in evidence_refs:
+        if isinstance(r, str):
+            refs.append({"path": r, "tier": "tier-1-mechanical"})
+        else:
+            refs.append(r)
     return _minimal_valid_envelope() | {
         "ac_results": [
             {
                 "ac_id": ac_id,
                 "status": ac_status,
                 "assertions": list(assertions),
-                "evidence_refs": list(evidence_refs),
-                "semantic_verification": {"checked_by": "playwright"},
+                "evidence_refs": refs,
+                "semantic_verification": semantic_verification,
             }
         ],
     }
@@ -265,8 +293,10 @@ def test_specialist_extension_qa(schema: dict) -> None:
                 "ac_id": "AC-1",
                 "status": "pass",
                 "assertions": ["login button visible"],
-                "evidence_refs": ["evidence/screen-001.png"],
-                "semantic_verification": {"checked_by": "playwright"},
+                "evidence_refs": [
+                    {"path": "evidence/screen-001.png", "tier": "tier-1-mechanical"}
+                ],
+                "semantic_verification": "not_applicable",
             }
         ],
     }
@@ -623,13 +653,24 @@ def test_ac_triple_failing_with_evidence_accepted(schema: dict) -> None:
 
 
 def test_existing_corpus_qa_fixtures_validate_clean(schema: dict) -> None:
-    """Regression guard: every existing qa-*.yaml fixture validates under the bumped schema."""
+    """Regression guard: every existing qa-*.yaml fixture validates under the bumped schema.
+
+    Story 4.7 baseline: passing-AC entries have non-empty assertions +
+    evidence_refs (FR19 triple invariant).
+
+    Story 4.8 extension (in-place update): the corpus has been migrated
+    from string-form ``evidence_refs`` items to the bumped object form
+    ``{path, tier: tier-1-mechanical}`` for every ``qa-*.yaml`` fixture
+    (12 fixtures total post-migration; 11 migrated + 1 new
+    ``qa-pass-tier-3-not-configured.yaml``). Any fixture whose
+    evidence_refs were not migrated would regress here LOUDLY.
+    """
     qa_fixtures = sorted((REPO_ROOT / "examples" / "envelopes").glob("qa-*.yaml"))
     assert qa_fixtures, "no qa-*.yaml fixtures discovered — corpus inspection broke"
     for fixture in qa_fixtures:
         errors = validate_file(fixture, schema)
         assert errors == [], (
-            f"fixture {fixture.name} regressed under FR19 triple invariant: "
+            f"fixture {fixture.name} regressed under FR19 + FR20 + FR21 invariants: "
             f"{format_errors(errors)}"
         )
 
@@ -736,9 +777,9 @@ def test_cli_triple_invariant_pass_empty_assertions_exits_one(
                 status: pass
                 assertions: []
                 evidence_refs:
-                  - evidence/screen-001.png
-                semantic_verification:
-                  checked_by: playwright
+                  - path: evidence/screen-001.png
+                    tier: tier-1-mechanical
+                semantic_verification: not_applicable
         """),
         encoding="utf-8",
     )
@@ -764,8 +805,7 @@ def test_cli_triple_invariant_failing_empty_arrays_exits_zero(
                     status: {ac_status}
                     assertions: []
                     evidence_refs: []
-                    semantic_verification:
-                      checked_by: playwright
+                    semantic_verification: not_applicable
             """),
             encoding="utf-8",
         )
@@ -773,3 +813,238 @@ def test_cli_triple_invariant_failing_empty_arrays_exits_zero(
         assert rc == 0, (
             f"expected exit 0 for {ac_status!r} AC with empty arrays; got {rc}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# Negative-path: three-tier evidence hierarchy + semantic_verification enum   #
+# (FR20 + FR21; Story 4.8)                                                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_evidence_refs_pre_bump_string_form_rejected(schema: dict) -> None:
+    """Pre-Story-4.8 string-form evidence_refs items are rejected by
+    the bumped schema's ``$defs/evidence_ref`` `$ref` (item type must
+    be object, not string).
+    """
+    envelope = _minimal_valid_envelope() | {
+        "ac_results": [
+            {
+                "ac_id": "AC-1",
+                "status": "pass",
+                "assertions": ["a"],
+                "evidence_refs": ["x.txt"],  # pre-bump string form
+                "semantic_verification": "not_applicable",
+            }
+        ],
+    }
+    errors = validate_envelope(envelope, schema)
+    type_errors = [
+        e
+        for e in errors
+        if e.validator == "type"
+        and list(e.absolute_path) == ["ac_results", 0, "evidence_refs", 0]
+    ]
+    assert type_errors, (
+        f"expected a type ValidationError at ac_results[0].evidence_refs[0]; "
+        f"got: {[(e.validator, list(e.absolute_path)) for e in errors]}"
+    )
+
+
+@pytest.mark.parametrize(
+    "tier",
+    ["tier-1-mechanical", "tier-2-outcome", "tier-3-semantic"],
+)
+def test_evidence_refs_object_form_with_valid_tier_accepted(
+    schema: dict, tier: str
+) -> None:
+    """Object-form evidence_refs items with valid tier values pass
+    schema validation."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        evidence_refs=({"path": "evidence/x.txt", "tier": tier},),
+    )
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_evidence_refs_object_form_unknown_tier_rejected(schema: dict) -> None:
+    """Out-of-enum tier values produce an enum violation at
+    ac_results[0].evidence_refs[0].tier."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        evidence_refs=(
+            {"path": "x.txt", "tier": "tier-4-formal-proof"},
+        ),
+    )
+    errors = validate_envelope(envelope, schema)
+    enum_errors = [
+        e
+        for e in errors
+        if e.validator == "enum"
+        and list(e.absolute_path)
+        == ["ac_results", 0, "evidence_refs", 0, "tier"]
+    ]
+    assert len(enum_errors) == 1, (
+        f"expected exactly one enum violation at evidence_refs[0].tier; "
+        f"got: {[(e.validator, list(e.absolute_path)) for e in errors]}"
+    )
+
+
+def test_evidence_refs_object_form_extra_property_rejected(
+    schema: dict,
+) -> None:
+    """``additionalProperties: false`` on $defs/evidence_ref rejects
+    extra keys."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        evidence_refs=(
+            {"path": "x.txt", "tier": "tier-1-mechanical", "notes": "extra"},
+        ),
+    )
+    errors = validate_envelope(envelope, schema)
+    extra_errors = [e for e in errors if e.validator == "additionalProperties"]
+    assert extra_errors, (
+        f"expected additionalProperties violation; "
+        f"got: {[(e.validator, list(e.absolute_path)) for e in errors]}"
+    )
+
+
+def test_evidence_refs_object_form_missing_path_rejected(schema: dict) -> None:
+    """``required: [path, tier]`` on $defs/evidence_ref rejects items
+    missing ``path``."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        evidence_refs=({"tier": "tier-1-mechanical"},),
+    )
+    errors = validate_envelope(envelope, schema)
+    required_errors = [
+        e
+        for e in errors
+        if e.validator == "required" and "path" in e.message
+    ]
+    assert required_errors, (
+        f"expected a required-field validation error naming 'path'; "
+        f"got: {[(e.validator, e.message) for e in errors]}"
+    )
+
+
+def test_semantic_verification_pre_bump_required_string_rejected(
+    schema: dict,
+) -> None:
+    """The literal ``"required"`` (the PLAN-side value the loose pre-
+    bump ``oneOf: [object, string]`` permitted) is REJECTED by the
+    bumped closed string enum — ``required`` is intentionally absent
+    from the result-side enum.
+    """
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        semantic_verification="required",
+    )
+    errors = validate_envelope(envelope, schema)
+    enum_errors = [
+        e
+        for e in errors
+        if e.validator == "enum"
+        and list(e.absolute_path) == ["ac_results", 0, "semantic_verification"]
+    ]
+    assert len(enum_errors) == 1, (
+        f"expected exactly one enum violation at semantic_verification; "
+        f"got: {[(e.validator, list(e.absolute_path)) for e in errors]}"
+    )
+
+
+def test_semantic_verification_pre_bump_object_form_rejected(
+    schema: dict,
+) -> None:
+    """Object-form ``semantic_verification`` (the previously-permitted-
+    by-the-loose-``oneOf`` shape that the bumped enum REJECTS)
+    produces a ``type`` violation. The forward-pointer prose drift in
+    ``agents/qa.md`` is documented in this story's Completion Notes.
+    """
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        semantic_verification={"tier": 3, "status": "configured"},
+    )
+    errors = validate_envelope(envelope, schema)
+    type_errors = [
+        e
+        for e in errors
+        if e.validator == "type"
+        and list(e.absolute_path) == ["ac_results", 0, "semantic_verification"]
+    ]
+    assert type_errors, (
+        f"expected a type ValidationError at semantic_verification; "
+        f"got: {[(e.validator, list(e.absolute_path)) for e in errors]}"
+    )
+
+
+@pytest.mark.parametrize(
+    "value", ["verified", "not_configured", "not_applicable"]
+)
+def test_semantic_verification_three_valid_enum_values_accepted(
+    schema: dict, value: str
+) -> None:
+    """Each of the three FR21-canonical result-side values validates
+    cleanly."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        semantic_verification=value,
+    )
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_format_errors_renames_tier_enum_violation(schema: dict) -> None:
+    """The Story 4.8 ``format_errors`` rewrite branch (a) renames
+    tier-enum violations and resolves the AC-id when ``envelope`` is
+    passed (mirrors Story 4.7 AC-id resolution)."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        evidence_refs=(
+            {"path": "x.txt", "tier": "tier-4-formal-proof"},
+        ),
+    )
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(errors, envelope=envelope)
+    assert "three-tier evidence hierarchy invariant" in output, (
+        f"expected FR20 invariant text in format_errors output; got: {output!r}"
+    )
+    assert "tier must be one of" in output
+    assert "AC-1" in output
+    # Bare-index form must NOT leak through when AC-id resolution succeeds.
+    assert "ac_results[0]" not in output
+
+
+def test_format_errors_renames_semantic_verification_enum_violation(
+    schema: dict,
+) -> None:
+    """The Story 4.8 ``format_errors`` rewrite branch (b) renames
+    semantic_verification-enum violations and resolves the AC-id."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        semantic_verification="required",
+    )
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(errors, envelope=envelope)
+    assert "three-tier evidence hierarchy invariant" in output
+    assert "semantic_verification must be one of" in output
+    assert "AC-1" in output
+
+
+def test_format_errors_does_not_mangle_non_evidence_ref_enum_errors(
+    schema: dict,
+) -> None:
+    """The path-conditional rewrites added by Story 4.8 (AC-8) MUST
+    NOT clobber unrelated enum errors. Feeds an envelope with a
+    top-level ``status`` enum violation and asserts the standard
+    diagnostic phrasing survives.
+    """
+    envelope = _minimal_valid_envelope() | {"status": "halfpass"}
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(errors, envelope=envelope)
+    # The Story 4.8 rewrite branches are scoped to ac_results paths;
+    # this top-level status-enum error must keep its standard surface.
+    assert "three-tier evidence hierarchy invariant" not in output, (
+        f"FR20/FR21 rewrite leaked onto unrelated enum error; got: {output!r}"
+    )
+    assert "/status" in output, f"Expected /status pointer; got: {output!r}"
+    assert "halfpass" in output, f"Expected 'halfpass' value in output; got: {output!r}"
+    assert "is not one of" in output, f"Expected enum-violation phrasing; got: {output!r}"

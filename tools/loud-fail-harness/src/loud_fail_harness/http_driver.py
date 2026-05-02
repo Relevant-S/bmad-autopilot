@@ -233,6 +233,7 @@ from loud_fail_harness.playwright_driver import (
     NoOpEvidenceCapturer as NoOpEvidenceCapturer,
     _apply_masked_selector_policy,
 )
+from loud_fail_harness.qa_evidence_tier import EvidenceRef
 from loud_fail_harness.qa_behavioral_plan import QABehavioralPlanEntry
 
 # --------------------------------------------------------------------------- #
@@ -1124,7 +1125,7 @@ def verify_ac(
             ac_id=ac_id,
             status="blocked",
             assertions=(assertion_str, f"blocked: {exc!r}"),
-            evidence_refs=(evidence_ref,),
+            evidence_refs=(EvidenceRef(path=evidence_ref, tier="tier-1-mechanical"),),
             semantic_verification="not_applicable",
         )
 
@@ -1147,7 +1148,7 @@ def verify_ac(
             ac_id=ac_id,
             status="pass",
             assertions=(assertion_str,),
-            evidence_refs=(evidence_ref,),
+            evidence_refs=(EvidenceRef(path=evidence_ref, tier="tier-1-mechanical"),),
             semantic_verification="not_applicable",
         )
 
@@ -1159,7 +1160,7 @@ def verify_ac(
             f"{assertion.kind}: observed={assertion.observed!r} "
             f"expected={assertion.expected!r} passed={assertion.passed}",
         ),
-        evidence_refs=(evidence_ref,),
+        evidence_refs=(EvidenceRef(path=evidence_ref, tier="tier-1-mechanical"),),
         semantic_verification="not_applicable",
     )
 

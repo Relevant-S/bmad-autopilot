@@ -133,6 +133,65 @@ def format_errors(
             )
             continue
 
+        # Tier-enum violation rewrite (FR20; Story 4.8). Path-conditional
+        # (matches errors at ["ac_results", <int>, "evidence_refs", <int>,
+        # "tier"]). The defensive AC-id resolution mirrors the Story 4.7
+        # FR19 branch byte-for-byte; copy-adapted rather than extracted to
+        # a helper at this story per the narrow-scope branch discipline.
+        if (
+            err.validator == "enum"
+            and len(path_list) == 5
+            and path_list[0] == "ac_results"
+            and isinstance(path_list[1], int)
+            and path_list[2] == "evidence_refs"
+            and isinstance(path_list[3], int)
+            and path_list[4] == "tier"
+        ):
+            ac_index = path_list[1]
+            ac_label = f"ac_results[{ac_index}]"
+            if envelope is not None:
+                try:
+                    ac_id = envelope["ac_results"][ac_index]["ac_id"]
+                except (KeyError, IndexError, TypeError):
+                    pass
+                else:
+                    if isinstance(ac_id, str) and ac_id:
+                        ac_label = ac_id
+            lines.append(
+                f"{ac_label}: three-tier evidence hierarchy invariant: "
+                "tier must be one of "
+                "{tier-1-mechanical, tier-2-outcome, tier-3-semantic} "
+                "(see FR20)"
+            )
+            continue
+
+        # semantic_verification-enum violation rewrite (FR21; Story 4.8).
+        # Matches errors at ["ac_results", <int>, "semantic_verification"].
+        if (
+            err.validator == "enum"
+            and len(path_list) == 3
+            and path_list[0] == "ac_results"
+            and isinstance(path_list[1], int)
+            and path_list[2] == "semantic_verification"
+        ):
+            ac_index = path_list[1]
+            ac_label = f"ac_results[{ac_index}]"
+            if envelope is not None:
+                try:
+                    ac_id = envelope["ac_results"][ac_index]["ac_id"]
+                except (KeyError, IndexError, TypeError):
+                    pass
+                else:
+                    if isinstance(ac_id, str) and ac_id:
+                        ac_label = ac_id
+            lines.append(
+                f"{ac_label}: three-tier evidence hierarchy invariant: "
+                "semantic_verification must be one of "
+                "{verified, not_configured, not_applicable} "
+                "(see FR21)"
+            )
+            continue
+
         if err.validator == "additionalProperties" and not path_list:
             for key in _ADDITIONAL_PROPERTY_KEY_PATTERN.findall(err.message):
                 if key in FORBIDDEN_FLOW_POLICY_FIELDS:

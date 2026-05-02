@@ -413,11 +413,21 @@ def surface_smoke_first_abort(
     """
     validate_marker_emission(registry, SMOKE_FIRST_ABORT_MARKER)
 
+    # Story 4.8 transitive shim: AcResult.evidence_refs is bumped to
+    # tuple[EvidenceRef, ...] but SmokeFirstAbortDiagnosticContext's
+    # failed_evidence_refs (Story 4.6) is tuple[str, ...]. Project the
+    # path strings out of the tier-aware refs so the diagnostic shape
+    # is preserved unchanged. The tier metadata is recoverable from
+    # the source AcResult when needed by Story 4.10's escalation
+    # routing; the smoke-first diagnostic is intentionally narrow per
+    # the verbatim epic AC at epics.md line 1985.
     diagnostic_context = SmokeFirstAbortDiagnosticContext(
         story_id=story_id,
         failed_ac_id=ac1_result.ac_id,
         failed_assertions=ac1_result.assertions,
-        failed_evidence_refs=ac1_result.evidence_refs,
+        failed_evidence_refs=tuple(
+            ref.path for ref in ac1_result.evidence_refs
+        ),
     )
     marker_record = SmokeFirstAbortEmissionRecord(
         marker_class=SMOKE_FIRST_ABORT_MARKER,

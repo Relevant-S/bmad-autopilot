@@ -47,5 +47,6 @@ ac_results:
     assertions:
       - HTTP POST /healthz returned status code 200
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-001/run-2026-04-29-002/ac1-http-503.log
+      - path: _bmad-output/qa-evidence/sample-001/run-2026-04-29-002/ac1-http-503.log
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

@@ -63,5 +63,6 @@ ac_results:
     assertions:
       - "api service broken mid-run: connection refused"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-auto-001/run-002/prior-network-trace-ac1.json
+      - path: _bmad-output/qa-evidence/sample-auto-001/run-002/prior-network-trace-ac1.json
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

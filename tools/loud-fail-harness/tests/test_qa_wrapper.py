@@ -117,7 +117,10 @@ def test_qa_pass_ac1_tier1_fixture_validates_against_schema(
     assert entry["semantic_verification"] == "not_applicable", (
         "Epic 2 scope: semantic_verification is the literal string 'not_applicable'"
     )
-    assert _QA_EVIDENCE_PATH_FRAGMENT in entry["evidence_refs"][0], (
+    # Story 4.8: evidence_refs items are now {path, tier} objects per the
+    # bumped $defs/evidence_ref shape; the path-under-qa-evidence invariant
+    # checks the `path` key.
+    assert _QA_EVIDENCE_PATH_FRAGMENT in entry["evidence_refs"][0]["path"], (
         "evidence_refs must point under the canonical _bmad-output/qa-evidence/ path per FR49"
     )
 
@@ -151,7 +154,8 @@ def test_qa_fail_ac1_assertion_fixture_validates_against_schema(
     assert entry["assertions"]
     assert entry["evidence_refs"]
     assert entry["semantic_verification"] == "not_applicable"
-    assert _QA_EVIDENCE_PATH_FRAGMENT in entry["evidence_refs"][0]
+    # Story 4.8: evidence_refs items are now {path, tier} objects.
+    assert _QA_EVIDENCE_PATH_FRAGMENT in entry["evidence_refs"][0]["path"]
 
 
 # --------------------------------------------------------------------------- #

@@ -227,7 +227,9 @@ def _make_canned_envelopes() -> dict[SpecialistId, dict[str, Any]]:
                     "file contents contain the literal string "
                     "`walking-skeleton-loop-completed`",
                 ],
-                "evidence_refs": [output_filename],
+                "evidence_refs": [
+                    {"path": output_filename, "tier": "tier-1-mechanical"}
+                ],
                 "semantic_verification": "not_applicable",
             }
         ],

@@ -60,5 +60,6 @@ ac_results:
     assertions:
       - playwright-mcp-unavailable mid-run during action_kind=click
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-auto-001/run-002/prior-screenshot-ac1.png
+      - path: _bmad-output/qa-evidence/sample-auto-001/run-002/prior-screenshot-ac1.png
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

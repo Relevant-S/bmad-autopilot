@@ -148,15 +148,22 @@ def _make_ac_list(ac_ids: tuple[str, ...]) -> tuple[AcEntry, ...]:
 def _make_ac1_fail_result() -> Any:
     """Build a deterministic AC-1 fail AcResult for the
     surface_smoke_first_abort tests (uses the AcResult class re-exported
-    from playwright_driver)."""
+    from playwright_driver). Story 4.8 transitive shim: evidence_refs
+    items are wrapped as ``EvidenceRef(path=..., tier="tier-1-mechanical")``
+    per the bumped ``$defs/evidence_ref`` shape.
+    """
     from loud_fail_harness.playwright_driver import AcResult
+    from loud_fail_harness.qa_evidence_tier import EvidenceRef
 
     return AcResult(
         ac_id="AC-1",
         status="fail",
         assertions=("verify: AC-1", "observed='x' expected='y'"),
         evidence_refs=(
-            "_bmad-output/qa-evidence/sample/run/ac1-snapshot.txt",
+            EvidenceRef(
+                path="_bmad-output/qa-evidence/sample/run/ac1-snapshot.txt",
+                tier="tier-1-mechanical",
+            ),
         ),
         semantic_verification="not_applicable",
     )
@@ -369,9 +376,14 @@ def test_surface_smoke_first_abort_happy_path() -> None:
     assert emission.diagnostic_context.failed_ac_id == "AC-1"
     # Verbatim copy from the input AcResult.
     assert emission.diagnostic_context.failed_assertions == ac1_result.assertions
+    # Story 4.8 transitive update: AcResult.evidence_refs is now
+    # tuple[EvidenceRef, ...] but SmokeFirstAbortDiagnosticContext.
+    # failed_evidence_refs remains tuple[str, ...] (Story 4.6 surface).
+    # surface_smoke_first_abort projects path strings out of the tier-aware
+    # refs; assert against the same projection on the source AcResult.
     assert (
         emission.diagnostic_context.failed_evidence_refs
-        == ac1_result.evidence_refs
+        == tuple(ref.path for ref in ac1_result.evidence_refs)
     )
     # Co-exposure: marker_record.diagnostic_context is the same payload.
     assert (
@@ -751,6 +763,7 @@ def test_ac_iteration_result_is_frozen_and_byte_stable() -> None:
         diagnostic_context=diagnostic,
     )
     from loud_fail_harness.playwright_driver import AcResult
+    from loud_fail_harness.qa_evidence_tier import EvidenceRef
 
     result = AcIterationResult(
         ac_results=(
@@ -758,7 +771,12 @@ def test_ac_iteration_result_is_frozen_and_byte_stable() -> None:
                 ac_id="AC-1",
                 status="fail",
                 assertions=("verify: AC-1",),
-                evidence_refs=("_bmad-output/qa-evidence/x.txt",),
+                evidence_refs=(
+                    EvidenceRef(
+                        path="_bmad-output/qa-evidence/x.txt",
+                        tier="tier-1-mechanical",
+                    ),
+                ),
                 semantic_verification="not_applicable",
             ),
         ),

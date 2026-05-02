@@ -447,7 +447,17 @@ def _render_per_ac_section(
             block_lines.append("")
             block_lines.append("**Evidence:**")
             if evidence_refs:
-                block_lines.extend(f"- `{ref}`" for ref in evidence_refs)
+                # Story 4.8 transitive shim: evidence_refs items are now
+                # objects {path, tier} (post-bump $defs/evidence_ref) — render
+                # the path string in backticks for backward-compat with the
+                # pre-Story-4.8 bundle visual surface. Story 4.11 owns the
+                # tier-aware render upgrade. Pre-Story-4.8 string items still
+                # render correctly via the str(ref) fallback.
+                block_lines.extend(
+                    f"- `{ref['path']}`" if isinstance(ref, dict) and "path" in ref
+                    else f"- `{ref}`"
+                    for ref in evidence_refs
+                )
             else:
                 block_lines.append("- _(none)_")
             block_lines.append("")

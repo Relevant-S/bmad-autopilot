@@ -54,5 +54,6 @@ ac_results:
       - "status: GET / returned 500 instead of expected 200"
       - "status: observed='500' expected='200' passed=False"
     evidence_refs:
-      - _bmad-output/qa-evidence/sample-auto-001/run-001/network-trace-ac1.json
+      - path: _bmad-output/qa-evidence/sample-auto-001/run-001/network-trace-ac1.json
+        tier: tier-1-mechanical
     semantic_verification: not_applicable

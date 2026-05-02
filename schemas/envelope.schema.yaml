@@ -17,6 +17,10 @@
 #     `evidence_refs` arrays via if/then conditional in $defs/ac_result;
 #     failing/blocked AC results are unconstrained per epics.md lines
 #     2009-2012)
+#   - FR20 / FR21 (Story 4.8: three-tier evidence hierarchy structurally
+#     enforced — evidence_refs items are {path, tier} objects with tier ∈
+#     {tier-1-mechanical, tier-2-outcome, tier-3-semantic}; semantic_verification
+#     tightens to closed enum {verified, not_configured, not_applicable})
 #   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
 #
 # This file encodes a contract validated by CI; modify with care.
@@ -209,13 +213,39 @@ $defs:
       evidence_refs:
         type: array
         items:
-          type: string
+          $ref: "#/$defs/evidence_ref"
       semantic_verification:
-        # Shape intentionally loose at this story; tightened by QA-specialist
-        # stories in Epic 4. Accepts object or string for now.
-        oneOf:
-          - type: object
-          - type: string
+        # FR21 (Story 4.8). Closed string enum mirroring PRD line 596 byte-for-
+        # byte. The result-side field captures what HAPPENED at semantic-
+        # verification time per AC: `verified` (Tier-3 ran and passed),
+        # `not_configured` (plan declared Tier-3 required but tooling isn't
+        # set up — emitted alongside the `Tier-3-not-configured` marker),
+        # `not_applicable` (plan declared Tier-3 N/A, OR plan declared Tier-3
+        # optional and tooling isn't configured). The PLAN-side
+        # `semantic_verification_requirement` field (qa_behavioral_plan.py)
+        # carries `required | optional | not_applicable` — distinct value
+        # space, distinct field; "required" is INTENTIONALLY rejected here.
+        type: string
+        enum: [verified, not_configured, not_applicable]
+
+  evidence_ref:
+    # FR20 / FR21 (Story 4.8): three-tier evidence hierarchy structurally
+    # enforced. Each evidence ref carries a tier ∈ {tier-1-mechanical,
+    # tier-2-outcome, tier-3-semantic} per the verbatim epic AC at
+    # epics.md line 2029. The tier enum mirrors qa_behavioral_plan.py's
+    # `ExpectedEvidenceTier` Literal byte-for-byte.
+    type: object
+    required:
+      - path
+      - tier
+    additionalProperties: false
+    properties:
+      path:
+        type: string
+        minLength: 1
+      tier:
+        type: string
+        enum: [tier-1-mechanical, tier-2-outcome, tier-3-semantic]
 
   plan_drift:
     # QA-specific (FR23 + Story 4.2) diagnostic context carried on the

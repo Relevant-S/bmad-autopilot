@@ -31,6 +31,7 @@ Test enumeration (Story 4.4 AC-9 — 19 tests):
 
 from __future__ import annotations
 
+import copy
 import pathlib
 import signal
 import unittest.mock as mock
@@ -159,7 +160,11 @@ def _make_ac_result_validator(
             ),
         ]
     )
-    ac_result_schema = envelope_schema["$defs"]["ac_result"]
+    ac_result_schema = dict(envelope_schema["$defs"]["ac_result"])
+    # Story 4.8: ``$defs/ac_result.evidence_refs.items`` references
+    # ``#/$defs/evidence_ref`` — inline the parent ``$defs`` so the
+    # relative ``$ref`` resolves locally inside the scoped validator.
+    ac_result_schema["$defs"] = copy.deepcopy(envelope_schema["$defs"])
     return Draft202012Validator(ac_result_schema, registry=registry)
 
 

@@ -490,7 +490,10 @@ def _qa_envelope_with_plan_drift() -> dict[str, Any]:
                 "status": "pass",
                 "assertions": ["HTTP POST /healthz returned status code 200"],
                 "evidence_refs": [
-                    "_bmad-output/qa-evidence/sample-001/run-2026-04-30-001/ac1-http-200.log"
+                    {
+                        "path": "_bmad-output/qa-evidence/sample-001/run-2026-04-30-001/ac1-http-200.log",
+                        "tier": "tier-1-mechanical",
+                    }
                 ],
                 "semantic_verification": "not_applicable",
             }
