@@ -15,10 +15,15 @@ Cross-fixture invariants (AC-5, AC-6, FR50, FR52, FR54):
     [x] no dev-*.yaml carries forbidden flow-policy fields             → test_all_dev_fixtures_have_no_forbidden_flow_policy_fields
 
 Wrapper-prose discipline (AC-2, AC-3, AC-4, AC-6):
-    [x] dev-wrapper.md documents the Epic-2 empty-scope invariant      → test_dev_wrapper_documents_epic2_empty_scope_invariant
+    [x] dev-wrapper.md documents the FR11 scope_expanded_to contract   → test_dev_wrapper_documents_scope_expanded_to_contract
+        (relaxed from Story 2.8's Epic-2 hardcode by Story 5.3 AC-6 —
+        the empty-array invariant is now retry-conditional, not
+        era-conditional, per the FR10 / FR11 contract-pair landing)
     [x] dev-wrapper.md has zero cross-specialist references            → test_dev_wrapper_no_cross_specialist_references
     [x] dev-wrapper.md documents bmad-dev-story composition            → test_dev_wrapper_documents_bmad_dev_story_composition
     [x] dev-wrapper.md documents required envelope fields              → test_dev_wrapper_documents_required_envelope_fields
+    [x] dev-wrapper.md carries the Story 5.3 fix-only retry-mode       → test_dev_wrapper_documents_fix_only_retry_mode_section
+        section (FR10 / FR11)
 
 Directory shape (AC-1):
     [x] agents/ contains dev-wrapper.md at top-level (one of two       → test_agents_directory_contains_dev_wrapper
@@ -154,7 +159,10 @@ def test_all_dev_fixtures_have_empty_scope_expanded_to(
     for name in _all_dev_envelope_filenames():
         envelope = _load_envelope(envelopes_dir, name)
         assert envelope.get("scope_expanded_to") == [], (
-            f"{name} violates Epic-2 invariant: scope_expanded_to must be []"
+            f"{name} violates first-dispatch invariant: "
+            f"scope_expanded_to must be [] on non-retry dispatch "
+            f"(Story 5.3 relaxed the Epic-2 unconditional hardcode to "
+            f"retry-conditional; first-dispatch fixtures must still use [])"
         )
 
 
@@ -174,19 +182,47 @@ def test_all_dev_fixtures_have_no_forbidden_flow_policy_fields(
 # --------------------------------------------------------------------------- #
 
 
-def test_dev_wrapper_documents_epic2_empty_scope_invariant(
+def test_dev_wrapper_documents_scope_expanded_to_contract(
     dev_wrapper_text: str,
 ) -> None:
+    """Post-Story-5.3 contract: the FR54 ``scope_expanded_to`` prose
+    names the FR11 contract anchor + the orchestrator-side
+    ``affected_files`` scope lock + the literal ``[]`` empty-array
+    posture for the no-expansion case. The Epic-2 hardcode prose was
+    relaxed by Story 5.3 AC-6 (the empty-array invariant is now
+    retry-conditional, not era-conditional)."""
     text = dev_wrapper_text
     idx = text.find("scope_expanded_to")
     assert idx >= 0, "dev-wrapper.md must mention scope_expanded_to"
-    window = text[idx : idx + 200]
-    assert re.search(r"[Ee]pic 2", window), (
-        "first scope_expanded_to mention must name Epic 2 within 200 chars"
+    # Post-5.3: the first scope_expanded_to mention names FR11 and the
+    # affected_files scope lock; check both substrings within the
+    # first 400 chars (the prose is longer post-5.3).
+    window = text[idx : idx + 400]
+    assert "FR11" in window, (
+        "first scope_expanded_to mention must name FR11 within 400 chars"
+    )
+    assert "affected_files" in window, (
+        "first scope_expanded_to mention must name affected_files within 400 chars"
     )
     assert "[]" in window, (
-        "first scope_expanded_to mention must show the literal [] within 200 chars"
+        "first scope_expanded_to mention must show the literal [] within 400 chars"
     )
+
+
+def test_dev_wrapper_documents_fix_only_retry_mode_section(
+    dev_wrapper_text: str,
+) -> None:
+    """Post-Story-5.3 AC-6 contract: dev-wrapper.md carries a
+    ``## Fix-only retry mode (FR10 / FR11)`` section naming the
+    capability-level constraint, the reporting contract, and the
+    Story 5.4 forward-pointer for the verifier."""
+    text = dev_wrapper_text
+    assert "## Fix-only retry mode (FR10 / FR11)" in text
+    assert re.search(
+        r"# Retry directive \(fix-only mode .* Story 5\.3\)", text
+    ), "section must reference the rendered prompt-body header verbatim"
+    assert "Constrain your work" in text
+    assert "Story 5.4" in text
 
 
 def test_dev_wrapper_no_cross_specialist_references(dev_wrapper_text: str) -> None:

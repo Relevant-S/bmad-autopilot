@@ -44,7 +44,7 @@ Required fields:
 Dev-specific extensions (FR54):
 
 - `proposed_commit_message` — a single-line semantic commit message in BMAD's commit-message convention (`<type>(<scope>): <subject>`). Per FR50, the SubagentStop hook from Story 2.7 reads this field and authors the git commit using it. Even on `status: fail` the hook still attempts a commit (capturing partial state for diagnostic visibility per the loud-fail discipline); supply a representative semantic message naming what you partially implemented.
-- `scope_expanded_to` — array. ALWAYS the empty array `[]` at Epic 2 scope per epics.md line 1405 verbatim ("always an empty array in Epic 2 — full retry-driven scope expansion lives in Epic 5"). See "Forward pointer" below.
+- `scope_expanded_to` — array of repo-relative file paths Dev touched outside the `affected_files` scope lock declared by the orchestrator at retry-mode dispatch (FR11). On first dispatch (no retry mode set) and on clean fix-only retries (no scope expansion), this field MUST be `[]`. On scope-expansion retries, list every file path touched outside `affected_files`. The orchestrator verifies your reported `scope_expanded_to` against your actual git diff at SubagentStop time (Story 5.4); silent expansion fails loudly as a `scope-assertion-violation` marker.
 
 ## Forbidden fields (sensor-not-advisor — FR52 / FR53)
 
@@ -56,6 +56,10 @@ This wrapper MUST NOT reference any other specialist agent file by path. Special
 
 References to `bmad-dev-story` are explicitly allowed: `bmad-dev-story` is an upstream BMAD-core primitive, NOT a specialist. The wrapper composes the upstream skill per ADR-002 cell 5 (Specialist Wrapper Binding).
 
-## Forward pointer — `scope_expanded_to: []` at Epic 2
+## Fix-only retry mode (FR10 / FR11)
 
-Epic 5's Story 5.3 introduces the Dev fix-only retry mechanism; on retry, `scope_expanded_to` MAY list files touched outside the original scope lock per FR11. THIS wrapper at Epic 2 scope hardcodes the field to `[]` — Epic 2 has no retry mechanism, so no scope expansion is structurally possible.
+On retry-mode dispatch, your prompt body opens with a `# Retry directive (fix-only mode — Story 5.3)` section listing `retry_mode: fix-only`, an `affected_files` array, and a structured action-items list. Constrain your work to files listed under `affected_files`; do not refactor code outside the declared scope.
+
+If your fix structurally requires touching files outside the declared scope, populate `scope_expanded_to` in your return envelope with the additional file paths. Do NOT silently expand scope.
+
+You do NOT decide whether expanding scope is acceptable; you REPORT what you did, and the orchestrator verifies (Story 5.4 owns the post-return diff-vs-`scope_expanded_to` verification + loud-fail). THIS section is the capability-level constraint surface only.

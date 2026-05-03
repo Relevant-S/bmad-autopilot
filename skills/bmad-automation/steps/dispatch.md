@@ -69,3 +69,12 @@ The asymmetric `marker_class` posture encodes the architectural distinction betw
 - **Composed substrate primitives**: `loud_fail_harness.envelope_validator.validate_envelope` (Story 1.2), `loud_fail_harness.event_validator.validate_event` (Story 1.3), `loud_fail_harness.reconciler.load_marker_taxonomy` (Story 1.4)
 - **Orchestrator entry**: `bmad-autopilot/skills/bmad-automation/steps/run.md` (step (f) invokes this protocol)
 - **Forward consumers**: Stories 2.7 (SubagentStop hook reads `last_envelope`), 2.8 / 2.9 / 2.10 (specialist wrappers supply `agents/{dev,review-bmad,qa}-wrapper.md` files), 2.11 (PR bundle assembly reads the events), 2.12 (per-seam streaming thickens `event_log_appender`), 6.4 (cost telemetry hooks the `(prompt_id, retry_attempt, specialist)` correlation triple per ADR-006), 6.7 (specialist-timeout markers in PR bundle).
+
+## Retry-dispatch (fix-only mode — Story 5.3)
+
+When the upstream retry-routing seam (Story 5.2; `steps/run.md`) yields `RoutingOutcome.RETRY_DEV` AND `retry_budget.evaluate_retry_decision` returns `DISPATCH_RETRY` (Story 5.1), compose four substrate primitives from `loud_fail_harness.retry_dispatch.{derive_affected_files, make_retry_prompt_body_renderer, extract_scope_expanded_to, RetryDispatchDirective}` (FR10 / FR11 / FR54):
+
+1. `affected_files = derive_affected_files(action_items)` against the Story 5.2 `tuple[ActionItem, ...]`. If `affected_files == ()` (every action item had `location: ""`), the orchestrator-skill MUST escalate (route to Story 5.8) rather than dispatch a no-scope retry — a no-scope retry contradicts the FR10 capability framing.
+2. `directive = RetryDispatchDirective(retry_mode="fix-only", affected_files=affected_files)`.
+3. Supply `make_retry_prompt_body_renderer(directive, action_items)` AS the `prompt_body_renderer` argument to `build_dispatch_payload`; the renderer prepends a `# Retry directive` section and appends `default_prompt_body_renderer`'s output below.
+4. When the Dev return envelope arrives (post-`validate_return_envelope`), call `extract_scope_expanded_to(envelope)` to obtain Dev's reported scope-expansion declaration. Story 5.4 owns the actual-diff comparison + `scope-assertion-violation` marker emission against this declaration.
