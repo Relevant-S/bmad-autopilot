@@ -89,7 +89,10 @@ markers:
       AC's input or UI surface. NOT a failure — a structural-bound case. The
       QA Behavioral Plan's `verification_mode` field documents which
       heuristic was skipped.
-    sub_classifications: []
+    sub_classifications:
+      - empty-state
+      - error-state
+      - auth-boundary
 
   - marker_class: mobile-blocked
     diagnostic_pointer: |

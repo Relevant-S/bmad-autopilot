@@ -88,6 +88,19 @@ Negative-path — three-tier evidence hierarchy + semantic_verification enum (FR
     [x] format_errors renames semantic_verification enum         → test_format_errors_renames_semantic_verification_enum_violation
     [x] format_errors does not mangle unrelated enum errors      → test_format_errors_does_not_mangle_non_evidence_ref_enum_errors
     [x] migrated qa-*.yaml fixtures validate clean post-Story-4.8 → test_existing_corpus_qa_fixtures_validate_clean (in-place updated)
+
+Negative-path — exploratory-heuristic discriminator + heuristic_skipped_emissions field (FR22; Story 4.9):
+    [x] finding `verification_mode: "speculative-mutation"` rejected → test_finding_verification_mode_unknown_value_rejected
+    [x] finding `verification_mode: "exploratory-heuristic"` accepted → test_finding_verification_mode_exploratory_heuristic_accepted
+    [x] finding without `verification_mode` accepted (optional)      → test_finding_verification_mode_absent_accepted
+    [x] format_errors renames verification_mode enum violation       → test_format_errors_renames_verification_mode_enum_violation
+    [x] heuristic_skipped_emissions valid entry accepted (parametrized) → test_heuristic_skipped_emissions_array_with_valid_entry_accepted
+    [x] heuristic_skipped_emissions unknown sub_classification rejected → test_heuristic_skipped_emissions_unknown_sub_classification_rejected
+    [x] heuristic_skipped_emissions missing required field rejected  → test_heuristic_skipped_emissions_missing_required_field_rejected
+    [x] heuristic_skipped_emissions extra property rejected          → test_heuristic_skipped_emissions_extra_property_rejected
+    [x] heuristic_skipped_emissions field absent accepted (optional) → test_heuristic_skipped_emissions_field_absent_accepted
+    [x] format_errors does not mangle unrelated verification_mode-adjacent enum errors → test_format_errors_does_not_mangle_non_verification_mode_enum_errors
+    [x] post-Story-4.9 corpus regression-guard                       → test_existing_corpus_qa_fixtures_validate_clean_post_bump
 """
 
 from __future__ import annotations
@@ -1048,3 +1061,182 @@ def test_format_errors_does_not_mangle_non_evidence_ref_enum_errors(
     assert "/status" in output, f"Expected /status pointer; got: {output!r}"
     assert "halfpass" in output, f"Expected 'halfpass' value in output; got: {output!r}"
     assert "is not one of" in output, f"Expected enum-violation phrasing; got: {output!r}"
+
+
+# --------------------------------------------------------------------------- #
+# Negative-path — exploratory-heuristic discriminator + heuristic_skipped     #
+# emissions (FR22; Story 4.9)                                                 #
+# --------------------------------------------------------------------------- #
+
+
+def _heuristic_finding(**overrides: object) -> dict:
+    base = {
+        "id": "qa-heuristic-empty-001",
+        "source": "qa",
+        "title": "empty list view renders generic placeholder",
+        "detail": "exploratory observation",
+        "location": "src/components/list-view.tsx:42",
+        "bucket": "decision_needed",
+        "severity": "MED",
+    }
+    base.update(overrides)
+    return base
+
+
+@pytest.mark.parametrize(
+    "bad_value", ["speculative-mutation", "manual", "automated", ""]
+)
+def test_finding_verification_mode_unknown_value_rejected(
+    schema: dict, bad_value: str
+) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["findings"] = [_heuristic_finding(verification_mode=bad_value)]
+    errors = validate_envelope(envelope, schema)
+    enum_errors = [
+        e for e in errors
+        if e.validator == "enum"
+        and list(e.absolute_path) == ["findings", 0, "verification_mode"]
+    ]
+    assert len(enum_errors) == 1, (
+        f"expected one enum violation at findings[0].verification_mode; got {errors}"
+    )
+
+
+def test_finding_verification_mode_exploratory_heuristic_accepted(schema: dict) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["findings"] = [
+        _heuristic_finding(verification_mode="exploratory-heuristic")
+    ]
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_finding_verification_mode_absent_accepted(schema: dict) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["findings"] = [_heuristic_finding()]
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_format_errors_renames_verification_mode_enum_violation(schema: dict) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["findings"] = [
+        _heuristic_finding(verification_mode="speculative-mutation")
+    ]
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(errors, envelope=envelope)
+    assert "exploratory-heuristic discriminator invariant" in output, output
+    assert 'verification_mode must be "exploratory-heuristic"' in output, output
+    assert "qa-heuristic-empty-001" in output, output
+
+
+@pytest.mark.parametrize(
+    "sub_classification", ["empty-state", "error-state", "auth-boundary"]
+)
+def test_heuristic_skipped_emissions_array_with_valid_entry_accepted(
+    schema: dict, sub_classification: str
+) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["heuristic_skipped_emissions"] = [
+        {
+            "marker_class": "heuristic-skipped",
+            "sub_classification": sub_classification,
+            "story_id": "auto-001",
+        }
+    ]
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_heuristic_skipped_emissions_unknown_sub_classification_rejected(
+    schema: dict,
+) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["heuristic_skipped_emissions"] = [
+        {
+            "marker_class": "heuristic-skipped",
+            "sub_classification": "form-validation",
+            "story_id": "auto-001",
+        }
+    ]
+    errors = validate_envelope(envelope, schema)
+    enum_errors = [
+        e for e in errors
+        if e.validator == "enum"
+        and list(e.absolute_path)
+        == ["heuristic_skipped_emissions", 0, "sub_classification"]
+    ]
+    assert len(enum_errors) == 1, errors
+
+
+def test_heuristic_skipped_emissions_missing_required_field_rejected(
+    schema: dict,
+) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["heuristic_skipped_emissions"] = [
+        {
+            "marker_class": "heuristic-skipped",
+            "sub_classification": "empty-state",
+        }
+    ]
+    errors = validate_envelope(envelope, schema)
+    required_errors = [
+        e for e in errors
+        if e.validator == "required" and "story_id" in e.message
+    ]
+    assert required_errors, errors
+
+
+def test_heuristic_skipped_emissions_extra_property_rejected(schema: dict) -> None:
+    envelope = _minimal_valid_envelope()
+    envelope["heuristic_skipped_emissions"] = [
+        {
+            "marker_class": "heuristic-skipped",
+            "sub_classification": "empty-state",
+            "story_id": "auto-001",
+            "extra": "x",
+        }
+    ]
+    errors = validate_envelope(envelope, schema)
+    extra_errors = [e for e in errors if e.validator == "additionalProperties"]
+    assert extra_errors, errors
+
+
+def test_heuristic_skipped_emissions_field_absent_accepted(schema: dict) -> None:
+    envelope = _minimal_valid_envelope()
+    assert "heuristic_skipped_emissions" not in envelope
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_format_errors_does_not_mangle_non_verification_mode_enum_errors(
+    schema: dict,
+) -> None:
+    """The path-conditional rewrite added by Story 4.9 (AC-4) MUST NOT clobber
+    existing rewrite-path outputs. Feeds an envelope with a Story 4.8 tier-enum
+    violation and asserts the existing tier-enum diagnostic is produced unchanged
+    (no regression on the existing rewrite paths — byte-for-byte verification)."""
+    envelope = _minimal_qa_envelope(
+        ac_status="pass",
+        evidence_refs=({"path": "x.txt", "tier": "tier-4-formal-proof"},),
+    )
+    errors = validate_envelope(envelope, schema)
+    output = format_errors(errors, envelope=envelope)
+    # Story 4.8 tier-enum rewrite branch MUST still fire with its exact diagnostic.
+    assert "three-tier evidence hierarchy invariant" in output, (
+        f"expected Story 4.8 tier-enum diagnostic; got: {output!r}"
+    )
+    assert "tier must be one of" in output
+    # Story 4.9 verification_mode branch MUST NOT fire on this path.
+    assert "exploratory-heuristic discriminator invariant" not in output, output
+
+
+def test_existing_corpus_qa_fixtures_validate_clean_post_bump(schema: dict) -> None:
+    """Story 4.9 regression guard: every existing qa-*.yaml fixture
+    (the pre-Story-4.9 shape — none carry verification_mode on
+    findings, none carry heuristic_skipped_emissions) AND the two new
+    Story-4.9 fixtures MUST validate cleanly under the bumped schema."""
+    qa_fixtures = sorted((REPO_ROOT / "examples" / "envelopes").glob("qa-*.yaml"))
+    assert qa_fixtures, "no qa-*.yaml fixtures discovered"
+    for fixture in qa_fixtures:
+        errors = validate_file(fixture, schema)
+        assert errors == [], (
+            f"fixture {fixture.name} regressed under Story 4.9 schema bump: "
+            f"{format_errors(errors)}"
+        )

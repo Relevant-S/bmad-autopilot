@@ -1,0 +1,102 @@
+# QA specialist envelope — status=pass, multi-AC happy path with two
+# exploratory-heuristic findings (verification_mode-tagged) AND one
+# heuristic-skipped emission (Story 4.9 — three exploratory heuristics
+# + verification_mode discriminator).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical
+# envelope corpus. THIS fixture is the canonical Story 4.9 demonstration
+# of the verification-mode-tagged finding shape (FR22) — the wrapper
+# stamps the `verification_mode: "exploratory-heuristic"` discriminator
+# on findings surfaced by the three MVP heuristics so the bundle
+# assembler can render them in their own `### Exploratory heuristic
+# findings` H3 sub-section distinct from AC-driven findings (per
+# epics.md lines 2059-2079). Cross-references epics.md lines
+# 2059-2079.
+#
+# Top-level shape mirrors qa-pass-multi-ac.yaml (3-AC happy path web
+# project). Distinctions:
+#   - findings[0] / findings[1] carry `verification_mode:
+#     "exploratory-heuristic"` (one for the empty-state heuristic
+#     surfacing a `decision_needed: MED` observation; one for the
+#     error-state heuristic surfacing a `patch: LOW` observation).
+#   - heuristic_skipped_emissions records that the auth-boundary
+#     heuristic was structurally inapplicable to this story.
+#   - envelope-level status: pass (heuristic findings do NOT flip the
+#     pass/fail verdict — they are exploratory observations per
+#     epics.md line 2069's bucket-and-severity discipline).
+#   - every ac_results entry has status: pass.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/ac1-dom-snapshot.txt
+  - _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/ac2-dom-snapshot.txt
+  - _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/ac3-dom-snapshot.txt
+  - _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/heuristic-empty-state.txt
+  - _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/heuristic-error-state.txt
+findings:
+  - id: heuristic-empty-state-001
+    source: qa
+    title: Empty list view renders generic "no items" placeholder that doesn't match AC intent
+    detail: >-
+      The empty-state heuristic surfaced a generic "no items" placeholder
+      where the AC text implied a domain-specific empty-state message.
+      Not an AC violation per se — the AC's mechanical assertion passes —
+      but a drift-catching observation worth reviewing.
+    location: src/components/list-view.tsx:42
+    bucket: decision_needed
+    severity: MED
+    verification_mode: exploratory-heuristic
+  - id: heuristic-error-state-001
+    source: qa
+    title: 500 error response includes unhelpful generic "Something went wrong" message
+    detail: >-
+      The error-state heuristic posted an invalid form payload and
+      observed the resulting 500 error surface; the response body was a
+      generic placeholder rather than an actionable diagnostic.
+    location: src/api/handlers/submit.ts:118
+    bucket: patch
+    severity: LOW
+    verification_mode: exploratory-heuristic
+rationale: >-
+  All three acceptance criteria verified mechanically in story-doc
+  order: AC-1 (registration with email), AC-2 (form rejects invalid
+  email syntax), AC-3 (unauthenticated /dashboard redirects to /login).
+  Two exploratory-heuristic findings surfaced (empty-state + error-state)
+  as drift-catching observations distinct from AC-driven verification
+  verdicts. The auth-boundary heuristic was structurally inapplicable
+  per the QA Behavioral Plan's `heuristic_applicability` field — surfaced
+  as a heuristic-skipped emission. Envelope-level status remains pass:
+  AC-driven verifications all passed; heuristic findings do not flip the
+  pass/fail verdict per FR22.
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "verify: User can register with email"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/ac1-dom-snapshot.txt
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "verify: Form rejects invalid email syntax"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/ac2-dom-snapshot.txt
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "verify: Unauthenticated /dashboard redirects to /login"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/auto-001/run-2026-05-02-001/ac3-dom-snapshot.txt
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: auth-boundary
+    story_id: auto-001

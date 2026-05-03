@@ -111,6 +111,7 @@ import yaml
 from loud_fail_harness import thickening_flags as _default_thickening_flags
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
+from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.review_layer_failure import (
     META_REVIEW_COMPLETENESS,
@@ -403,7 +404,10 @@ def _render_per_ac_section(
     """Render the ``## Per-AC results`` section from QA's envelope's
     ``ac_results`` array (FR55), followed by the optional Story-4.2
     ``### Plan drift detected`` sub-section when QA's envelope's
-    ``plan_drift`` field is non-null.
+    ``plan_drift`` field is non-null, followed by the optional
+    Story-4.9 ``### Exploratory heuristic findings`` sub-section when
+    EITHER ``findings`` carries verification-mode-tagged entries OR
+    ``heuristic_skipped_emissions`` is non-empty.
 
     At Epic 2 scope ``ac_results`` carries exactly one entry per Story
     2.10's AC-2; the renderer is structurally agnostic to the array
@@ -416,13 +420,16 @@ def _render_per_ac_section(
     blocks, carrying the four diagnostic-context bullets in human-
     readable form + the structured marker comment
     ``<!-- bmad-automation:marker plan-drift-detected -->`` co-located.
-    The per-emission :func:`validate_marker_emission` defense-in-depth
-    call (mirroring Story 3.3's pattern at line 589) fires once when
-    the field is non-null. When the field is absent or ``None`` ZERO
-    marker comments are rendered AND no sub-section appears (silent at
-    the bundle-side path; the structural-not-era-based emission rule
-    from Story 3.4's architecture.md addendum at line 1581 is
-    structurally mirrored — emit iff the field is non-null).
+
+    Story 4.9 thickening (AC-9): the renderer partitions the QA
+    envelope's TOP-LEVEL ``findings`` array on the ``verification_mode``
+    discriminator (heuristic findings vs AC-driven findings). When the
+    heuristic-findings partition is non-empty OR the optional
+    ``heuristic_skipped_emissions`` array is non-empty, the renderer
+    appends an ``### Exploratory heuristic findings`` H3 sub-section
+    AFTER ``### Plan drift detected``. AC-driven findings are NOT
+    rendered by this section (Story 4.13 may add an AC-driven-findings
+    render section as part of wrapper-thickening completion).
     """
     entries = qa_envelope.get("ac_results") or []
     if not entries:
@@ -470,9 +477,16 @@ def _render_per_ac_section(
     plan_drift_body = _render_qa_plan_drift_subsection(
         qa_envelope, marker_registry=marker_registry
     )
+    heuristic_body = _render_qa_heuristic_findings_subsection(
+        qa_envelope, marker_registry=marker_registry
+    )
+
+    parts = [ac_results_body]
     if plan_drift_body:
-        return ac_results_body + "\n\n" + plan_drift_body
-    return ac_results_body
+        parts.append(plan_drift_body)
+    if heuristic_body:
+        parts.append(heuristic_body)
+    return "\n\n".join(parts)
 
 
 def _render_qa_plan_drift_subsection(
@@ -527,6 +541,75 @@ def _render_qa_plan_drift_subsection(
         f"- Prior ac_hash: `{prior_ac_hash}`",
         f"- Current ac_hash: `{current_ac_hash}`",
     ]
+    return "\n".join(lines)
+
+
+
+def _render_qa_heuristic_findings_subsection(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-4.9 ``### Exploratory heuristic findings`` H3
+    sub-section when EITHER the QA envelope's top-level ``findings``
+    array carries entries with ``verification_mode ==
+    "exploratory-heuristic"`` OR the optional
+    ``heuristic_skipped_emissions`` array is non-empty; return the
+    empty string otherwise (silent at the bundle-side path).
+
+    The sub-section partitions the top-level ``findings`` array on the
+    ``verification_mode`` discriminator field (Story 4.9 AC-9):
+    heuristic findings (carrying
+    ``verification_mode == "exploratory-heuristic"``) are rendered as
+    bullets via :func:`_render_finding_bullet`; AC-driven findings
+    (without ``verification_mode``) are NOT rendered by this section.
+    Per-emission diagnostic prose + the ``heuristic-skipped:
+    <sub_classification>`` marker comment pair are co-located inside
+    the same sub-section.
+
+    Defense-in-depth re-validation per Pattern 5 (mirrors Story 3.3 +
+    Story 4.2): :func:`validate_marker_emission` fires once per
+    emission entry. Registry rejection raises
+    :exc:`UnknownMarkerClass` per Pattern 5.
+    """
+    findings = qa_envelope.get("findings") or []
+    heuristic_findings = [
+        f for f in findings
+        if isinstance(f, dict)
+        and f.get("verification_mode") == "exploratory-heuristic"
+    ]
+    emissions = qa_envelope.get("heuristic_skipped_emissions") or []
+
+    if not heuristic_findings and not emissions:
+        return ""
+
+    lines = [
+        "### Exploratory heuristic findings",
+        "",
+        "Synthetic findings surfaced by the three MVP exploratory heuristics",
+        "(empty-state / error-state / auth-boundary) per FR22. Distinct from",
+        "AC-driven findings: these are exploratory drift-catching observations,",
+        "not per-AC verification verdicts.",
+    ]
+
+    if heuristic_findings:
+        lines.append("")
+        lines.extend(_render_finding_bullet(f) for f in heuristic_findings)
+
+    for emission in emissions:
+        validate_marker_emission(marker_registry, HEURISTIC_SKIPPED_MARKER)
+        sub_classification = emission.get("sub_classification", "(unknown)")
+        lines.append("")
+        lines.append(
+            f"Heuristic {sub_classification} skipped — structurally "
+            "inapplicable to this story per the QA Behavioral Plan's "
+            "`heuristic_applicability` field."
+        )
+        lines.append(
+            f"<!-- bmad-automation:marker {HEURISTIC_SKIPPED_MARKER}: "
+            f"{sub_classification} -->"
+        )
+
     return "\n".join(lines)
 
 

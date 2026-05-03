@@ -21,6 +21,10 @@
 #     enforced — evidence_refs items are {path, tier} objects with tier ∈
 #     {tier-1-mechanical, tier-2-outcome, tier-3-semantic}; semantic_verification
 #     tightens to closed enum {verified, not_configured, not_applicable})
+#   - FR22 (Story 4.9: three exploratory heuristics — empty-state /
+#     error-state / auth-boundary — with `verification_mode: exploratory-heuristic`
+#     discriminator field added to $defs/finding; sibling of the `meta` field
+#     precedent from Story 3.3, single-responsibility per discriminator)
 #   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
 #
 # This file encodes a contract validated by CI; modify with care.
@@ -120,6 +124,12 @@ properties:
     # Recorded in `docs/extension-audit.md` per the no-introductions principle.
     $ref: "#/$defs/plan_drift"
 
+  heuristic_skipped_emissions:
+    type: array
+    description: "QA-specific (FR22 + Story 4.9). Per-heuristic-skipped emission records carried on the QA envelope. Optional non-null shape: the field is absent on stories where every heuristic applies (no skips); present-and-array-conforming-to-$defs/heuristic_skipped_emission on stories with ≥ 1 structurally inapplicable heuristic. The field is consumed by the bundle assembler's QA-section render to surface the per-emission diagnostic prose + the structured marker comment co-located. Recorded in `docs/extension-audit.md` per the no-introductions principle."
+    items:
+      $ref: "#/$defs/heuristic_skipped_emission"
+
 $defs:
   finding:
     type: object
@@ -161,14 +171,27 @@ $defs:
       # Optional Review-BMAD wrapper-layer-only discriminator (Story 3.3 + FR28 + FR56).
       # Distinguishes synthetic meta-findings emitted by `surface_failed_layers`
       # (the three-channel atomic emission for per-layer failure) from layer-produced
-      # content findings. The enum is intentionally narrow at this story; future
-      # meta-finding kinds (e.g., the Story 4.9 `verification_mode` precedent at
-      # epics.md line 2068) extend the enum via a follow-on schema bump recorded in
-      # `docs/extension-audit.md` per the no-introductions principle. Closed-by-default
-      # invariant ($defs/finding.additionalProperties: false above) is preserved.
+      # content findings. The enum is intentionally narrow at this story; the Story 4.9
+      # `verification_mode` field below at $defs/finding.properties.verification_mode IS
+      # the second-instance discriminator-field precedent that motivates this comment's
+      # forward-looking framing; further wrapper-layer-only discriminator FIELDS
+      # (parallel to `meta` and `verification_mode`) are added as siblings, NOT as enum
+      # extensions of EITHER existing field — single-responsibility per discriminator
+      # field. Closed-by-default invariant ($defs/finding.additionalProperties: false
+      # above) is preserved.
       meta:
         type: string
         enum: [review-completeness]
+      # Optional QA wrapper-layer-only discriminator (Story 4.9 + FR22).
+      # Distinguishes synthetic exploratory-heuristic findings (surfaced by the
+      # three MVP heuristics: empty-state, error-state, auth-boundary) from
+      # AC-driven findings (the wrapper's per-AC `verify_ac` output). Mirrors
+      # the `meta` field precedent at line 169. Closed-by-default invariant
+      # ($defs/finding.additionalProperties: false above) is preserved.
+      verification_mode:
+        type: string
+        enum: [exploratory-heuristic]
+        description: "QA wrapper-layer-only discriminator (Story 4.9 + FR22). Distinguishes synthetic exploratory-heuristic findings (surfaced by the three MVP heuristics: empty-state, error-state, auth-boundary) from AC-driven findings (the wrapper's per-AC `verify_ac` output). Mirrors the `meta` field precedent at line 169. Closed-by-default invariant ($defs/finding.additionalProperties: false above) is preserved."
 
   ac_result:
     type: object
@@ -277,3 +300,28 @@ $defs:
       current_ac_hash:
         type: string
         pattern: "^[0-9a-f]{64}$"
+
+  heuristic_skipped_emission:
+    # QA-specific (FR22 + Story 4.9) per-heuristic-skipped emission record.
+    # Mirrors `qa_exploratory_heuristics.HeuristicSkippedEmissionRecord`
+    # Pydantic model byte-for-byte. The `sub_classification` enum mirrors
+    # the bumped marker-taxonomy.yaml `heuristic-skipped.sub_classifications`
+    # at AC-5 byte-for-byte AND `qa_behavioral_plan.HeuristicApplicability`
+    # at line 164 byte-for-byte (single source of truth: the heuristic-kind
+    # enumeration).
+    type: object
+    required:
+      - marker_class
+      - sub_classification
+      - story_id
+    additionalProperties: false
+    properties:
+      marker_class:
+        type: string
+        enum: [heuristic-skipped]
+      sub_classification:
+        type: string
+        enum: [empty-state, error-state, auth-boundary]
+      story_id:
+        type: string
+        minLength: 1

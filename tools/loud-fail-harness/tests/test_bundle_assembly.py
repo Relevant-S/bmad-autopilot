@@ -62,6 +62,15 @@ Story 3.4 — bucket × severity grouped review-section rendering:
     [x] header drops "Single-layer review" sentence at Epic 3        → test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3
     [x] walking-skeleton-bundle marker still emits at Epic 3         → test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state
     [x] per-layer review-layer-failed marker emission preserved      → test_review_findings_section_per_layer_marker_emission_preserved
+
+Exploratory heuristic findings sub-section render (Story 4.9):
+    [x] sub-section with findings only                               → test_exploratory_heuristic_findings_subsection_with_findings_only
+    [x] sub-section with emissions only                              → test_exploratory_heuristic_findings_subsection_with_emissions_only
+    [x] sub-section with both findings and emissions                 → test_exploratory_heuristic_findings_subsection_with_findings_and_emissions
+    [x] sub-section omitted when both empty                          → test_exploratory_heuristic_findings_subsection_omitted_when_both_empty
+    [x] validate_marker_emission called per emission                 → test_exploratory_heuristic_findings_subsection_marker_validate_emission_called_per_emission
+    [x] AC-driven findings not rendered by per-AC section            → test_ac_driven_findings_not_rendered_by_per_ac_section_render_at_story_4_9
+    [x] ordering: per-AC → plan-drift → heuristic findings           → test_ordering_per_ac_then_plan_drift_then_heuristic_findings
 """
 
 from __future__ import annotations
@@ -1738,3 +1747,212 @@ def test_review_findings_section_per_layer_marker_emission_preserved(
     )
     # The marker is co-located with the failed_layers prose.
     assert "Failed layers: `edge`" in body
+
+
+# --------------------------------------------------------------------------- #
+# Exploratory heuristic findings sub-section render (Story 4.9)               #
+# --------------------------------------------------------------------------- #
+
+
+def _qa_envelope_with_one_ac() -> dict[str, Any]:
+    return {
+        "status": "pass",
+        "artifacts": ["evidence/x.txt"],
+        "findings": [],
+        "rationale": "ok",
+        "ac_results": [
+            {
+                "ac_id": "AC-1",
+                "status": "pass",
+                "assertions": ["verify: x"],
+                "evidence_refs": [
+                    {"path": "evidence/x.txt", "tier": "tier-1-mechanical"}
+                ],
+                "semantic_verification": "not_applicable",
+            }
+        ],
+    }
+
+
+def _heuristic_finding_dict(
+    *, fid: str, title: str, location: str = ""
+) -> dict[str, Any]:
+    return {
+        "id": fid,
+        "source": "qa",
+        "title": title,
+        "detail": "exploratory observation",
+        "location": location,
+        "bucket": "decision_needed",
+        "severity": "MED",
+        "verification_mode": "exploratory-heuristic",
+    }
+
+
+def _heuristic_skipped_emission_dict(sub_classification: str) -> dict[str, Any]:
+    return {
+        "marker_class": "heuristic-skipped",
+        "sub_classification": sub_classification,
+        "story_id": "auto-001",
+    }
+
+
+@pytest.fixture
+def heuristic_registry() -> MarkerClassRegistry:
+    return MarkerClassRegistry(
+        marker_classes=frozenset(
+            {"heuristic-skipped", "plan-drift-detected", "review-layer-failed"}
+        )
+    )
+
+
+def test_exploratory_heuristic_findings_subsection_with_findings_only(
+    heuristic_registry: MarkerClassRegistry,
+) -> None:
+    envelope = _qa_envelope_with_one_ac()
+    envelope["findings"] = [
+        _heuristic_finding_dict(
+            fid="heuristic-empty-state-001",
+            title="empty-state heuristic",
+            location="src/x.tsx:1",
+        ),
+        _heuristic_finding_dict(
+            fid="heuristic-error-state-001", title="error-state heuristic"
+        ),
+    ]
+    body = bundle_assembly._render_per_ac_section(
+        envelope, marker_registry=heuristic_registry
+    )
+    assert "### Exploratory heuristic findings" in body
+    assert "[qa] `heuristic-empty-state-001`" in body
+    assert "[qa] `heuristic-error-state-001`" in body
+    assert "bmad-automation:marker heuristic-skipped" not in body
+
+
+def test_exploratory_heuristic_findings_subsection_with_emissions_only(
+    heuristic_registry: MarkerClassRegistry,
+) -> None:
+    envelope = _qa_envelope_with_one_ac()
+    envelope["heuristic_skipped_emissions"] = [
+        _heuristic_skipped_emission_dict("auth-boundary")
+    ]
+    body = bundle_assembly._render_per_ac_section(
+        envelope, marker_registry=heuristic_registry
+    )
+    assert "### Exploratory heuristic findings" in body
+    assert "Heuristic auth-boundary skipped" in body
+    assert "<!-- bmad-automation:marker heuristic-skipped: auth-boundary -->" in body
+
+
+def test_exploratory_heuristic_findings_subsection_with_findings_and_emissions(
+    heuristic_registry: MarkerClassRegistry,
+) -> None:
+    envelope = _qa_envelope_with_one_ac()
+    envelope["findings"] = [
+        _heuristic_finding_dict(
+            fid="heuristic-empty-state-001", title="empty-state observation"
+        )
+    ]
+    envelope["heuristic_skipped_emissions"] = [
+        _heuristic_skipped_emission_dict("error-state"),
+        _heuristic_skipped_emission_dict("auth-boundary"),
+    ]
+    body = bundle_assembly._render_per_ac_section(
+        envelope, marker_registry=heuristic_registry
+    )
+    finding_idx = body.index("[qa] `heuristic-empty-state-001`")
+    error_emission_idx = body.index("Heuristic error-state skipped")
+    auth_emission_idx = body.index("Heuristic auth-boundary skipped")
+    assert finding_idx < error_emission_idx < auth_emission_idx
+
+
+def test_exploratory_heuristic_findings_subsection_omitted_when_both_empty(
+    heuristic_registry: MarkerClassRegistry,
+) -> None:
+    envelope = _qa_envelope_with_one_ac()
+    body = bundle_assembly._render_per_ac_section(
+        envelope, marker_registry=heuristic_registry
+    )
+    assert "### Exploratory heuristic findings" not in body
+
+
+def test_exploratory_heuristic_findings_subsection_marker_validate_emission_called_per_emission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-emission ``validate_marker_emission`` defense-in-depth
+    call fires once per emission."""
+
+    calls: list[str] = []
+
+    def _counting_validate(registry: object, marker_class: str) -> None:
+        calls.append(marker_class)
+
+    monkeypatch.setattr(
+        bundle_assembly, "validate_marker_emission", _counting_validate
+    )
+    registry = MarkerClassRegistry(marker_classes=frozenset({"heuristic-skipped"}))
+    envelope = _qa_envelope_with_one_ac()
+    envelope["heuristic_skipped_emissions"] = [
+        _heuristic_skipped_emission_dict("empty-state"),
+        _heuristic_skipped_emission_dict("error-state"),
+        _heuristic_skipped_emission_dict("auth-boundary"),
+    ]
+    bundle_assembly._render_per_ac_section(envelope, marker_registry=registry)
+    assert calls == ["heuristic-skipped"] * 3
+
+
+def test_ac_driven_findings_not_rendered_by_per_ac_section_render_at_story_4_9(
+    heuristic_registry: MarkerClassRegistry,
+) -> None:
+    """An AC-driven finding (no `verification_mode`) is NOT rendered
+    in any AC-driven-findings sub-section at Story 4.9 (Story 4.13 may
+    add that surface; THIS story explicitly does NOT preempt it)."""
+    envelope = _qa_envelope_with_one_ac()
+    envelope["findings"] = [
+        {
+            "id": "ac-driven-001",
+            "source": "qa",
+            "title": "AC-driven finding",
+            "detail": "...",
+            "location": "",
+            "bucket": "patch",
+            "severity": "LOW",
+        }
+    ]
+    body = bundle_assembly._render_per_ac_section(
+        envelope, marker_registry=heuristic_registry
+    )
+    assert "### Exploratory heuristic findings" not in body
+    assert "ac-driven-001" not in body
+    assert "AC-driven finding" not in body
+
+
+def test_ordering_per_ac_then_plan_drift_then_heuristic_findings(
+    heuristic_registry: MarkerClassRegistry,
+) -> None:
+    envelope = _qa_envelope_with_one_ac()
+    envelope["findings"] = [
+        _heuristic_finding_dict(
+            fid="heuristic-empty-state-001", title="empty-state obs"
+        )
+    ]
+    envelope["plan_drift"] = {
+        "story_id": "auto-001",
+        "prior_plan_status": "generated",
+        "prior_ac_hash": "0" * 64,
+        "current_ac_hash": "1" * 64,
+    }
+    envelope["heuristic_skipped_emissions"] = [
+        {
+            "marker_class": "heuristic-skipped",
+            "sub_classification": "auth-boundary",
+            "story_id": "auto-001",
+        }
+    ]
+    body = bundle_assembly._render_per_ac_section(
+        envelope, marker_registry=heuristic_registry
+    )
+    ac_idx = body.index("### AC-1")
+    plan_drift_idx = body.index("### Plan drift detected")
+    heuristic_idx = body.index("### Exploratory heuristic findings")
+    assert ac_idx < plan_drift_idx < heuristic_idx

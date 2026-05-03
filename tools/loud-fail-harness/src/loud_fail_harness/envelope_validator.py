@@ -192,6 +192,37 @@ def format_errors(
             )
             continue
 
+        # verification_mode-enum violation rewrite (FR22; Story 4.9).
+        # Matches errors at ["findings", <int>, "verification_mode"]. The
+        # defensive finding-id resolution mirrors the Story 4.7 + 4.8 AC-id
+        # resolution pattern byte-for-byte; copy-adapted rather than
+        # extracted to a helper at this story per the narrow-scope branch
+        # discipline.
+        if (
+            err.validator == "enum"
+            and len(path_list) == 3
+            and path_list[0] == "findings"
+            and isinstance(path_list[1], int)
+            and path_list[2] == "verification_mode"
+        ):
+            finding_index = path_list[1]
+            finding_label = f"findings[{finding_index}]"
+            if envelope is not None:
+                try:
+                    finding_id = envelope["findings"][finding_index]["id"]
+                except (KeyError, IndexError, TypeError):
+                    pass
+                else:
+                    if isinstance(finding_id, str) and finding_id:
+                        finding_label = finding_id
+            lines.append(
+                f"{finding_label}: exploratory-heuristic discriminator "
+                "invariant: verification_mode must be \"exploratory-heuristic\" "
+                "(the only currently-defined wrapper-layer-only QA "
+                "discriminator value; see FR22)"
+            )
+            continue
+
         if err.validator == "additionalProperties" and not path_list:
             for key in _ADDITIONAL_PROPERTY_KEY_PATTERN.findall(err.message):
                 if key in FORBIDDEN_FLOW_POLICY_FIELDS:

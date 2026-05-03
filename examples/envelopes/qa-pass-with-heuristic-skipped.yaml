@@ -1,0 +1,54 @@
+# QA specialist envelope — status=pass, api project type, all-three-
+# heuristics-skipped shape (Story 4.9 — three exploratory heuristics
+# + verification_mode discriminator).
+#
+# Source list: PRD Reference Artifacts (line 653) names the canonical
+# envelope corpus. THIS fixture is the canonical Story 4.9
+# demonstration of the all-three-heuristics-skipped shape — a story
+# whose project-type or surface makes ALL three heuristics inapplicable
+# (e.g. a CLI / library / pure-data-transformation API with no UI
+# lists, no error UIs, no auth boundary). Cross-references epics.md
+# lines 2071-2074.
+#
+# Top-level shape mirrors qa-pass-api-http-ac1.yaml. Distinctions:
+#   - findings: [] (no heuristic findings — every heuristic was skipped).
+#   - heuristic_skipped_emissions carries THREE entries (one per
+#     heuristic kind: empty-state, error-state, auth-boundary).
+#   - envelope-level status: pass; AC-driven verifications all passed.
+#
+# Validated against schemas/envelope.schema.yaml by the harness CI gate
+# (envelope-validator).
+
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/auto-002/run-001/network-trace-ac1.json
+findings: []
+rationale: >-
+  AC-1 verified mechanically via the HTTP api driver: issued a GET
+  request against the running API service, asserted the response status
+  was 200 and the response body contained the expected AC-1 string, and
+  captured a network-trace artefact under the canonical qa-evidence
+  path. All three exploratory heuristics (empty-state / error-state /
+  auth-boundary) were structurally inapplicable to this story per the
+  QA Behavioral Plan's `heuristic_applicability` field — surfaced as
+  three heuristic-skipped emissions per FR22.
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "status: GET / returned 200 as expected"
+      - "body: response body contained the expected AC-1 string verbatim"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/auto-002/run-001/network-trace-ac1.json
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: empty-state
+    story_id: auto-002
+  - marker_class: heuristic-skipped
+    sub_classification: error-state
+    story_id: auto-002
+  - marker_class: heuristic-skipped
+    sub_classification: auth-boundary
+    story_id: auto-002
