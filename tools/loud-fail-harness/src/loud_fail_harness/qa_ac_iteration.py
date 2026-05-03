@@ -242,7 +242,7 @@ class SmokeFirstAbortEmissionRecord(BaseModel):
           constant).
         * ``diagnostic_context`` — the four-field
           :class:`SmokeFirstAbortDiagnosticContext` carried on the
-          marker emission. Bundle-assembler consumers (Story 4.11)
+          marker emission. Bundle-assembler consumers (Story 4.13)
           read this field to render the human-readable diagnostic
           sub-section.
     """

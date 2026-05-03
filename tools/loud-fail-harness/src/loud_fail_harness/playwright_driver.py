@@ -1126,9 +1126,11 @@ def verify_ac(
     except Exception as exc:
         # Non-MCP exception during AC verification — verification cannot
         # complete; status="blocked" with the exception's diagnostic
-        # captured for downstream visibility (Story 4.10 / 4.11 thicken
-        # consumer semantics). Guard against the capturer itself raising
-        # so the original driver error is preserved in the assertions tuple.
+        # captured for downstream visibility (Story 4.13 thickens
+        # consumer semantics; Story 4.10's escalation contracts +
+        # Story 4.11's compromise blockquote are render-surface only).
+        # Guard against the capturer itself raising so the original
+        # driver error is preserved in the assertions tuple.
         try:
             evidence_ref = evidence_capturer.capture(
                 "blocked-diagnostic",

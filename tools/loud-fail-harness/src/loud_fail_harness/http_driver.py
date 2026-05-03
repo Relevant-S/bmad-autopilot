@@ -196,8 +196,9 @@ Forward consumers:
       mid-run service-broken path AS-IS via
       :func:`surface_env_setup_failure`) AND the wrapper-side
       ``status: fail`` envelope.
-    * Story 4.11 — plan-persistence-compromise PR-bundle visibility
-      renders the structured emissions in the PR bundle.
+    * Story 4.11 — plan-persistence-compromise blockquote prepended
+      at PR-bundle render time. Story 4.13 thickens consumer semantics
+      for structured per-AC emissions.
     * Story 4.12 — evidence-persistence size budgets reads the
       :class:`EvidenceCapturer`'s on-disk output to enforce
       truncation; THIS story's
@@ -1109,9 +1110,11 @@ def verify_ac(
         # Non-service-broken exception during AC verification —
         # verification cannot complete; status="blocked" with the
         # exception's diagnostic captured for downstream visibility
-        # (Story 4.10 / 4.11 thicken consumer semantics). Guard
-        # against the capturer itself raising so the original
-        # driver error is preserved in the assertions tuple.
+        # (Story 4.13 thickens consumer semantics; Story 4.10's
+        # escalation contracts + Story 4.11's compromise blockquote
+        # are render-surface only). Guard against the capturer itself
+        # raising so the original driver error is preserved in the
+        # assertions tuple.
         try:
             evidence_ref = evidence_capturer.capture(
                 "blocked-diagnostic",

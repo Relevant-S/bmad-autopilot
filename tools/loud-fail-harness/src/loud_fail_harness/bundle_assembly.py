@@ -89,6 +89,15 @@ rendering decisions.
     * Story 2.11 :mod:`loud_fail_harness.thickening_flags` — the four-flag
       namespace whose :func:`is_loud_fail_block_present` predicates the
       marker emission rule.
+    * Story 4.11 :mod:`loud_fail_harness.qa_plan_persistence_compromise`
+      — :func:`render_compromise_blockquote` PREPENDED unconditionally to
+      the ``## Per-AC results`` section body so the FR25 plan-persistence
+      compromise (resumability vs purity tradeoff; FR-P2-9 Phase-2 upgrade
+      path) is visible at PR-review time without scrolling into the story
+      doc. The blockquote is rendered even when the QA envelope's
+      ``ac_results`` array is empty — same render-surface single-source-
+      of-truth invariant ``qa_behavioral_plan.render_plan_section`` uses
+      on the story-doc side.
 """
 
 from __future__ import annotations
@@ -113,6 +122,9 @@ from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
+from loud_fail_harness.qa_plan_persistence_compromise import (
+    render_compromise_blockquote,
+)
 from loud_fail_harness.review_layer_failure import (
     META_REVIEW_COMPLETENESS,
     REVIEW_LAYER_FAILED_MARKER,
@@ -457,8 +469,9 @@ def _render_per_ac_section(
                 # Story 4.8 transitive shim: evidence_refs items are now
                 # objects {path, tier} (post-bump $defs/evidence_ref) — render
                 # the path string in backticks for backward-compat with the
-                # pre-Story-4.8 bundle visual surface. Story 4.11 owns the
-                # tier-aware render upgrade. Pre-Story-4.8 string items still
+                # pre-Story-4.8 bundle visual surface. Story 4.13 owns the
+                # tier-aware render upgrade per the FR16-FR25 thickening
+                # surface. Pre-Story-4.8 string items still
                 # render correctly via the str(ref) fallback.
                 block_lines.extend(
                     f"- `{ref['path']}`" if isinstance(ref, dict) and "path" in ref
@@ -481,7 +494,16 @@ def _render_per_ac_section(
         qa_envelope, marker_registry=marker_registry
     )
 
-    parts = [ac_results_body]
+    # Story 4.11 (FR25): the plan-persistence-compromise blockquote is
+    # PREPENDED unconditionally — present even when ``ac_results`` is
+    # empty/missing. The compromise applies to the QA Behavioral Plan
+    # persistence concept itself (resumability vs purity tradeoff), not
+    # to the per-AC results, so the placeholder body still shows the
+    # blockquote above it. The canonical prose is sourced from
+    # :func:`loud_fail_harness.qa_plan_persistence_compromise.render_compromise_blockquote`
+    # — same single-source-of-truth invariant ``render_plan_section``
+    # uses on the story-doc side.
+    parts = [render_compromise_blockquote().rstrip("\n"), ac_results_body]
     if plan_drift_body:
         parts.append(plan_drift_body)
     if heuristic_body:

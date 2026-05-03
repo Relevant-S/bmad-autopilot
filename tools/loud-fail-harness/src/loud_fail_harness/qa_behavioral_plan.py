@@ -72,6 +72,15 @@ Cross-component reuse posture (story 1.10b precedent):
       pure path. The library does not read or write files itself; file I/O is
       the wrapper's procedural-step responsibility (mirrors story 1.10b's
       no-file-I/O posture).
+    * ``loud_fail_harness.qa_plan_persistence_compromise.render_compromise_blockquote``
+      — REUSED by ``render_plan_section`` (Story 4.11 / FR25): every rendered
+      plan body PREPENDS the canonical Plan-persistence-compromise blockquote
+      at the very top, sourced from the single-source-of-truth constant in
+      that module. The compromise blockquote is fixed-text decoration NOT
+      round-tripped through ``parse_plan_section`` as structured data — it is
+      regenerated on every render call. ``parse_plan_section``'s regex anchors
+      already operate in MULTILINE mode so the leading blockquote does not
+      perturb plan_status / ac_hash / per-AC-entry extraction.
 
 AC-hash function — canonical normalization rules (AC-2 + AC-7):
     The hash is computed over a canonical normalized string representation
@@ -133,6 +142,10 @@ import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from loud_fail_harness.qa_plan_persistence_compromise import (
+    render_compromise_blockquote,
+)
 
 #: ``PlanPersistAction`` is a Literal carrying exactly three values. The
 #: third value ``"drift-suspected"`` is a forward-pointer to story 4.2's
@@ -358,9 +371,16 @@ def render_plan_section(plan: QABehavioralPlan) -> str:
     Canonical shape (documented in module docstring; round-trip-stable
     with ``parse_plan_section``):
 
+    * The Story-4.11 plan-persistence-compromise blockquote at the very
+      top — fixed-text decoration sourced from
+      :func:`loud_fail_harness.qa_plan_persistence_compromise.render_compromise_blockquote`
+      on every render call. The blockquote is NOT round-tripped through
+      :func:`parse_plan_section` as structured data; it is regenerated
+      on every render (single-source-of-truth invariant per FR25).
+    * One blank line.
     * Two HTML-comment metadata lines for ``plan_status`` and ``ac_hash``
-      at the top — machine-parseable, invisible to most markdown
-      renderers, regex-extractable.
+      — machine-parseable, invisible to most markdown renderers,
+      regex-extractable.
     * One blank line.
     * Per-AC entries under ``### AC-{ac_id}`` H3 headers, each followed
       by four ``- key: value`` lines for the four required per-AC fields.
@@ -370,6 +390,8 @@ def render_plan_section(plan: QABehavioralPlan) -> str:
     under the H2 header produces well-formed markdown.
     """
     parts: list[str] = []
+    parts.append(render_compromise_blockquote().rstrip("\n"))
+    parts.append("")
     parts.append(f"<!-- plan_status: {plan.plan_status} -->")
     parts.append(f"<!-- ac_hash: {plan.ac_hash} -->")
     parts.append("")

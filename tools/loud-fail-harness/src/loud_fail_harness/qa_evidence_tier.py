@@ -209,7 +209,7 @@ class Tier3NotConfiguredEmissionRecord(BaseModel):
           symbolic constant).
         * ``diagnostic_context`` — the three-field
           :class:`Tier3NotConfiguredDiagnosticContext` carried on the
-          marker emission. Bundle-assembler consumers (Story 4.11)
+          marker emission. Bundle-assembler consumers (Story 4.13)
           read this field to render the human-readable diagnostic
           sub-section + the actionable how-to-enable pointer.
     """
@@ -316,7 +316,7 @@ def surface_tier_3_not_configured(
     :class:`Tier3NotConfiguredEmissionRecord` is data the wrapper
     consumes; the structured bundle-comment marker is rendered by the
     bundle assembler when reading the envelope's per-AC tier-3-not-
-    configured emission record — Story 4.11 finalizes that rendering
+    configured emission record — Story 4.13 finalizes that rendering
     surface).
 
     Args:
