@@ -100,11 +100,12 @@ Downstream-consumer linkage:
       :func:`surface_env_setup_failure` and routes it through the
       verification-fail / env-setup-fail escalation contracts. THIS
       module emits + structures; Story 4.10 routes.
-    * Story 4.12 (evidence-persistence size budgets) reads the QA
-      evidence root after QA return to enforce truncation; the
-      :func:`teardown_env` invariant ("evidence root is NEVER opened,
-      listed, mutated, or referenced") is what makes Story 4.12's
-      composition possible.
+    * Story 4.12 (evidence-persistence size budgets) owns the
+      truncation enforcement at
+      :func:`loud_fail_harness.qa_evidence_persistence.evaluate_size_budget`;
+      the :func:`teardown_env` invariant ("evidence root is NEVER
+      opened, listed, mutated, or referenced") is what made Story
+      4.12's composition possible without ordering risk.
 
 Structural-not-era-based emission rule:
     The ``env-setup-failed`` marker emits iff :func:`provision_env`

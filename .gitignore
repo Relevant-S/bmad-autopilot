@@ -9,3 +9,6 @@ __pycache__/
 dist/
 build/
 .coverage
+
+# QA evidence (FR49 — _bmad-output/qa-evidence/{story-id}/{run-id}/)
+_bmad-output/qa-evidence/

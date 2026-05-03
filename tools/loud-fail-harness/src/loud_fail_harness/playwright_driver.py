@@ -129,10 +129,12 @@ Downstream-consumer linkage:
       escalation-class contracts. THIS module produces the
       structured emission; that module routes it.
     * Story 4.12 (evidence-persistence size budgets + truncation)
-      reads the :class:`EvidenceCapturer`'s on-disk output to
-      enforce truncation; the
-      :func:`verify_ac`-NEVER-emits-markers invariant is what makes
-      Story 4.12's composition possible without ordering risk.
+      owns the substrate decision function
+      :func:`loud_fail_harness.qa_evidence_persistence.evaluate_size_budget`
+      + the Pattern-5 atomic-on-failure emission helper
+      :func:`loud_fail_harness.qa_evidence_persistence.surface_evidence_truncated`;
+      the :func:`verify_ac`-NEVER-emits-markers invariant is what
+      made Story 4.12's composition possible without ordering risk.
     * Story 4.13 (QA wrapper completion) thickens
       ``agents/qa.md`` to compose THIS module's primitives at AC-
       iteration time for ``web`` project types.

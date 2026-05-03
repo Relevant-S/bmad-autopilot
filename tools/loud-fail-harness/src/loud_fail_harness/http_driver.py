@@ -107,7 +107,9 @@ Procedural checklist (verbatim epic AC at epics.md lines 1927-1956):
        from the API-broken path above).
     8. Masked-selector redaction per epics.md line 1942 ("request/
        response traces (with optional sensitive-field masking per
-       Story 4.12's ``masked_selectors``) are persisted"): the
+       Story 4.4's :class:`MaskedSelectorPolicy` ``masked_selectors``
+       field) are persisted"; Story 4.12 documents the AS-IS reuse
+       posture without modifying the policy class): the
        :class:`EvidenceCapturer`'s ``capture(action_kind, payload)``
        implementation applies the :class:`MaskedSelectorPolicy` to
        its inputs BEFORE persisting, replacing matched substrings
@@ -199,12 +201,13 @@ Forward consumers:
     * Story 4.11 — plan-persistence-compromise blockquote prepended
       at PR-bundle render time. Story 4.13 thickens consumer semantics
       for structured per-AC emissions.
-    * Story 4.12 — evidence-persistence size budgets reads the
-      :class:`EvidenceCapturer`'s on-disk output to enforce
-      truncation; THIS story's
-      :data:`_TRACE_BODY_EXCERPT_MAX_CHARS` constant bounds the
-      per-trace-record body excerpt size (distinct from the file-
-      level size budget Story 4.12 owns).
+    * Story 4.12 — evidence-persistence size budgets are enforced
+      by
+      :func:`loud_fail_harness.qa_evidence_persistence.evaluate_size_budget`;
+      THIS story's :data:`_TRACE_BODY_EXCERPT_MAX_CHARS` constant
+      bounds the per-trace-record body excerpt size (distinct from
+      the file-level size budget Story 4.12 owns at
+      :func:`evaluate_size_budget`).
     * Story 4.13 — QA wrapper completion thickens ``agents/qa.md``
       to compose THIS module's step file at AC-iteration time for
       ``api`` project types.
