@@ -68,6 +68,16 @@ Review-patch additions (code review 2026-04-26):
     [x] null marker_class in taxonomy → exit 2                   → test_loud_fail_on_null_marker_class_in_taxonomy
     [x] non-dict dependencies.yaml (valid YAML) → exit 2         → test_loud_fail_on_non_dict_dependencies_yaml
 
+Escalation-bundles directory reconciliation (Story 4.10):
+    [x] absent dir → graceful skip + deferral note               → test_escalation_bundles_directory_absent_clean_skip
+    [x] empty dir → clean skip, NO deferral note                 → test_escalation_bundles_directory_empty_clean_skip
+    [x] real contracts → 4 references resolve cleanly            → test_escalation_bundles_directory_with_clean_contracts_passes
+    [x] missing-marker reference in contract → exit 1            → test_escalation_bundles_contract_with_missing_marker_reference_fails
+    [x] malformed YAML in contract → exit 2                      → test_escalation_bundles_contract_yaml_parse_failure_yields_harness_error
+    [x] non-mapping YAML in contract → exit 2                    → test_escalation_bundles_contract_non_mapping_yields_harness_error
+    [x] CLI flag overrides default escalation-bundles-dir        → test_escalation_bundles_dir_cli_flag_overrides_default
+    [x] both optional pairs absent → both deferral notes printed → test_dependencies_absent_AND_escalation_bundles_absent_clean_skip
+
 Coverage (AC-6):
     [x] enumeration_check.py module-level statement coverage ≥ 90% → review-enforced; not a CI gate
 """
@@ -159,13 +169,22 @@ def _bare_run(
     taxonomy_path: pathlib.Path,
     event_schema_path: pathlib.Path,
     dependencies_path: pathlib.Path | None = None,
+    escalation_bundles_dir: pathlib.Path | None = None,
 ) -> tuple[int, str, str]:
-    """Invoke main() with the three test-injection flags and capture streams.
+    """Invoke main() with the four CLI test-injection flags and capture streams.
 
     ``dependencies_path`` may point at a non-existent file (the absent path)
     or an existing one (the present path); main() handles both per AC-2.
+
+    ``escalation_bundles_dir`` (Story 4.10) defaults to a non-existent
+    tmp_path so the canonical repo's `schemas/escalation-bundles/` directory
+    does NOT leak into Story-1.5-era tests; tests that need to exercise the
+    escalation-bundles pair pass an explicit value.
     """
     deps_path = dependencies_path or (tmp_path / "definitely-absent-dependencies.yaml")
+    escalation_bundles = escalation_bundles_dir or (
+        tmp_path / "definitely-absent-escalation-bundles"
+    )
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
         rc = main(
@@ -176,6 +195,8 @@ def _bare_run(
                 str(event_schema_path),
                 "--dependencies-path",
                 str(deps_path),
+                "--escalation-bundles-dir",
+                str(escalation_bundles),
             ]
         )
     return rc, out.getvalue(), err.getvalue()
@@ -1033,3 +1054,254 @@ def test_loud_fail_on_non_dict_dependencies_yaml(tmp_path: pathlib.Path) -> None
     assert rc == 2
     assert str(deps_path) in err
     assert "YAML mapping" in err
+
+
+# --------------------------------------------------------------------------- #
+# Escalation-bundles directory reconciliation (Story 4.10)                    #
+# --------------------------------------------------------------------------- #
+
+
+CANONICAL_ESCALATION_BUNDLES_DIR = REPO_ROOT / "schemas" / "escalation-bundles"
+
+
+def test_escalation_bundles_directory_absent_clean_skip(
+    tmp_path: pathlib.Path,
+) -> None:
+    """When the escalation-bundles directory does not exist, ``main`` returns
+    exit 0 and stdout includes the canonical deferral note. Mirrors the
+    existing ``test_dependencies_yaml_absent_does_not_fail`` posture."""
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    _write_taxonomy(taxonomy_path, ["a"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    rc, out, _ = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        escalation_bundles_dir=tmp_path / "definitely-absent-dir",
+    )
+    assert rc == 0
+    assert (
+        "schemas/escalation-bundles/ not present; deferred to story 4.10" in out
+    )
+
+
+def test_escalation_bundles_directory_empty_clean_skip(
+    tmp_path: pathlib.Path,
+) -> None:
+    """When the escalation-bundles directory exists but is empty (no
+    ``*.yaml`` files), ``main`` returns exit 0 and the deferral note is NOT
+    printed (the directory IS present, just empty); no references are
+    discovered from the directory."""
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    escalation_bundles_dir = tmp_path / "escalation-bundles"
+    escalation_bundles_dir.mkdir()
+    _write_taxonomy(taxonomy_path, ["a"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    rc, out, _ = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        escalation_bundles_dir=escalation_bundles_dir,
+    )
+    assert rc == 0
+    assert "Summary:" in out
+    assert (
+        "schemas/escalation-bundles/ not present; deferred to story 4.10"
+        not in out
+    )
+
+
+def test_escalation_bundles_directory_with_clean_contracts_passes(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Pointing ``--escalation-bundles-dir`` at the canonical in-repo
+    directory containing both real contracts (``verification-fail.yaml`` +
+    ``env-setup-fail.yaml``) yields exit 0 + the four marker references
+    (``env-setup-failed``, ``Tier-3-not-configured``, ``plan-drift-detected``,
+    ``smoke-first-abort``) all resolve cleanly against the canonical
+    marker-taxonomy.yaml."""
+    rc, out, _ = _bare_run(
+        tmp_path,
+        taxonomy_path=CANONICAL_TAXONOMY_PATH,
+        event_schema_path=CANONICAL_EVENT_SCHEMA_PATH,
+        escalation_bundles_dir=CANONICAL_ESCALATION_BUNDLES_DIR,
+    )
+    assert rc == 0
+    # The four canonical Story-4.10 marker references must all resolve to
+    # taxonomy entries (i.e., none of them appear in the orphan list, since
+    # an orphan is a taxonomy entry that NO reference resolves to). The
+    # orphan-list-rendering shape is `  - <marker_class>: ` per format_findings.
+    for resolved_marker in (
+        "env-setup-failed",
+        "Tier-3-not-configured",
+        "plan-drift-detected",
+        "smoke-first-abort",
+    ):
+        assert f"  - {resolved_marker}:" not in out, (
+            f"{resolved_marker} resolved by escalation-bundle contract should "
+            f"not appear in the orphan list"
+        )
+    # No deferral note when the directory is present.
+    assert (
+        "schemas/escalation-bundles/ not present; deferred to story 4.10"
+        not in out
+    )
+
+
+def test_escalation_bundles_contract_with_missing_marker_reference_fails(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A synthesized contract whose ``marker_class`` field references a non-
+    existent marker class triggers exit 1 + the canonical
+    ``_MISSING_REFERENCE_REMEDIATION`` prose names the malformed reference."""
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    escalation_bundles_dir = tmp_path / "escalation-bundles"
+    escalation_bundles_dir.mkdir()
+    _write_taxonomy(taxonomy_path, ["a"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    _write_yaml(
+        escalation_bundles_dir / "synthetic.yaml",
+        {
+            "type": "object",
+            "properties": {
+                "marker_class": {"const": "nonexistent-marker-class"},
+            },
+        },
+    )
+    rc, out, _ = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        escalation_bundles_dir=escalation_bundles_dir,
+    )
+    assert rc == 1
+    assert "nonexistent-marker-class" in out
+    assert "ERROR:" in out
+    assert "Remediation:" in out
+    assert "schemas/marker-taxonomy.yaml" in out
+
+
+def test_escalation_bundles_contract_yaml_parse_failure_yields_harness_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A contract file containing malformed YAML (an unterminated flow-
+    mapping, the same shape that triggers ``yaml.YAMLError`` reliably for
+    other tests in this module) yields exit 2 with the canonical harness-
+    level diagnostic naming the YAML parse failure.
+
+    Note: this test exercises the YAML-parse-failure error path, NOT the
+    OSError path. The function was renamed from
+    ``test_escalation_bundles_contract_yaml_parse_failure_yields_harness_error``
+    to reflect the actual trigger condition (Review patch 2026-05-03).
+    """
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    escalation_bundles_dir = tmp_path / "escalation-bundles"
+    escalation_bundles_dir.mkdir()
+    _write_taxonomy(taxonomy_path, ["a"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    bad_fragment = escalation_bundles_dir / "bad.yaml"
+    bad_fragment.write_text("{unterminated:\n", encoding="utf-8")
+    rc, _, err = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        escalation_bundles_dir=escalation_bundles_dir,
+    )
+    assert rc == 2
+    assert "harness-level error: escalation-bundle contract YAML parse failure:" in err
+    assert str(bad_fragment) in err
+
+
+def test_escalation_bundles_contract_non_mapping_yields_harness_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A contract file whose top-level YAML is a list (NOT a mapping) yields
+    exit 2 + the canonical "did not parse to a YAML mapping" diagnostic.
+    Mirrors the dependencies.yaml non-dict pattern (D1 patch)."""
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    escalation_bundles_dir = tmp_path / "escalation-bundles"
+    escalation_bundles_dir.mkdir()
+    _write_taxonomy(taxonomy_path, ["a"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    non_mapping = escalation_bundles_dir / "list.yaml"
+    non_mapping.write_text("- item_one\n- item_two\n", encoding="utf-8")
+    rc, _, err = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        escalation_bundles_dir=escalation_bundles_dir,
+    )
+    assert rc == 2
+    assert "harness-level error: escalation-bundle contract did not parse to a YAML mapping:" in err
+    assert str(non_mapping) in err
+
+
+def test_escalation_bundles_dir_cli_flag_overrides_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Invoking ``main`` with ``--escalation-bundles-dir <tmp_path>`` (a
+    synthetic directory containing one contract referencing a custom marker
+    class) consumes the override exclusively — references are discovered from
+    the override path, NOT from the canonical
+    ``<repo-root>/schemas/escalation-bundles/`` (whose contracts reference
+    only the four canonical Story-4.10 markers)."""
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    escalation_bundles_dir = tmp_path / "escalation-bundles"
+    escalation_bundles_dir.mkdir()
+    # Marker class unique to the synthetic override; the canonical four
+    # Story-4.10 markers are intentionally NOT in this taxonomy so that any
+    # leakage from the canonical in-repo escalation-bundles directory would
+    # surface as missing references (rc == 1) and fail the test.
+    _write_taxonomy(taxonomy_path, ["override-only-marker"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    _write_yaml(
+        escalation_bundles_dir / "override.yaml",
+        {
+            "type": "object",
+            "properties": {
+                "marker_class": {"const": "override-only-marker"},
+            },
+        },
+    )
+    rc, out, _ = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        escalation_bundles_dir=escalation_bundles_dir,
+    )
+    assert rc == 0
+    # The override marker is referenced (passing); canonical Story-4.10
+    # markers are NOT present in this taxonomy, so if the canonical in-repo
+    # directory had been scanned we'd see them as missing references and
+    # rc would be 1.
+    assert "Summary: 1 passing reference(s), 0 missing reference(s)" in out
+
+
+def test_dependencies_absent_AND_escalation_bundles_absent_clean_skip(
+    tmp_path: pathlib.Path,
+) -> None:
+    """When BOTH optional pairs are absent simultaneously (no dependencies
+    .yaml AND no escalation-bundles directory), ``main`` returns exit 0 +
+    BOTH deferral notes are printed."""
+    taxonomy_path = tmp_path / "taxonomy.yaml"
+    event_schema_path = tmp_path / "events.yaml"
+    _write_taxonomy(taxonomy_path, ["a"])
+    _write_yaml(event_schema_path, _minimal_event_schema())
+    rc, out, _ = _bare_run(
+        tmp_path,
+        taxonomy_path=taxonomy_path,
+        event_schema_path=event_schema_path,
+        dependencies_path=tmp_path / "missing-deps.yaml",
+        escalation_bundles_dir=tmp_path / "missing-escalation-bundles",
+    )
+    assert rc == 0
+    assert "schemas/dependencies.yaml not present; deferred to story 1.6" in out
+    assert (
+        "schemas/escalation-bundles/ not present; deferred to story 4.10" in out
+    )

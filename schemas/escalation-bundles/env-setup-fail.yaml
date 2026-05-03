@@ -1,0 +1,407 @@
+# Env-setup-fail escalation-bundle contract (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 4.10 (this contract's authoring; epics.md lines 2085-2122). The
+#     standalone schema fragment under schemas/escalation-bundles/ answers the
+#     verbatim epic AC at line 2095 ("two contract artifacts exist as schema
+#     fragments: schemas/escalation-bundles/verification-fail.yaml and
+#     schemas/escalation-bundles/env-setup-fail.yaml").
+#   - FR24b (PRD line 840) — "QA's policy on *env-setup failure* (dev server
+#     won't start, port binding fails, MCP unavailable, dependencies missing)
+#     is `escalate with env-diagnostic`. This is a distinct escalation class
+#     from verification failure — escalation bundle includes the env-setup
+#     diagnostic and a pointer to `qa-runbook.yaml` for config review. Story
+#     does not enter QA state; remains in `review`. Different remediation,
+#     different escalation-bundle shape." Encoded structurally below as
+#     `retry_policy: { enum: [escalate-with-env-diagnostic] }` AND
+#     `story_state_preservation_note.current_state: { const: review }` so a
+#     drift away from FR24b's invariants fails JSON-Schema-2020-12 validation
+#     rather than being caught only by review-time discipline.
+#   - FR15 (PRD line 826) — "Orchestrator assembles an **escalation bundle**
+#     (distinct from merge-ready bundle) on retry-budget exhaustion". Story
+#     5.8 (epics.md lines 2463-2491) is the downstream assembler that
+#     consumes this contract; this fragment encodes the env-setup-fail shape
+#     Story 5.8 ingests for the env-setup-failure trigger path.
+#   - Story 4.3 (epics.md lines 1872-1891) — full env-provisioning lifecycle
+#     (orchestrator-owned). This contract's failure trigger is Story 4.3's
+#     env-provisioning failure detection (NOT QA envelope return per the
+#     verbatim epic AC at line 1885: "Then the failure routes to Story
+#     4.10's env-setup-fail escalation contract: emits `env-setup-failed`
+#     marker, structures the env-diagnostic per the contract"). This
+#     contract structures that env-diagnostic.
+#   - FR40 / FR42 (PRD lines 865-867) — "init writes documented default
+#     `_bmad/automation/config.yaml` and `_bmad/automation/qa-runbook.yaml`
+#     stubs"; "init re-runs preserve user configuration; upgrades do not
+#     lose customizations." The `qa_runbook_pointer` field below references
+#     the runbook artifact that init scaffolds + that practitioners
+#     customize. Story 7.5 (config + qa-runbook stub generation) owns the
+#     eventual path-resolution logic; this contract carries the path as a
+#     string field rather than a const so the consumer can resolve from
+#     init-time configuration.
+#   - ADR-002 cell-1 portability classification (architecture.md lines
+#     99-203). This fragment is a cell-1 (Host-Portable / Methodology-
+#     Portable) architectural-core artifact: the escalation-bundle contract
+#     is primitive-agnostic and methodology-agnostic. Cell-1 schemas port
+#     unchanged across host-axis (Codex, Cursor) and methodology-axis (non-
+#     BMAD) boundaries. ADR-002's matrix gains an entry for this schema at
+#     cell 1 alongside marker-taxonomy.yaml and tea-handoff-contract.yaml.
+#   - ADR-003 substrate-component closure at FIVE (architecture.md lines
+#     205-333). Substrate component 4 (enumeration_check.py) gains a fourth
+#     reconciliation pair `marker-taxonomy.yaml ↔ schemas/escalation-bundles/
+#     *.yaml`; component count remains FIVE because the gain is a NEW pair
+#     on the existing component, NOT a sixth component.
+#   - ADR-005 cross-state consistency protocol (architecture.md lines
+#     429-540). Env-setup-fail bundles encode the architectural intent that
+#     env-setup failures DO NOT advance the story to `qa` state — the story
+#     remains in `review`. The structurally-typed `current_state: const
+#     review` + `intended_next_state_skipped: const qa` fields enforce this
+#     invariant on the contract side; the eventual orchestrator-side state-
+#     transition logic (Story 5.8's assembly + the Stop-hook bundle assembly
+#     per FR59) consumes the contract's preservation note to decide the
+#     post-bundle lifecycle state. ADR-005's two-store framing (architecture
+#     .md line 528 — sprint-status as the third store) further mandates the
+#     cross-store consistency invariant: the run-state cache MUST NOT
+#     advance to `qa` while the story-doc canonical state remains `review`,
+#     and the sprint-status third store MUST mirror story-doc canonical.
+#   - Pattern 1 (architecture.md lines 925-955) — snake_case structural keys
+#     (bundle_class, story_id, run_id, retry_policy, env_setup_diagnostic,
+#     failed_provisioning_step, port_states, mcp_status, dependency_name,
+#     dependency_status, qa_runbook_pointer, qa_runbook_path,
+#     config_review_hint, story_state_preservation_note, current_state,
+#     intended_next_state_skipped, preservation_rationale).
+#   - Pattern 2 (architecture.md line 961) — kebab-case marker class
+#     identifier values (`env-setup-failed` is the canonical kebab-case
+#     identifier from marker-taxonomy.yaml line 105).
+#
+# Structural-distinctness invariant (per the verbatim epic AC at epics.md
+# line 2106):
+#
+#   "the contract documents that env-setup-fail is structurally distinct
+#    from verification-fail — different remediation, different escalation-
+#    bundle shape, different story-state outcome"
+#
+# Mechanically encoded below by:
+#   (1) the narrowed `bundle_class: { enum: [env-setup-fail] }` discriminator
+#       (vs verification-fail.yaml's `[verification-fail]`);
+#   (2) the narrowed `retry_policy: { enum: [escalate-with-env-diagnostic] }`
+#       (vs verification-fail.yaml's `[escalate]`);
+#   (3) the OMISSION of `failing_ac_result` (env-setup-fail occurs BEFORE
+#       QA dispatch; there is no AC-failure record to carry);
+#   (4) the OMISSION of `qa_behavioral_plan_pointer` (the QA Behavioral
+#       Plan is a downstream-of-env-provisioning artifact);
+#   (5) the PRESENCE of `env_setup_diagnostic` (which provisioning step
+#       failed; port states; MCP/dep status — NOT in verification-fail.yaml);
+#   (6) the PRESENCE of `qa_runbook_pointer` (config-review remediation
+#       hint — NOT in verification-fail.yaml);
+#   (7) the PRESENCE of `story_state_preservation_note` (story remains in
+#       `review` state, NOT entering `qa` — NOT in verification-fail.yaml).
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors marker-taxonomy.yaml lines 30-36):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Story 5.8's escalation-bundle assembly mechanism (epics.md lines
+#     2463-2491) consumes this fragment by JSON-Schema-2020-12 conformance
+#     check. Bumps to this fragment trigger reconciliation review with the
+#     Story 5.8 assembler when 5.8 lands. Until 5.8 lands, this contract's
+#     existence + structural shape IS the binding contract for the eventual
+#     assembler.
+#   - Story 4.3's env-provisioning lifecycle (epics.md lines 1872-1891)
+#     produces the env-diagnostic data that populates this contract's
+#     `env_setup_diagnostic` field. Bumps to either fragment require
+#     reconciliation review.
+#   - Story 7.5's `init`-time qa-runbook.yaml scaffolding (epics.md Epic 7)
+#     produces the artifact this contract's `qa_runbook_pointer` field
+#     references. Path-resolution semantics live in Story 7.5; this
+#     contract carries the path as data.
+#   - The `env_setup_diagnostic.marker_class` field references marker-
+#     taxonomy.yaml line 105 (`env-setup-failed`). Substrate component 4
+#     (enumeration_check.py) reconciles this reference at CI; co-versioning
+#     between this contract and marker-taxonomy.yaml is enforced via that
+#     reconciliation.
+#
+# Boundary doc cross-reference: see _bmad-output/planning-artifacts/epics.md
+# lines 2085-2122 for the prose source of this schema's structural shape and
+# rationale citations. Drift between this file and the boundary doc is a
+# review-time finding; reconcile by editing the more-out-of-date side.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/escalation-bundles/env-setup-fail.yaml"
+schema_version: "1.0"
+title: "Env-setup-fail escalation-bundle"
+description: >-
+  The escalation-bundle shape produced by Epic 5's bundle-assembler (Story
+  5.8) when Story 4.3's env-provisioning lifecycle fails (dev server won't
+  start, port-binding fails, Playwright MCP unavailable, dependencies
+  missing). Encodes FR24b's "QA's policy on env-setup failure is `escalate
+  with env-diagnostic`" semantic as the structurally-typed `retry_policy:
+  escalate-with-env-diagnostic` field. STRUCTURALLY DISTINCT from
+  `verification-fail.yaml` per the verbatim epic AC at epics.md line 2106
+  — different remediation, different bundle shape, different story-state
+  outcome (story remains in `review`, NOT `qa`). See `_bmad-output/
+  planning-artifacts/epics.md` lines 2103-2106 for the architectural prose.
+
+type: object
+required:
+  - bundle_class
+  - story_id
+  - run_id
+  - retry_policy
+  - env_setup_diagnostic
+  - qa_runbook_pointer
+  - story_state_preservation_note
+additionalProperties: false
+
+properties:
+  bundle_class:
+    type: string
+    enum: [env-setup-fail]
+    description: >-
+      Structural discriminator distinguishing env-setup-fail bundles from
+      verification-fail bundles at consumer-side dispatch. Story 5.8's
+      assembler reads this discriminator to route between the two bundle
+      shapes. The single-value enum mirrors verification-fail.yaml's
+      `bundle_class` precedent; future bundle classes (Phase 1.5+
+      extensions) MAY extend the enum via a follow-on schema bump recorded
+      in `docs/extension-audit.md` per the no-introductions principle.
+
+  story_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-story identifier. Mirrors verification-fail.yaml's
+      `story_id` field byte-for-byte AND `tea-handoff-contract.yaml`'s
+      `story_id` byte-for-byte. Anchors the orchestrator's per-story
+      branch (FR4) and PR-bundle assembly (FR32). Free-form by BMAD
+      convention; not regex-constrained here.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating dispatch with the
+      run-state.yaml record per ADR-005. Required for recovery semantics
+      (post-recovery run-state must reference the same run_id per ADR-005
+      Consequence 1). Mirrors verification-fail.yaml's `run_id` byte-for-
+      byte.
+
+  retry_policy:
+    type: string
+    enum: [escalate-with-env-diagnostic]
+    description: >-
+      FR24b (PRD line 840) — "QA's policy on env-setup failure is
+      `escalate with env-diagnostic`". Distinct from verification-fail's
+      `escalate` policy; the env-diagnostic prefix indicates the bundle
+      carries env-provisioning diagnostic context, not AC-failure
+      context. Per the verbatim epic AC at epics.md line 2106 — "different
+      remediation, different escalation-bundle shape, different story-
+      state outcome". The kebab-case identifier value
+      `escalate-with-env-diagnostic` follows Pattern 1 (architecture.md
+      lines 925-955).
+
+  env_setup_diagnostic:
+    type: object
+    required:
+      - failed_provisioning_step
+      - port_states
+      - mcp_status
+      - dependency_status
+      - marker_class
+    additionalProperties: false
+    description: >-
+      Structured diagnostic context per the verbatim epic AC at epics.md
+      line 2105 — "env-setup diagnostic (which provisioning step failed;
+      port states; MCP/dep status)". Story 4.3's env-provisioning
+      lifecycle is the source-of-truth for the data populating this
+      object.
+    properties:
+      failed_provisioning_step:
+        type: string
+        minLength: 1
+        description: >-
+          Free-form name of the provisioning step that failed (e.g.,
+          "dev-server-start", "playwright-mcp-launch", "port-binding").
+          The string value is NOT enum-constrained because the
+          provisioning-step taxonomy is open at MVP (Story 4.3 owns the
+          enumeration; future provisioning steps land via additive
+          bumps). The canonical near-term value space is the
+          `env-setup-failed.sub_classifications` enumeration in marker-
+          taxonomy.yaml lines 113-115 (`port-bind-failed`,
+          `playwright-launch-failed`, `dev-server-not-ready`).
+      port_states:
+        type: array
+        description: >-
+          Per-port state inventory captured at provisioning-failure time.
+          Each entry names a port number + the state observed. The field
+          is required but the array MAY be empty (provisioning failures
+          unrelated to ports — e.g., MCP unavailability — produce an
+          empty array; the field's structural presence signals "the
+          provisioning step DID inspect ports"; the empty array signals
+          "no port-related state to report").
+        items:
+          type: object
+          required:
+            - port
+            - state
+          additionalProperties: false
+          properties:
+            port:
+              type: integer
+              minimum: 1
+              maximum: 65535
+            state:
+              type: string
+              enum: [bound, available, in-use-by-other]
+      mcp_status:
+        type: object
+        required:
+          - available
+          - dependency_name
+        additionalProperties: false
+        description: >-
+          MCP availability snapshot at provisioning-failure time. The
+          field is REQUIRED; provisioning failures unrelated to MCP MAY
+          surface `available: true` + the relevant `dependency_name` as
+          a no-op state inventory (the field's structural presence
+          signals "the provisioning step DID check MCP availability";
+          the boolean's value reflects the actual observation).
+        properties:
+          available:
+            type: boolean
+            description: >-
+              The success/failure of the launch attempt for the
+              referenced MCP dependency.
+          dependency_name:
+            type: string
+            minLength: 1
+            description: >-
+              The MCP identifier (e.g., "playwright-mcp", "mobile-mcp").
+      dependency_status:
+        type: array
+        description: >-
+          Per-dependency status inventory captured at provisioning-
+          failure time. Each entry names a dependency from
+          dependencies.yaml (Story 1.6) + its availability + (optional)
+          detected version. The field is required but the array MAY be
+          empty.
+        items:
+          type: object
+          required:
+            - dependency_name
+            - available
+          additionalProperties: false
+          properties:
+            dependency_name:
+              type: string
+              minLength: 1
+            available:
+              type: boolean
+            version:
+              type: string
+              description: >-
+                OPTIONAL — not every dependency exposes a version-
+                detection seam (some are binary-presence-only).
+      marker_class:
+        type: string
+        const: env-setup-failed
+        description: >-
+          References marker-taxonomy.yaml line 105 (`env-setup-failed`).
+          Substrate component 4 (enumeration_check.py) discovers this
+          reference via the strict-name `marker_class` rule and unwraps
+          the `const` to the marker-class string at check-time per
+          enumeration_check.py `discover_marker_class_references`. The
+          field's name + const value is the canonical mechanism for
+          marker-class reconciliation between this contract and marker-
+          taxonomy.yaml.
+
+  qa_runbook_pointer:
+    type: object
+    required:
+      - qa_runbook_path
+      - config_review_hint
+    additionalProperties: false
+    description: >-
+      Structured pointer to the `qa-runbook.yaml` configuration file.
+      Per the verbatim epic AC at epics.md line 2105 — "pointer to
+      `qa-runbook.yaml` for config review". The runbook is scaffolded
+      by Story 7.5's `init` workflow (FR40 / FR42) and customized by
+      practitioners.
+    properties:
+      qa_runbook_path:
+        type: string
+        minLength: 1
+        description: >-
+          Repo-relative path to the runbook (canonical default:
+          "_bmad/automation/qa-runbook.yaml" per prd.md line 501). The
+          value is configurable because Story 7.5 (`init`-time
+          scaffolding, epics.md Epic 7) owns the eventual path-
+          resolution logic; the contract carries the path as a string
+          field rather than a const so the consumer can resolve from
+          init-time configuration.
+      config_review_hint:
+        type: string
+        minLength: 1
+        description: >-
+          Free-form prose hint pointing the practitioner to the
+          relevant runbook section (e.g., "check ports config",
+          "check playwright-mcp launch arguments",
+          "check dependency_versions section"). The hint is mandatory
+          but free-form because the per-failure-class hint surface is
+          open-ended at MVP.
+
+  story_state_preservation_note:
+    type: object
+    required:
+      - current_state
+      - intended_next_state_skipped
+      - preservation_rationale
+    additionalProperties: false
+    description: >-
+      Structured note per the verbatim epic AC at epics.md line 2105 —
+      "story-state preservation note ('story remains in `review` state,
+      NOT entering `qa` state — this is a structurally distinct
+      escalation class from verification failure')". Encodes ADR-005's
+      cross-state consistency invariant on the contract side.
+    properties:
+      current_state:
+        type: string
+        const: review
+        description: >-
+          The lifecycle state the story remains in. The const-form
+          encodes the structural invariant that env-setup-fail does NOT
+          advance the story to `qa` state.
+      intended_next_state_skipped:
+        type: string
+        const: qa
+        description: >-
+          The lifecycle state that WOULD have been entered absent the
+          env-setup failure. The const-form encodes the architectural
+          intent (Story 4.3's env-provisioning-then-QA-dispatch
+          ordering).
+      preservation_rationale:
+        type: string
+        minLength: 1
+        description: >-
+          Free-form prose naming the FR24b rationale (canonical
+          phrasing: "FR24b: env-setup failures are structurally
+          distinct from verification failures; story-state preservation
+          prevents the QA lifecycle state from being entered when the
+          env never came up — re-running env-provisioning + QA after
+          config remediation produces a clean run starting from the
+          preserved review state").

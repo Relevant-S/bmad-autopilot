@@ -785,10 +785,16 @@ def test_main_prints_findings_to_stdout(tmp_path: pathlib.Path) -> None:
 
 
 def test_enumeration_check_picks_up_dependencies_yaml() -> None:
-    """1.5's enumeration_check auto-discovers schemas/dependencies.yaml when
-    it lands. Per AC-5: 4 passing references (env-setup-failed, mobile-blocked,
-    LAD-skipped × 2); orphan list shrinks to 24 (27 taxonomy − 3 distinct
-    referenced markers); the AC-2 deferral note is absent.
+    """1.5's enumeration_check auto-discovers schemas/dependencies.yaml AND
+    (post-Story-4.10) schemas/escalation-bundles/*.yaml when each lands. Per
+    AC-5: passing references include the dependencies.yaml-resolved markers
+    (env-setup-failed, mobile-blocked, LAD-skipped × 2) AND the post-Story-
+    4.10 escalation-bundle-resolved markers (env-setup-failed × 1 from
+    env_setup_diagnostic.marker_class; Tier-3-not-configured × 1 from the
+    verification-fail tier_3_not_configured_markers items.marker_class.const;
+    plan-drift-detected × 1 from $defs/plan_drift_pointer.marker_class.const;
+    smoke-first-abort × 1 from smoke_first_abort_marker.marker_class.const);
+    no AC-2 / Story-4.10 deferral notes (both directories present).
 
     This test IS the cross-story seam contract — it explicitly imports the
     1.5 module and exercises its CLI surface against the canonical schemas.
@@ -799,16 +805,26 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     assert rc == 0, f"enumeration-check failed: stdout={out.getvalue()!r} stderr={err.getvalue()!r}"
 
     text = out.getvalue()
-    # AC-5: 4 passing + 26 orphans, no deferral note.
-    # Arithmetic: 29 total taxonomy markers − 3 distinct referenced markers
-    # (env-setup-failed, mobile-blocked, LAD-skipped) = 26 orphans.
-    # Story 2.3 added 2 markers (git-uncommitted-work-detected, trunk-branch-
-    # write-rejected); both are orphan-at-MVP per the existing pattern (will
-    # bind to dependencies.yaml or orchestrator-event.yaml in Epic 2+ stories).
-    # If a future story adds markers to marker-taxonomy.yaml or new marker_class
-    # references to dependencies.yaml, update this count accordingly.
-    assert "Summary: 4 passing reference(s), 0 missing reference(s), 26 orphan marker class(es)" in text
+    # Post-Story-4.10: 8 passing + 23 orphans, no deferral note.
+    # Arithmetic: 29 total taxonomy markers (post-Story-4.9 baseline) −
+    # 6 distinct referenced markers across the two reconciliation pairs:
+    #   dependencies.yaml pair: env-setup-failed, mobile-blocked, LAD-skipped
+    #   escalation-bundles pair: Tier-3-not-configured, plan-drift-detected,
+    #                            smoke-first-abort
+    # (env-setup-failed appears in BOTH pairs but counts as ONE distinct
+    # taxonomy entry) → 29 − 6 = 23 orphans.
+    # The 8 passing references break down as:
+    #   dependencies.yaml: env-setup-failed ×1, mobile-blocked ×1,
+    #                       LAD-skipped ×2 = 4 refs
+    #   escalation-bundles: env-setup-failed ×1, Tier-3-not-configured ×1,
+    #                        plan-drift-detected ×1, smoke-first-abort ×1
+    #                        = 4 refs
+    # If a future story adds markers to marker-taxonomy.yaml or new
+    # marker_class references to dependencies.yaml or to schemas/escalation-
+    # bundles/*.yaml, update this count accordingly.
+    assert "Summary: 8 passing reference(s), 0 missing reference(s), 23 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
+    assert "deferred to story 4.10" not in text
 
 
 # --------------------------------------------------------------------------- #

@@ -1,0 +1,383 @@
+# Verification-fail escalation-bundle contract (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 4.10 (this contract's authoring; epics.md lines 2085-2122). The
+#     standalone schema fragment under schemas/escalation-bundles/ answers the
+#     verbatim epic AC at line 2095 ("two contract artifacts exist as schema
+#     fragments: schemas/escalation-bundles/verification-fail.yaml and
+#     schemas/escalation-bundles/env-setup-fail.yaml").
+#   - FR24a (PRD line 839) — "QA's default retry policy on *verification
+#     failure* (AC assertion fails, evidence contradicts AC, heuristic catches
+#     regression) is `escalate`. Post-TEA behavioral failures imply semantic
+#     drift / gamed tests / integration gaps — not `patch` findings.
+#     Escalation bundle includes the failing AC result record and a pointer to
+#     the QA Behavioral Plan for drift inspection." Encoded structurally below
+#     as `retry_policy: { enum: [escalate] }` so a non-`escalate` value fails
+#     JSON-Schema-2020-12 validation rather than being caught only by review-
+#     time discipline.
+#   - FR15 (PRD line 826) — "Orchestrator assembles an **escalation bundle**
+#     (distinct from merge-ready bundle) on retry-budget exhaustion — contains
+#     retry history, outstanding findings, rationale, and a pointer to
+#     deferred-work.md." Story 5.8 (epics.md lines 2463-2491) is the
+#     downstream assembler that consumes this contract; this fragment encodes
+#     the QA-domain shape Story 5.8 ingests.
+#   - FR23 (PRD; Story 4.2 — AC-hash plan-drift detection). The contract's
+#     OPTIONAL `plan_drift_pointer` field references the `plan-drift-detected`
+#     marker class via the strict-name `marker_class: { const: plan-drift-
+#     detected }` shape so substrate component 4 (enumeration_check.py)
+#     resolves the reference against marker-taxonomy.yaml line 117.
+#   - FR21 (PRD; Story 4.8 — three-tier evidence hierarchy). The contract's
+#     OPTIONAL `tier_3_not_configured_markers` field references the
+#     `Tier-3-not-configured` marker class via the strict-name `marker_class:
+#     { const: Tier-3-not-configured }` shape so substrate component 4
+#     resolves the reference against marker-taxonomy.yaml line 78.
+#   - Story 4.6 — smoke-first ordering. The contract's OPTIONAL
+#     `smoke_first_abort_marker` field references the `smoke-first-abort`
+#     marker class via the strict-name `marker_class: { const: smoke-first-
+#     abort }` shape so substrate component 4 resolves the reference against
+#     marker-taxonomy.yaml line 191.
+#   - ADR-002 cell-1 portability classification (architecture.md lines
+#     99-203). This fragment is a cell-1 (Host-Portable / Methodology-
+#     Portable) architectural-core artifact: the escalation-bundle contract
+#     is primitive-agnostic and methodology-agnostic. Cell-1 schemas port
+#     unchanged across host-axis (Codex, Cursor) and methodology-axis (non-
+#     BMAD) boundaries. ADR-002's matrix gains an entry for this schema at
+#     cell 1 alongside marker-taxonomy.yaml and tea-handoff-contract.yaml.
+#   - ADR-003 substrate-component closure at FIVE (architecture.md lines
+#     205-333). Substrate component 4 (enumeration_check.py) gains a fourth
+#     reconciliation pair `marker-taxonomy.yaml ↔ schemas/escalation-bundles/
+#     *.yaml`; component count remains FIVE because the gain is a NEW pair on
+#     the existing component, NOT a sixth component. Per ADR-003 Consequence
+#     7, substrate evolution is internal to existing components.
+#   - Pattern 1 (architecture.md lines 925-955) — snake_case structural keys
+#     (bundle_class, story_id, run_id, retry_policy, failing_ac_result,
+#     qa_behavioral_plan_pointer, evidence_refs, tier_3_not_configured_markers,
+#     plan_drift_pointer, smoke_first_abort_marker). Pattern 1 conformance is
+#     review-enforced for this fragment (naming_lint.py registration is
+#     intentionally out-of-scope at Story 4.10 — the new sub-directory is the
+#     first under schemas/; canonical naming-lint targets remain the six pre-
+#     Story-4.10 cell-1 schemas).
+#   - Pattern 2 (architecture.md line 961) — kebab-case marker class
+#     identifier values (`Tier-3-not-configured` is intentional CamelCase-
+#     prefix kebab — verbatim from marker-taxonomy.yaml line 78; mirrors
+#     `LAD-skipped` at line 70's casing precedent).
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors marker-taxonomy.yaml lines 30-36):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Story 5.8's escalation-bundle assembly mechanism (epics.md lines
+#     2463-2491) consumes this fragment by JSON-Schema-2020-12 conformance
+#     check. Bumps to this fragment trigger reconciliation review with the
+#     Story 5.8 assembler when 5.8 lands. Until 5.8 lands, this contract's
+#     existence + structural shape IS the binding contract for the eventual
+#     assembler — Story 5.8 reads this file and conforms its assembled
+#     bundles to the shape declared here (per the verbatim epic AC at
+#     epics.md lines 2108-2112: "Epic 5 imports these contracts and assembles
+#     bundles accordingly. Epic 5 does NOT redefine the content rules — it
+#     consumes them").
+#   - The `$defs/failing_ac_result` block duplicates `envelope.schema.yaml`'s
+#     `$defs/ac_result` block (with the `status` enum narrowed to [fail,
+#     blocked] and the FR19 if/then conditional pruned — see the per-block
+#     comment at the `$defs/failing_ac_result` declaration below).
+#     Cross-fragment `$ref` resolution would create a co-versioning coupling
+#     NOT justified by a runtime invariant per ADR-003 Consequence 2's
+#     "co-versioning is local; not generalized" principle. Drift between this
+#     duplicated `$defs/failing_ac_result` block and the source-of-truth
+#     `envelope.schema.yaml#/$defs/ac_result` block is a review-time finding;
+#     reconcile by editing the more-out-of-date side.
+#   - Similarly, the `$defs/evidence_ref` block duplicates
+#     `envelope.schema.yaml`'s `$defs/evidence_ref` block (Story 4.8 three-
+#     tier evidence hierarchy). Same drift-reconciliation discipline applies.
+#
+# Boundary doc cross-reference: see _bmad-output/planning-artifacts/epics.md
+# lines 2085-2122 for the prose source of this schema's structural shape and
+# rationale citations. Drift between this file and the boundary doc is a
+# review-time finding; reconcile by editing the more-out-of-date side.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/escalation-bundles/verification-fail.yaml"
+schema_version: "1.0"
+title: "Verification-fail escalation-bundle"
+description: >-
+  The escalation-bundle shape produced by Epic 5's bundle-assembler (Story
+  5.8) when QA returns `status: fail` (a behavioral-verification failure,
+  NOT an env-setup failure). Encodes the FR24a "QA's default retry policy on
+  verification failure is `escalate`" semantic as the structurally-typed
+  `retry_policy: escalate` field. See `_bmad-output/planning-artifacts/
+  epics.md` lines 2085-2122 for the architectural prose.
+
+type: object
+required:
+  - bundle_class
+  - story_id
+  - run_id
+  - retry_policy
+  - failing_ac_result
+  - qa_behavioral_plan_pointer
+  - evidence_refs
+additionalProperties: false
+
+properties:
+  bundle_class:
+    type: string
+    enum: [verification-fail]
+    description: >-
+      Structural discriminator distinguishing verification-fail bundles from
+      env-setup-fail bundles at consumer-side dispatch. Story 5.8's assembler
+      reads this discriminator to route between the two bundle shapes. The
+      single-value enum mirrors Story 4.7's `meta` field's narrow-enum
+      precedent; future bundle classes (Phase 1.5+ extensions) MAY extend the
+      enum via a follow-on schema bump recorded in `docs/extension-audit.md`
+      per the no-introductions principle.
+
+  story_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-story identifier (e.g. "4-10-two-escalation-class-
+      contracts-verification-fail-and-env-setup-fail"). Anchors the
+      orchestrator's per-story branch (FR4) and PR-bundle assembly (FR32).
+      Free-form by BMAD convention; not regex-constrained here. Mirrors
+      `tea-handoff-contract.yaml`'s `story_id` field byte-for-byte.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating dispatch with the
+      run-state.yaml record per ADR-005. Required for recovery semantics
+      (post-recovery run-state must reference the same run_id per ADR-005
+      Consequence 1). Mirrors `tea-handoff-contract.yaml`'s `run_id` field
+      byte-for-byte.
+
+  retry_policy:
+    type: string
+    enum: [escalate]
+    description: >-
+      FR24a (PRD line 839) — "QA's default retry policy on *verification
+      failure* is `escalate`." Verification failures imply semantic drift /
+      gamed tests / integration gaps, NOT `patch` findings. The single-value
+      enum is intentionally narrow to forbid downstream consumers from re-
+      deriving the policy decision; the contract IS the policy. Per the
+      verbatim epic AC at epics.md line 2101.
+
+  failing_ac_result:
+    $ref: "#/$defs/failing_ac_result"
+    description: >-
+      The full `ac_result` entry from the QA envelope's `ac_results` array
+      for the failed AC. Per the verbatim epic AC at epics.md line 2100 —
+      "failing AC result record (full `ac_results` entry for the failed AC)".
+
+  qa_behavioral_plan_pointer:
+    type: object
+    required:
+      - story_doc_path
+      - section_heading
+      - ac_id
+    additionalProperties: false
+    description: >-
+      Structured pointer to the QA Behavioral Plan section in the story doc
+      for drift inspection. Per the verbatim epic AC at epics.md line 2100 —
+      "pointer to the QA Behavioral Plan section in the story doc (for drift
+      inspection)".
+    properties:
+      story_doc_path:
+        type: string
+        minLength: 1
+        description: >-
+          Repo-relative path to the story doc (e.g.,
+          "_bmad-output/implementation-artifacts/4-10-two-escalation-class-
+          contracts-verification-fail-and-env-setup-fail.md").
+      section_heading:
+        type: string
+        const: "## QA Behavioral Plan"
+        description: >-
+          Canonical section heading per `prd.md`. Verbatim from the story-
+          doc section-allowlist landed in Story 1.10b. The const-form
+          encodes the pluggability contract: bundles point to a
+          STRUCTURALLY-FIXED section heading; the section name is not
+          negotiable per consumer.
+      ac_id:
+        type: string
+        minLength: 1
+        description: >-
+          The AC identifier whose plan entry is the inspection target
+          (e.g., "AC-1", "AC-3"). Free-form per BMAD convention;
+          parallels `tea-handoff-contract.yaml`'s `ac_id` shape.
+
+  evidence_refs:
+    type: array
+    items:
+      $ref: "#/$defs/evidence_ref"
+    description: >-
+      Evidence references for the failing AC. Per the verbatim epic AC at
+      epics.md line 2100 — "pointer to evidence bundle paths". The array
+      MAY be empty (failing AC results may have partial or absent evidence
+      per envelope.schema.yaml's FR19 conditional which is INACTIVE for
+      non-passing statuses); the schema does NOT enforce a minItems
+      constraint here.
+
+  tier_3_not_configured_markers:
+    type: array
+    description: >-
+      OPTIONAL — pointer to applicable Tier-3-not-configured marker
+      emissions for the failing AC. Per the verbatim epic AC at epics.md
+      line 2100 — "optional pointer to applicable Tier-3-not-configured
+      markers". Each entry encodes the marker reference structurally so
+      substrate component 4 (enumeration_check.py) discovers the reference
+      via the strict-name `marker_class` rule. The verbose object-form
+      (vs a flat string array) is the price for closure-equivalence
+      reconciliation against marker-taxonomy.yaml without bespoke
+      heuristics; the shape is consistent with the other three marker-
+      reference encodings in this contract.
+    items:
+      type: object
+      required:
+        - marker_class
+      additionalProperties: false
+      properties:
+        marker_class:
+          type: string
+          const: Tier-3-not-configured
+          description: >-
+            References marker-taxonomy.yaml line 78 (`Tier-3-not-
+            configured`). Substrate component 4's strict-name discovery
+            rule unwraps this `const` to the marker-class string at
+            check-time per enumeration_check.py
+            `discover_marker_class_references`.
+
+  plan_drift_pointer:
+    $ref: "#/$defs/plan_drift_pointer"
+    description: >-
+      OPTIONAL — pointer to the `plan-drift-detected` marker emission. Per
+      the implicit consequence of FR23 (Story 4.2): plan drift is a
+      verification-fail-adjacent signal — when the QA envelope carries the
+      `plan_drift` field (from Story 4.2), the verification-fail
+      escalation MAY include this pointer for drift-inspection context.
+      The field is OPTIONAL because not every verification-fail scenario
+      involves plan drift; pre-existing-plan reuse paths skip drift
+      detection per Story 4.2's branch logic.
+
+  smoke_first_abort_marker:
+    type: object
+    required:
+      - marker_class
+    additionalProperties: false
+    description: >-
+      OPTIONAL — pointer to a `smoke-first-abort` marker emission. Per
+      Story 4.6's smoke-first ordering: when the smoke pass aborts BEFORE
+      the failing AC was reached, the verification-fail bundle MAY carry
+      this pointer instead of (or alongside) the AC-failure record. The
+      field is OPTIONAL because verification failures that occur AFTER
+      the smoke pass do not surface this signal.
+    properties:
+      marker_class:
+        type: string
+        const: smoke-first-abort
+        description: >-
+          References marker-taxonomy.yaml line 191 (`smoke-first-abort`).
+          Substrate component 4's strict-name discovery rule unwraps this
+          `const` to the marker-class string at check-time.
+
+$defs:
+  failing_ac_result:
+    # Mirrors envelope.schema.yaml's `$defs/ac_result` block byte-for-byte
+    # EXCEPT: (1) the `status` field's enum is `[fail, blocked]` (NOT
+    # `[pass, fail, blocked]` — by definition this contract carries a non-
+    # passing AC result; passing AC results do NOT trigger verification-fail
+    # escalation) AND (2) the `additionalProperties: false` invariant is
+    # preserved AND (3) the FR19 if/then conditional from
+    # envelope.schema.yaml line 213-227 is OMITTED (the conditional applies
+    # only when status == pass; the contract's narrowed enum makes the
+    # conditional vacuous; pruning it removes a dead-code branch).
+    # Source-of-truth: envelope.schema.yaml#/$defs/ac_result. Drift between
+    # this duplicated block and the source-of-truth is a review-time
+    # finding; reconcile per the file-header co-versioning notes above.
+    type: object
+    required:
+      - ac_id
+      - status
+      - assertions
+      - evidence_refs
+      - semantic_verification
+    additionalProperties: false
+    properties:
+      ac_id:
+        type: string
+        minLength: 1
+      status:
+        type: string
+        enum: [fail, blocked]
+      assertions:
+        type: array
+        items:
+          type: string
+      evidence_refs:
+        type: array
+        items:
+          $ref: "#/$defs/evidence_ref"
+      semantic_verification:
+        type: string
+        enum: [verified, not_configured, not_applicable]
+
+  evidence_ref:
+    # Mirrors envelope.schema.yaml's `$defs/evidence_ref` block byte-for-
+    # byte (Story 4.8 three-tier evidence hierarchy). Source-of-truth:
+    # envelope.schema.yaml#/$defs/evidence_ref. Drift between this
+    # duplicated block and the source-of-truth is a review-time finding;
+    # reconcile per the file-header co-versioning notes above.
+    type: object
+    required:
+      - path
+      - tier
+    additionalProperties: false
+    properties:
+      path:
+        type: string
+        minLength: 1
+      tier:
+        type: string
+        enum: [tier-1-mechanical, tier-2-outcome, tier-3-semantic]
+
+  plan_drift_pointer:
+    # Encodes the optional `plan-drift-detected` marker pointer per the
+    # FR23 / Story 4.2 plan-drift surface. The `marker_class` strict-name
+    # field is what substrate component 4's discovery walks to resolve the
+    # reference against marker-taxonomy.yaml line 117.
+    type: object
+    required:
+      - story_id
+      - marker_class
+    additionalProperties: false
+    properties:
+      story_id:
+        type: string
+        minLength: 1
+        description: >-
+          The story identifier whose plan drift is being pointed to.
+          Free-form per BMAD convention; parallels the `story_id` field
+          used elsewhere in this contract.
+      marker_class:
+        type: string
+        const: plan-drift-detected
+        description: >-
+          References marker-taxonomy.yaml line 117 (`plan-drift-
+          detected`). Substrate component 4's strict-name discovery rule
+          unwraps this `const` to the marker-class string at check-time.

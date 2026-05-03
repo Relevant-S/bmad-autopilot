@@ -3,15 +3,21 @@
 This module implements Layer A's *completeness mitigation* (distinct from
 substrate component 3, the reconciler — which is Layer A's primary mechanism).
 It cross-validates that every ``marker_class`` reference in the orchestrator-
-event schema (and, when present, ``schemas/dependencies.yaml`` per SDN-001)
-resolves to an enumerated entry in the closed ``marker-taxonomy.yaml`` set.
+event schema (and, when present, ``schemas/dependencies.yaml`` per SDN-001
+AND ``schemas/escalation-bundles/*.yaml`` per Story 4.10) resolves to an
+enumerated entry in the closed ``marker-taxonomy.yaml`` set.
 
-Three reconciliation pairs are covered architecturally:
+Four reconciliation pairs are covered architecturally:
 
 * ``marker-taxonomy.yaml`` ↔ ``orchestrator-event.yaml`` — primary pair.
 * ``marker-taxonomy.yaml`` ↔ ``dependencies.yaml`` (SDN-001 sub-decision) —
   optional at this story (file lands in story 1.6); absent path is gracefully
   skipped per AC-2.
+* ``marker-taxonomy.yaml`` ↔ ``schemas/escalation-bundles/*.yaml`` — Epic 4
+  escalation-bundle contracts (Story 4.10); optional at this story (directory
+  lands in story 4.10); absent path is gracefully skipped per Story 4.10
+  AC-6(e). Per ADR-003 Consequence 7, this fourth pair is internal evolution
+  of substrate component 4 — substrate-component count remains FIVE.
 * ``marker-taxonomy.yaml`` ↔ fixture-coverage — handled by substrate
   component 5 (story 1.7), NOT this module.
 
@@ -248,6 +254,9 @@ def check_enumeration(
 _DEPENDENCIES_DEFERRAL_NOTE = (
     "note: schemas/dependencies.yaml not present; deferred to story 1.6"
 )
+_ESCALATION_BUNDLES_DEFERRAL_NOTE = (
+    "note: schemas/escalation-bundles/ not present; deferred to story 4.10"
+)
 _MISSING_REFERENCE_REMEDIATION = (
     "Remediation: add the marker_class entry to schemas/marker-taxonomy.yaml "
     "OR remove the reference (taxonomy is single-source-of-truth per "
@@ -257,13 +266,20 @@ _MISSING_REFERENCE_REMEDIATION = (
 )
 
 
-def format_findings(result: CheckResult, *, dependencies_present: bool) -> str:
+def format_findings(
+    result: CheckResult,
+    *,
+    dependencies_present: bool,
+    escalation_bundles_present: bool = True,
+) -> str:
     """Render a :class:`CheckResult` for stdout.
 
     Always prints a header and a summary line. Conditionally prints:
 
     * the dependencies-absent deferral note (AC-2) when
       ``dependencies_present`` is False;
+    * the escalation-bundles-absent deferral note (Story 4.10 AC-6(f)) when
+      ``escalation_bundles_present`` is False;
     * an ``ERROR:`` section listing every missing reference with file +
       JSON-pointer + remediation prose (AC-3 / AC-4); the rendered shape is
       the same regardless of whether the violation is "added a reference to
@@ -276,6 +292,10 @@ def format_findings(result: CheckResult, *, dependencies_present: bool) -> str:
 
     The summary line is unconditional so a green CI run still surfaces the
     counts (Pattern 5: explicit, never silent on the warn-level half).
+
+    The ``escalation_bundles_present`` keyword defaults to ``True`` so test
+    callers using only the dependencies-pair shape continue to compile and
+    pass without churn (parallel to story 4.7's additive-default pattern).
     """
     lines: list[str] = []
     lines.append("Cross-schema enumeration check (substrate component 4)")
@@ -283,6 +303,10 @@ def format_findings(result: CheckResult, *, dependencies_present: bool) -> str:
 
     if not dependencies_present:
         lines.append(_DEPENDENCIES_DEFERRAL_NOTE)
+        lines.append("")
+
+    if not escalation_bundles_present:
+        lines.append(_ESCALATION_BUNDLES_DEFERRAL_NOTE)
         lines.append("")
 
     if result.missing:
@@ -325,9 +349,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         description=(
             "Cross-schema enumeration_check. Validates that every "
             "marker_class reference in the orchestrator-event schema "
-            "(and, if present, schemas/dependencies.yaml) resolves to "
-            "an entry in schemas/marker-taxonomy.yaml. Substrate "
-            "component 4; ADR-003 + FR33."
+            "(and, if present, schemas/dependencies.yaml AND "
+            "schemas/escalation-bundles/*.yaml) resolves to an entry in "
+            "schemas/marker-taxonomy.yaml. Substrate component 4; "
+            "ADR-003 + FR33; Story 4.10 added the escalation-bundles "
+            "reconciliation pair."
         ),
     )
     parser.add_argument(
@@ -361,15 +387,29 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "its absence is gracefully skipped per AC-2."
         ),
     )
+    parser.add_argument(
+        "--escalation-bundles-dir",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Override path to the escalation-bundles directory (default: "
+            "<repo-root>/schemas/escalation-bundles). Test-injection "
+            "flag; CI invocations omit it. The default path is optional — "
+            "its absence is gracefully skipped per Story 4.10 AC-6(e)."
+        ),
+    )
     return parser
 
 
-def _resolve_default_paths() -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
+def _resolve_default_paths() -> tuple[
+    pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path
+]:
     repo_root = find_repo_root()
     return (
         repo_root / "schemas" / "marker-taxonomy.yaml",
         repo_root / "schemas" / "orchestrator-event.yaml",
         repo_root / "schemas" / "dependencies.yaml",
+        repo_root / "schemas" / "escalation-bundles",
     )
 
 
@@ -396,23 +436,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     taxonomy_path: pathlib.Path
     event_schema_path: pathlib.Path
     dependencies_path: pathlib.Path
+    escalation_bundles_dir: pathlib.Path
     if (
         args.taxonomy_path is None
         or args.event_schema_path is None
         or args.dependencies_path is None
+        or args.escalation_bundles_dir is None
     ):
         try:
-            d_taxonomy, d_event_schema, d_dependencies = _resolve_default_paths()
+            (
+                d_taxonomy,
+                d_event_schema,
+                d_dependencies,
+                d_escalation_bundles,
+            ) = _resolve_default_paths()
         except RuntimeError as exc:
             print(str(exc), file=sys.stderr)
             return 2
         taxonomy_path = args.taxonomy_path or d_taxonomy
         event_schema_path = args.event_schema_path or d_event_schema
         dependencies_path = args.dependencies_path or d_dependencies
+        escalation_bundles_dir = (
+            args.escalation_bundles_dir or d_escalation_bundles
+        )
     else:
         taxonomy_path = args.taxonomy_path
         event_schema_path = args.event_schema_path
         dependencies_path = args.dependencies_path
+        escalation_bundles_dir = args.escalation_bundles_dir
 
     try:
         taxonomy = load_marker_taxonomy(taxonomy_path)
@@ -497,8 +548,58 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         )
 
+    # Story 4.10 — fourth reconciliation pair:
+    # marker-taxonomy.yaml ↔ schemas/escalation-bundles/*.yaml.
+    # Mirrors the dependencies-discovery block byte-for-byte for error-
+    # handling shape (the four error paths — absent (handled by `is_dir()`
+    # check), OSError, YAMLError, non-mapping — surface as harness-level
+    # errors with exit code 2 per the existing Pattern 5 discipline). The
+    # absent-directory path is a clean skip per AC-6(e); other OSError
+    # subclasses encountered while reading individual fragments ARE harness
+    # errors and surface below.
+    escalation_bundles_present = False
+    if escalation_bundles_dir.is_dir():
+        escalation_bundles_present = True
+        for fragment_path in sorted(escalation_bundles_dir.glob("*.yaml")):
+            try:
+                fragment_text = fragment_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                print(
+                    "harness-level error: escalation-bundle contract unreadable: "
+                    f"{fragment_path}: {exc}",
+                    file=sys.stderr,
+                )
+                return 2
+            try:
+                fragment = yaml.safe_load(fragment_text)
+            except yaml.YAMLError as exc:
+                print(
+                    "harness-level error: escalation-bundle contract YAML parse failure: "
+                    f"{fragment_path}: {exc}",
+                    file=sys.stderr,
+                )
+                return 2
+            if not isinstance(fragment, dict):
+                print(
+                    "harness-level error: escalation-bundle contract did not parse to a YAML mapping: "
+                    f"{fragment_path} (got {type(fragment).__name__})",
+                    file=sys.stderr,
+                )
+                return 2
+            references.extend(
+                discover_marker_class_references(
+                    fragment, _display_path(fragment_path)
+                )
+            )
+
     result = check_enumeration(taxonomy, references)
-    print(format_findings(result, dependencies_present=dependencies_present))
+    print(
+        format_findings(
+            result,
+            dependencies_present=dependencies_present,
+            escalation_bundles_present=escalation_bundles_present,
+        )
+    )
     return 1 if result.missing else 0
 
 
