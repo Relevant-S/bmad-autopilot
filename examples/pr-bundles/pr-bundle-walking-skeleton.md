@@ -1,18 +1,29 @@
 <!--
-Canonical example PR bundle fixture — regenerated at Story 3.4
-(PR-bundle review-section bucket × severity rendering with retained
-Walking Skeleton Mode marker).
+Canonical example PR bundle fixture — regenerated at Story 4.13
+(QA wrapper thickening completion + `is_full_qa_present` flag flip;
+post-3.4 + post-4.13 cumulative flag-flip state — TWO flags True
+(`is_full_review_present` since Story 3.4; `is_full_qa_present` since
+Story 4.13); TWO flags False (`is_retry_present` — Epic 5 owns;
+`is_loud_fail_block_present` — Epic 6 owns)).
 
-Source story: bmad-autopilot/_bmad-output/implementation-artifacts/3-4-pr-bundle-review-section-rendering-with-retained-walking-skeleton-mode-marker.md
-Source envelopes (post-3.4 canonical corpus):
+Source story: bmad-autopilot/_bmad-output/implementation-artifacts/4-13-qa-wrapper-thickening-completion.md
+Source envelopes (canonical corpus — unchanged at Story 4.13 because
+the QA envelope's bundle-side rendering is unchanged at the envelope
+shape level; the thickening is at the wrapper-side prose + the
+flag-flip rendering, not at the envelope-rendering code):
   - examples/envelopes/dev-pass.yaml                 (Story 1.2)
   - examples/envelopes/review-pass-three-layer.yaml  (Story 3.1)
   - examples/envelopes/qa-pass-ac1-tier1.yaml        (Story 2.10)
 Assembler module: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py
 
-This fixture is a regression baseline. Subsequent epics (4 / 5 / 6)
+This fixture is a regression baseline. Subsequent epics (5 / 6)
 regenerate this fixture in place when bundle rendering thickens —
-review the diff before committing the regenerated fixture.
+review the diff before committing the regenerated fixture. The Story
+4.13 regeneration delta is the dropped "Tier-1 evidence only" bullet
+from the Walking Skeleton Mode header (the structural witness of
+`is_full_qa_present()` flipping True); no edit to the assembler's
+`_render_walking_skeleton_header` or `_THICKENING_SENTENCES` was
+required.
 -->
 # PR bundle — story sample-auto-001 (run run-2026-04-29-001)
 
@@ -24,7 +35,6 @@ Generated: 2026-04-29T12:00:00+00:00
 
 This PR bundle is a walking-skeleton — it enumerates the structural shape of the BMAD automation loop while the following thickenings remain unfinished:
 
-- Tier-1 evidence only (Epic 4 thickens to Tier-2 + Tier-3-where-configured).
 - No retry (Epic 5 thickens with whole-story retry budget + bucket-driven action item derivation).
 - No loud-fail block (Epic 6 thickens with the dedicated top-of-bundle loud-fail block + per-specialist × per-retry cost breakdown + actionable how-to-enable pointers).
 

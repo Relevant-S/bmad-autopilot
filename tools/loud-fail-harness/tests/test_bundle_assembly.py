@@ -1651,11 +1651,15 @@ def test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3(
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 3.4 AC-3: with the post-3.4 production thickening_flags
-    (`is_full_review_present` returns ``True``), the Walking Skeleton
-    Mode body enumerates EXACTLY THREE missing-thickening sentences;
-    the "Single-layer review (Epic 3 thickens to 3-layer adversarial
-    pass)." sentence is OMITTED.
+    """Story 3.4 AC-3 + Story 4.13 AC-3 + AC-5: with the post-4.13
+    production thickening_flags (``is_full_review_present`` returns
+    ``True`` since Story 3.4; ``is_full_qa_present`` returns ``True``
+    since Story 4.13), the Walking Skeleton Mode body enumerates EXACTLY
+    TWO missing-thickening sentences; both the "Single-layer review
+    (Epic 3 thickens to 3-layer adversarial pass)." sentence (Story 3.4)
+    AND the "Tier-1 evidence only (Epic 4 thickens to Tier-2 + Tier-3-
+    where-configured)." sentence (Story 4.13) are OMITTED. The remaining
+    "No retry" + "No loud-fail block" sentences are rendered.
     """
     result, _ = _assemble(
         tmp_path=tmp_path,
@@ -1663,22 +1667,22 @@ def test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
-        flags=thickening_flags,  # production module — post-3.4 substrate state
+        flags=thickening_flags,  # production module — post-4.13 substrate state
     )
     header = result.header_text
 
-    # Bullet count: exactly three sentences (lines beginning with `- `).
+    # Bullet count: exactly two sentences (lines beginning with `- `).
     bullets = [line for line in header.splitlines() if line.startswith("- ")]
-    assert len(bullets) == 3, (
-        f"expected 3 missing-thickening bullets at post-3.4 substrate state; "
+    assert len(bullets) == 2, (
+        f"expected 2 missing-thickening bullets at post-4.13 substrate state; "
         f"got {len(bullets)}: {bullets!r}"
     )
 
-    # The dropped sentence is the structural witness of the flag flip.
+    # The dropped sentences are the structural witnesses of the flag flips.
     assert "Single-layer review (Epic 3 thickens" not in header
+    assert "Tier-1 evidence only" not in header
 
-    # The remaining three sentences are present.
-    assert "Tier-1 evidence only" in header
+    # The remaining two sentences are present.
     assert "No retry" in header
     assert "No loud-fail block" in header
 
@@ -1707,6 +1711,92 @@ def test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state(
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
         flags=thickening_flags,  # production module — post-3.4 substrate state
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+    assert "walking-skeleton-bundle" in result.emitted_markers
+
+
+def test_walking_skeleton_header_drops_tier_1_evidence_only_sentence_at_epic_4(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 4.13 AC-3 + AC-5 — the post-4.13 analogue of Story 3.4's
+    ``test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3``.
+
+    With the post-4.13 production thickening_flags
+    (``is_full_qa_present`` returns ``True`` per Story 4.13's flag flip;
+    ``is_full_review_present`` returns ``True`` per Story 3.4's prior
+    flip), the Walking Skeleton Mode body enumerates EXACTLY TWO
+    missing-thickening sentences; the "Tier-1 evidence only (Epic 4
+    thickens to Tier-2 + Tier-3-where-configured)." sentence is
+    OMITTED. The dropped sentence is the structural witness of the
+    flag flip; no edit to ``_render_walking_skeleton_header`` or
+    ``_THICKENING_SENTENCES`` is required for the omission to fire.
+    """
+    result, _ = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+        flags=thickening_flags,  # production module — post-4.13 substrate state
+    )
+    header = result.header_text
+
+    # Bullet count: exactly two sentences (lines beginning with `- `).
+    bullets = [line for line in header.splitlines() if line.startswith("- ")]
+    assert len(bullets) == 2, (
+        f"expected 2 missing-thickening bullets at post-4.13 substrate state; "
+        f"got {len(bullets)}: {bullets!r}"
+    )
+
+    # The "Tier-1 evidence only" sentence is the structural witness of
+    # Story 4.13's flag flip — it MUST NOT appear in the rendered body.
+    assert "Tier-1 evidence only" not in header
+
+    # The Story 3.4 flip's invariant is preserved (the "Single-layer
+    # review" sentence remains absent at the post-4.13 substrate state).
+    assert "Single-layer review (Epic 3 thickens" not in header
+
+    # The remaining two sentences (Epic 5 + Epic 6 still owe their
+    # thickenings) are present.
+    assert "No retry" in header
+    assert "No loud-fail block" in header
+
+
+def test_walking_skeleton_marker_still_emitted_at_epic_4_substrate_state(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 4.13 AC-4 + AC-5 — regression baseline against accidental
+    Epic-4 pre-emption of Epic 6 / Story 6.1's loud-fail-block landing
+    responsibility.
+
+    With the post-4.13 production thickening_flags
+    (``is_loud_fail_block_present`` continues to return ``False``), the
+    ``walking-skeleton-bundle`` marker continues to emit. The emission
+    rule is structural (`absent loud-fail block triggers the marker`),
+    NOT era-based; Epic 4 is NOT the era that triggers suppression —
+    Epic 6 / Story 6.1 owns the loud-fail block landing that flips the
+    flag and inverts emission via the structural-not-era-based posture
+    Story 2.11 AC-4 ratified. This test mirrors Story 3.4's
+    ``test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state``
+    one-Epic-forward.
+    """
+    result, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+        flags=thickening_flags,  # production module — post-4.13 substrate state
     )
     body = bundle_path.read_text(encoding="utf-8")
     assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body

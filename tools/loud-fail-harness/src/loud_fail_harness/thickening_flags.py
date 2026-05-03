@@ -1,11 +1,15 @@
 """Walking-skeleton thickening-status flag namespace (Story 2.11 AC-2).
 
-Four boolean-returning functions naming the four thickening features the
-Epic-2 substrate intentionally omits. At Epic 2 substrate state all
-four functions return ``False``; :func:`is_full_review_present` was
-flipped to ``True`` at Story 3.4 (the first production in-place flip);
-downstream epics flip in
-place — each Epic flips the corresponding flag in this same module
+Four boolean-returning functions naming the four thickening features
+that downstream Epics flip in place as their thickenings land.
+Post-Story-4.13 substrate state: TWO flags return ``True``
+(:func:`is_full_review_present` flipped at Story 3.4 — the first
+production in-place flip; :func:`is_full_qa_present` flipped at Story
+4.13 — the second production in-place flip closing Epic 4); TWO flags
+continue to return ``False`` (:func:`is_retry_present` — Epic 5 owns;
+:func:`is_loud_fail_block_present` — Epic 6 owns). The Story 3.4 +
+Story 4.13 relaxations confirm the in-place-flip pattern's structural
+posture: each Epic flips its corresponding flag in this same module
 (same module identity, same function signatures), only the function
 bodies thicken:
 
@@ -79,17 +83,30 @@ def is_full_review_present() -> bool:
 
 
 def is_full_qa_present() -> bool:
-    """``True`` once Epic 4's full QA specialist (Tier-2 + Tier-3
-    evidence, behavioral plan, plan-drift detection) lands.
+    """``True`` — Epic 4's full QA specialist surface HAS LANDED.
 
-    Epic 2 substrate state: returns ``False`` unconditionally — the
-    Epic-2-era QA wrapper (Story 2.10) ships AC-1-only Tier-1-evidence-
-    only verification. Epic 4's Stories 4.1-4.13 thicken the QA
-    specialist with the behavioral plan, full env provisioning, the
-    Playwright MCP / HTTP drivers, and the three-tier evidence
-    hierarchy, at which point this function flips in place.
+    Post-Story-4.13 substrate state: returns ``True``. Epic 4's Stories
+    4.1 (plan creation + persistence) + 4.2 (AC-hash drift detection +
+    plan_status reset) + 4.3 (full env provisioning lifecycle —
+    orchestrator-owned) + 4.4 (Playwright MCP driver for ``web``) + 4.5
+    (HTTP driver for ``api``) + 4.6 (plan-driven AC iteration with
+    smoke-first ordering) + 4.7 (AC-assertion-evidence triple structural
+    enforcement) + 4.8 (three-tier evidence hierarchy + Tier-3
+    not-configured marker) + 4.9 (three exploratory heuristics with
+    verification-mode discriminator) + 4.10 (two escalation contracts —
+    verification-fail + env-setup-fail) + 4.11 (plan-persistence-
+    compromise visibility note) + 4.12 (evidence persistence + size
+    budget + sanitization) + 4.13 (this wrapper-thickening flip)
+    collectively delivered the full FR16-FR25 QA surface; the flag flips
+    per the in-place-flip pattern Story 2.11 AC-2 ratified — epics.md
+    lines 1521-1522: "each downstream epic flips its corresponding flag
+    when its thickening lands". The flip cascades automatically through
+    ``_render_walking_skeleton_header`` in
+    :mod:`loud_fail_harness.bundle_assembly` — the "Tier-1 evidence
+    only (Epic 4 thickens to Tier-2 + Tier-3-where-configured)."
+    sentence is now omitted from the dynamic header body.
     """
-    return False
+    return True
 
 
 def is_retry_present() -> bool:

@@ -2,19 +2,29 @@
 
 This docstring IS the contract-coverage matrix per AC-2.
 
-AC-2 — four-flag namespace (post-Story-3.4 substrate state per AC-7):
-    [x] post-3.4 substrate state: 3 flags False + 1 flag True      → test_thickening_flags_at_epic_3_substrate_state
+AC-2 — four-flag namespace (post-Story-4.13 substrate state per AC-6):
+    [x] post-4.13 substrate state: 2 flags True + 2 flags False    → test_thickening_flags_at_epic_4_substrate_state
     [x] module docstring documents the in-place-flip pattern       → test_thickening_flags_module_documents_in_place_flip_pattern
     [x] each function takes zero args and returns bool             → test_thickening_flags_signatures_take_zero_args_return_bool
     [x] flags are functions, not constants                         → test_thickening_flags_are_functions_not_constants
 
-Story 3.4 AC-7: the all-False-at-Epic-2 baseline is RELAXED IN PLACE.
-Story 3.4 flipped ``is_full_review_present`` to ``True`` per the
+Story 3.4 AC-7: the all-False-at-Epic-2 baseline was RELAXED IN PLACE
+when Story 3.4 flipped ``is_full_review_present`` to ``True`` per the
 Story 2.11 in-place-flip pattern; the test that asserted the all-False
-baseline is renamed to reflect the post-3.4 substrate state where
-exactly one flag (``is_full_review_present``) returns ``True`` and
-exactly three flags (``is_full_qa_present`` / ``is_retry_present`` /
-``is_loud_fail_block_present``) continue to return ``False``.
+baseline was renamed to reflect the post-3.4 substrate state.
+
+Story 4.13 AC-6: the post-3.4 substrate-state baseline is RELAXED IN
+PLACE per the same Story 2.11 in-place-flip pattern. Story 4.13 flipped
+``is_full_qa_present`` to ``True`` (the second production in-place flip
+closing Epic 4 after Stories 4.1-4.12 collectively delivered the full
+FR16-FR25 QA surface); the test asserting the post-3.4 substrate state
+is renamed to ``test_thickening_flags_at_epic_4_substrate_state`` and
+its assertion-set updated to reflect TWO flags returning ``True``
+(``is_full_review_present`` + ``is_full_qa_present``) and TWO flags
+continuing to return ``False`` (``is_retry_present`` — Epic 5 owns;
+``is_loud_fail_block_present`` — Epic 6 owns). The other three tests
+in this module continue to pass unchanged at the post-4.13 substrate
+state.
 """
 
 from __future__ import annotations
@@ -24,14 +34,15 @@ import inspect
 from loud_fail_harness import thickening_flags
 
 
-def test_thickening_flags_at_epic_3_substrate_state() -> None:
-    """Post-Story-3.4 substrate state: ``is_full_review_present`` is the
-    single flipped flag (Story 3.4 AC-2). The remaining three flags
-    continue to return ``False`` until their respective Epics' lead
-    stories land (Epic 4 / 5 / 6).
+def test_thickening_flags_at_epic_4_substrate_state() -> None:
+    """Post-Story-4.13 substrate state: ``is_full_review_present`` (Story
+    3.4 flipped) + ``is_full_qa_present`` (Story 4.13 flipped — closing
+    Epic 4) return ``True``; ``is_retry_present`` (Epic 5 owns) +
+    ``is_loud_fail_block_present`` (Epic 6 owns) continue to return
+    ``False``.
     """
     assert thickening_flags.is_full_review_present() is True
-    assert thickening_flags.is_full_qa_present() is False
+    assert thickening_flags.is_full_qa_present() is True
     assert thickening_flags.is_retry_present() is False
     assert thickening_flags.is_loud_fail_block_present() is False
 
