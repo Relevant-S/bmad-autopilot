@@ -2,16 +2,17 @@
 
 Four boolean-returning functions naming the four thickening features
 that downstream Epics flip in place as their thickenings land.
-Post-Story-4.13 substrate state: TWO flags return ``True``
+Post-Story-5.9 substrate state: THREE flags return ``True``
 (:func:`is_full_review_present` flipped at Story 3.4 — the first
 production in-place flip; :func:`is_full_qa_present` flipped at Story
-4.13 — the second production in-place flip closing Epic 4); TWO flags
-continue to return ``False`` (:func:`is_retry_present` — Epic 5 owns;
-:func:`is_loud_fail_block_present` — Epic 6 owns). The Story 3.4 +
-Story 4.13 relaxations confirm the in-place-flip pattern's structural
-posture: each Epic flips its corresponding flag in this same module
-(same module identity, same function signatures), only the function
-bodies thicken:
+4.13 — the second production in-place flip closing Epic 4;
+:func:`is_retry_present` flipped at Story 5.9 — the third production
+in-place flip closing Epic 5); ONE flag continues to return ``False``
+(:func:`is_loud_fail_block_present` — Epic 6 owns). The Story 3.4 +
+Story 4.13 + Story 5.9 relaxations confirm the in-place-flip pattern's
+structural posture: each Epic flips its corresponding flag in this
+same module (same module identity, same function signatures), only the
+function bodies thicken:
 
     * Epic 3 (3-layer adversarial review) flips :func:`is_full_review_present`.
     * Epic 4 (full QA specialist with Tier-2 + Tier-3 evidence + plan
@@ -110,15 +111,32 @@ def is_full_qa_present() -> bool:
 
 
 def is_retry_present() -> bool:
-    """``True`` once Epic 5's whole-story retry budget + bucket-driven
-    action item derivation + Dev fix-only retry mechanism lands.
+    """``True`` — Epic 5's whole-story retry + escalation surface HAS LANDED.
 
-    Epic 2 substrate state: returns ``False`` unconditionally — the
-    Epic-2-era walking-skeleton runs straight through dev → review →
-    qa with no retry path. Epic 5's Stories 5.1-5.8 land the retry
-    machinery, at which point this function flips in place.
+    Post-Story-5.9 substrate state: returns ``True``. Epic 5's Stories
+    5.1 (whole-story retry budget configuration + enforcement) + 5.2
+    (bucket-driven action-item derivation + retry routing) + 5.3 (Dev
+    fix-only retry mechanism + ``retry_mode`` + ``affected_files`` scope
+    expanded to contract pair) + 5.4 (scope-assertion verification +
+    violation loud-fail) + 5.5 (externalized retry history + run-state
+    references) + 5.6 (retry-budget-exhaustion non-advance + state
+    preservation marker) + 5.7 (``deferred-work.md`` format spec audit
+    + integration + research-blocker spike bounded with named fallback)
+    + 5.8 (escalation-bundle assembly mechanism consuming Epic-4
+    contracts + Stories 5.6-5.7) + 5.9 (this epic-close in-place flip)
+    collectively delivered the full FR12-FR15 + FR59 retry + escalation
+    surface; the flag flips per the in-place-flip pattern Story 2.11
+    AC-2 ratified: "each downstream epic flips its corresponding flag
+    when its thickening lands". This is
+    the third production in-place flip, mirroring Story 3.4
+    (:func:`is_full_review_present`) and Story 4.13
+    (:func:`is_full_qa_present`) verbatim. The flip cascades
+    automatically through ``_render_walking_skeleton_header`` in
+    :mod:`loud_fail_harness.bundle_assembly` — the "No retry (Epic 5
+    thickens with whole-story retry budget + bucket-driven action item
+    derivation)." sentence is now omitted from the dynamic header body.
     """
-    return False
+    return True
 
 
 def is_loud_fail_block_present() -> bool:

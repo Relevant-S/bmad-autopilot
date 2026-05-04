@@ -173,6 +173,7 @@ __all__ = [
     "_render_finding_bullet",
     "_render_marker",
     "_render_walking_skeleton_header",
+    "validate_payload_against_schema",
 ]
 
 
@@ -373,7 +374,7 @@ def _load_schema(schema_path: pathlib.Path, *, bundle_class: str) -> dict[str, A
     return yaml.safe_load(schema_path.read_text(encoding="utf-8"))
 
 
-def _validate_payload_against_schema(
+def validate_payload_against_schema(
     *,
     payload: Mapping[str, Any],
     bundle_class: str,
@@ -907,7 +908,7 @@ def assemble_escalation_bundle(
     # Step 2: Validate against the schema fragment BEFORE any filesystem
     # mutation (Pattern 5 defense-in-depth — mirrors
     # :func:`bundle_assembly.assemble_bundle` Step 3 ordering).
-    _validate_payload_against_schema(
+    validate_payload_against_schema(
         payload=payload,
         bundle_class=bundle_class,
         schemas_root=resolved_schemas_root,

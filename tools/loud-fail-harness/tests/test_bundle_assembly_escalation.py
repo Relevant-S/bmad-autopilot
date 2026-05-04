@@ -96,7 +96,7 @@ from loud_fail_harness.bundle_assembly_escalation import (
     EscalationBundleSchemaConformanceError,
     EscalationBundleSchemaNotFound,
     _render_machine_readable_block,
-    _validate_payload_against_schema,
+    validate_payload_against_schema,
     assemble_escalation_bundle,
 )
 from loud_fail_harness.retry_budget_exhaustion import (
@@ -291,7 +291,7 @@ def test_assemble_retry_budget_exhausted_bundle_writes_correct_shape(
     assert payload["bundle_class"] == "retry-budget-exhausted"
     assert payload["marker_class"] == "retry-budget-exhausted"
     assert len(payload["retry_history_refs"]) == 2
-    _validate_payload_against_schema(
+    validate_payload_against_schema(
         payload=payload,
         bundle_class="retry-budget-exhausted",
         schemas_root=SCHEMAS_ROOT,
@@ -353,7 +353,7 @@ def test_assemble_scope_assertion_violation_bundle_writes_correct_shape(
     assert diag["declared_scope"] == ["src/foo.py"]
     assert diag["violating_files"] == ["src/unrelated.py"]
     assert diag["retry_round"] == 1
-    _validate_payload_against_schema(
+    validate_payload_against_schema(
         payload=payload,
         bundle_class="scope-assertion-violation",
         schemas_root=SCHEMAS_ROOT,
@@ -414,7 +414,7 @@ def test_assemble_verification_fail_bundle_writes_correct_shape(
     # story to extend ExhaustionTrigger; until then, the payload is
     # validated explicitly here AND a body block is rendered using the
     # SHARED machine-readable-block helper.
-    _validate_payload_against_schema(
+    validate_payload_against_schema(
         payload=payload,
         bundle_class="verification-fail",
         schemas_root=SCHEMAS_ROOT,
@@ -479,7 +479,7 @@ def test_assemble_env_setup_fail_bundle_writes_correct_shape(
     tmp_path: pathlib.Path,
 ) -> None:
     payload = _make_env_setup_fail_payload()
-    _validate_payload_against_schema(
+    validate_payload_against_schema(
         payload=payload,
         bundle_class="env-setup-fail",
         schemas_root=SCHEMAS_ROOT,
@@ -643,7 +643,7 @@ def test_schema_conformance_failure_raises_before_write(
     assert not expected_path.exists()
 
     with pytest.raises(EscalationBundleSchemaConformanceError) as excinfo:
-        _validate_payload_against_schema(
+        validate_payload_against_schema(
             payload=bad_payload,
             bundle_class="retry-budget-exhausted",
             schemas_root=SCHEMAS_ROOT,
@@ -665,7 +665,7 @@ def test_schema_not_found_raises(tmp_path: pathlib.Path) -> None:
     per the closed-set Pattern 5 surface.
     """
     with pytest.raises(EscalationBundleSchemaNotFound):
-        _validate_payload_against_schema(
+        validate_payload_against_schema(
             payload={"bundle_class": "unknown-class"},
             bundle_class="unknown-class",
             schemas_root=tmp_path,
@@ -700,7 +700,7 @@ def test_schema_conformance_failure_scope_assertion_violation(
     bad_payload.pop("outstanding_findings_pointer", None)
 
     with pytest.raises(EscalationBundleSchemaConformanceError) as excinfo:
-        _validate_payload_against_schema(
+        validate_payload_against_schema(
             payload=bad_payload,
             bundle_class="scope-assertion-violation",
             schemas_root=SCHEMAS_ROOT,
@@ -732,7 +732,7 @@ def test_schema_conformance_failure_verification_fail(
     }
 
     with pytest.raises(EscalationBundleSchemaConformanceError) as excinfo:
-        _validate_payload_against_schema(
+        validate_payload_against_schema(
             payload=bad_payload,
             bundle_class="verification-fail",
             schemas_root=SCHEMAS_ROOT,
@@ -767,7 +767,7 @@ def test_schema_conformance_failure_env_setup_fail(
     }
 
     with pytest.raises(EscalationBundleSchemaConformanceError) as excinfo:
-        _validate_payload_against_schema(
+        validate_payload_against_schema(
             payload=bad_payload,
             bundle_class="env-setup-fail",
             schemas_root=SCHEMAS_ROOT,
