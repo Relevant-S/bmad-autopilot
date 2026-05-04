@@ -660,6 +660,11 @@ def _build_context(
 
 
 def test_default_assembler_writes_file(tmp_path: pathlib.Path) -> None:
+    # Post-Story-5.8: the placeholder body is RETIRED; the delegate writes
+    # a fully FR15-shaped escalation-variant bundle conforming to the
+    # relevant `schemas/escalation-bundles/{bundle_class}.yaml` fragment.
+    # Assertion text updated per AC-3 (bounded to assertion changes; no
+    # test deletion).
     assembler = default_escalation_bundle_assembler(repo_root=tmp_path)
     ctx = _build_context(tmp_path)
     assembler(ctx)
@@ -667,13 +672,15 @@ def test_default_assembler_writes_file(tmp_path: pathlib.Path) -> None:
     assert target.exists()
     body = target.read_text(encoding="utf-8")
     assert body
-    assert "# Escalation bundle (placeholder" in body
-    assert "**Trigger:**" in body
-    assert "**Story ID:**" in body
-    assert "**Branch:**" in body
-    assert "**Retry rounds completed:**" in body
-    assert "## Retry history references" in body
-    assert "<!-- Replaced by Story 5.8" in body
+    assert "# Escalation bundle " in body
+    assert "Bundle class: `retry-budget-exhausted`" in body
+    assert "## Escalation rationale" in body
+    assert "## Outstanding findings" in body
+    assert "## Retry history" in body
+    assert "## Deferred-work pointer" in body
+    assert "## Preservation" in body
+    # AC-3: the placeholder HTML comment is structurally absent.
+    assert "Replaced by Story 5.8" not in body
 
 
 def test_default_assembler_includes_scope_violation_section(
@@ -687,7 +694,7 @@ def test_default_assembler_includes_scope_violation_section(
     )
     assembler(ctx)
     body = (tmp_path / ctx.bundle_artifact_path).read_text(encoding="utf-8")
-    assert "## Scope-assertion violation diagnostic" in body
+    assert "## Scope-assertion diagnostic" in body
     assert "violating_files" in body
 
 
@@ -698,7 +705,7 @@ def test_default_assembler_omits_scope_section_for_budget_trigger(
     ctx = _build_context(tmp_path)
     assembler(ctx)
     body = (tmp_path / ctx.bundle_artifact_path).read_text(encoding="utf-8")
-    assert "## Scope-assertion violation diagnostic" not in body
+    assert "## Scope-assertion diagnostic" not in body
 
 
 def test_default_assembler_creates_parent_directory(tmp_path: pathlib.Path) -> None:
@@ -711,13 +718,25 @@ def test_default_assembler_creates_parent_directory(tmp_path: pathlib.Path) -> N
 
 
 def test_default_assembler_idempotent_overwrite(tmp_path: pathlib.Path) -> None:
+    # Post-Story-5.8: the production assembler stamps `Generated:` with
+    # `datetime.now(timezone.utc)` per Pattern 6 freshness invariant; two
+    # successive invocations land at the same path with the same
+    # structural shape (same six AC-2 sections; same machine-readable
+    # payload modulo timestamp). Byte-equality is no longer asserted —
+    # the structural-equivalence assertion below is the post-Story-5.8
+    # invariant per AC-3 (bounded assertion-text changes).
     assembler = default_escalation_bundle_assembler(repo_root=tmp_path)
     ctx = _build_context(tmp_path)
     assembler(ctx)
-    body_first = (tmp_path / ctx.bundle_artifact_path).read_text(encoding="utf-8")
+    target = tmp_path / ctx.bundle_artifact_path
+    body_first = target.read_text(encoding="utf-8")
+    assert "## Escalation rationale" in body_first
     assembler(ctx)
-    body_second = (tmp_path / ctx.bundle_artifact_path).read_text(encoding="utf-8")
-    assert body_first == body_second
+    body_second = target.read_text(encoding="utf-8")
+    assert "## Escalation rationale" in body_second
+    # The bundle remains a single file at the deterministic path; the
+    # second invocation overwrites cleanly via _atomic_write_bundle.
+    assert target.exists()
 
 
 def test_default_assembler_renders_retry_history_references(

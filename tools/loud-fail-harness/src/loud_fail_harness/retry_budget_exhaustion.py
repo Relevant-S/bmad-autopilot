@@ -134,21 +134,21 @@ Composition with Story 5.5 externalized retry-history references:
     (Story 5.5 thickening: ``round_id`` + ``path`` sub-properties) is
     copied into ``next_state`` verbatim via
     ``current_state.model_copy(update={"current_state": "escalated"})``.
-    Story 5.8's escalation-bundle assembler will resolve the references
+    Story 5.8's escalation-bundle assembler resolves the references
     at bundle-render time via
     :func:`loud_fail_harness.retry_history.resolve_retry_round`; THIS
-    module's :func:`default_escalation_bundle_assembler` does NOT lazy-
-    load (it lists references only; the placeholder is expressly
-    distinguishable from a Story-5.8-shaped bundle).
+    module's :func:`default_escalation_bundle_assembler` delegates to
+    Story 5.8's :func:`bundle_assembly_escalation.assemble_escalation_bundle`
+    which renders the references per AC-2 section 4 of Story 5.8.
 
-Forward-pointer: Story 5.8 (escalation-bundle assembly):
+Composition with Story 5.8 (escalation-bundle assembly):
     The :data:`EscalationBundleAssembler` callable seam is the production-
-    wiring boundary. Story 5.8 supplies the FR15-shaped assembler; until
-    5.8 lands, the orchestrator skill injects
-    :func:`default_escalation_bundle_assembler` which writes a minimum-
-    viable markdown placeholder at the deterministic
-    ``_bmad-output/escalation-bundles/{story_id}/{run_id}/escalation.md``
-    path computed by :func:`compute_escalation_bundle_path`.
+    wiring boundary. Story 5.8 supplies the FR15-shaped assembler at
+    :mod:`loud_fail_harness.bundle_assembly_escalation`; the orchestrator
+    skill injects :func:`default_escalation_bundle_assembler` which is
+    now a thin delegate to Story 5.8's full assembler. The deterministic
+    output path is still computed by :func:`compute_escalation_bundle_path`
+    AS-IS (Story 5.8 reuses this helper byte-for-byte).
 
 Forward-pointer: Story 6.1 (loud-fail block):
     :attr:`RetryBudgetExhaustionResult.diagnostic_message` is consumed
@@ -470,8 +470,9 @@ class RetryBudgetExhaustionInvariantViolation(
 #: resolving against ``repo_root``); on success, returns ``None``; on
 #: failure, raises any exception (THIS module catches and re-raises as
 #: :exc:`EscalationBundleAssemblerFailed`). Story 5.8's full FR15-shaped
-#: assembler is the production wiring; :func:`default_escalation_bundle_assembler`
-#: is the placeholder until 5.8 lands.
+#: assembler at :mod:`loud_fail_harness.bundle_assembly_escalation` is
+#: the production wiring; :func:`default_escalation_bundle_assembler`
+#: is now a thin delegate to that full assembler.
 EscalationBundleAssembler = Callable[["ExhaustionContext"], None]
 
 
@@ -555,25 +556,40 @@ def compute_escalation_bundle_path(
 def default_escalation_bundle_assembler(
     *, repo_root: pathlib.Path
 ) -> EscalationBundleAssembler:
-    """Return a placeholder :data:`EscalationBundleAssembler` bound to
-    ``repo_root``.
+    """Return an :data:`EscalationBundleAssembler` callable bound to
+    ``repo_root`` that delegates to Story 5.8's
+    :func:`loud_fail_harness.bundle_assembly_escalation.assemble_escalation_bundle`.
 
-    The returned callable writes a minimum-viable markdown file at
-    ``repo_root / context.bundle_artifact_path`` containing trigger /
-    story / run / branch / retry-history-reference summary plus
-    optional sections for the scope-assertion diagnostic, the last
-    envelope passthrough, and the last-retry-directive snapshot.
+    Per Story 5.8 (epics.md lines 2460-2491): the previous placeholder
+    body is RETIRED — the production assembler now writes a fully
+    FR15-shaped escalation-variant bundle conforming to the relevant
+    ``schemas/escalation-bundles/{bundle_class}.yaml`` fragment.
+    The function's public signature is preserved byte-for-byte so
+    Story 5.6's
+    :func:`record_retry_budget_exhaustion` callsites are unchanged; the
+    return value remains an :data:`EscalationBundleAssembler` callable
+    (signature ``(context: ExhaustionContext) -> None``).
 
-    Distinguishable from a Story-5.8-shaped bundle by the trailing
-    ``<!-- Replaced by Story 5.8's escalation-bundle assembler when that
-    lands. -->`` HTML comment. Idempotent overwrite via
-    :func:`pathlib.Path.write_text` (NOT atomic — placeholder writes are
-    non-atomic by design; Story 5.8's production assembler decides its
-    own write atomicity).
+    The closure imports :mod:`loud_fail_harness.bundle_assembly_escalation`
+    LAZILY at first invocation so the import-time graph is unaffected
+    (the assembler module composes :mod:`bundle_assembly`'s rendering
+    helpers; importing it eagerly here would tighten the import-time
+    coupling between the retry-budget-exhaustion module and the
+    bundle-assembly module without runtime benefit).
+
+    The delegate discards the
+    :class:`loud_fail_harness.bundle_assembly_escalation.AssembleEscalationBundleResult`
+    return value because the :data:`EscalationBundleAssembler` callable
+    typedef returns ``None`` per the seam contract; the discarded
+    information (bundle path, emitted markers, header text, payload) is
+    available to direct callers of
+    :func:`assemble_escalation_bundle` but not to
+    :func:`record_retry_budget_exhaustion`'s closure-injection seam.
 
     Args:
-        repo_root: The repository root used to resolve
-            ``context.bundle_artifact_path`` against.
+        repo_root: The repository root used to resolve schema fragment
+            paths AND the deterministic output path computed by
+            :func:`compute_escalation_bundle_path`.
 
     Returns:
         An :data:`EscalationBundleAssembler` callable suitable for
@@ -581,84 +597,11 @@ def default_escalation_bundle_assembler(
     """
 
     def _assembler(context: ExhaustionContext) -> None:
-        import dataclasses
-
-        import yaml as _yaml
-
-        target = repo_root / pathlib.PurePosixPath(context.bundle_artifact_path)
-        target.parent.mkdir(parents=True, exist_ok=True)
-
-        lines: list[str] = []
-        lines.append(
-            "# Escalation bundle (placeholder — Story 5.8 will replace "
-            "this assembler)"
-        )
-        lines.append("")
-        lines.append(f"**Trigger:** {context.trigger.value}")
-        lines.append(f"**Story ID:** {context.story_id}")
-        lines.append(f"**Run ID:** {context.run_id}")
-        lines.append(f"**Branch:** {context.branch_name}")
-        lines.append(
-            f"**Retry rounds completed:** {len(context.retry_history)}"
-        )
-        lines.append("")
-        lines.append("## Retry history references")
-        lines.append("")
-        if context.retry_history:
-            for attempt in context.retry_history:
-                round_id = attempt.round_id if attempt.round_id is not None else "(unset)"
-                path = attempt.path if attempt.path is not None else "(unset)"
-                lines.append(
-                    f"- attempt={attempt.retry_attempt}, "
-                    f"reason={attempt.retry_reason!r}, "
-                    f"round_id={round_id}, path={path}"
-                )
-        else:
-            lines.append("- (none — no retry rounds recorded)")
-        lines.append("")
-
-        if context.scope_violation_diagnostic is not None:
-            lines.append("## Scope-assertion violation diagnostic")
-            lines.append("")
-            lines.append("```yaml")
-            lines.append(
-                _yaml.safe_dump(
-                    dataclasses.asdict(context.scope_violation_diagnostic),
-                    sort_keys=False,
-                ).rstrip()
-            )
-            lines.append("```")
-            lines.append("")
-
-        if context.last_envelope is not None:
-            lines.append("## Last envelope (passthrough)")
-            lines.append("")
-            lines.append("```yaml")
-            lines.append(
-                _yaml.safe_dump(context.last_envelope, sort_keys=False).rstrip()
-            )
-            lines.append("```")
-            lines.append("")
-
-        if context.last_retry_directive is not None:
-            lines.append("## Last retry directive")
-            lines.append("")
-            lines.append("```yaml")
-            lines.append(
-                _yaml.safe_dump(
-                    context.last_retry_directive.model_dump(),
-                    sort_keys=False,
-                ).rstrip()
-            )
-            lines.append("```")
-            lines.append("")
-
-        lines.append(
-            "<!-- Replaced by Story 5.8's escalation-bundle assembler "
-            "when that lands. -->"
+        from loud_fail_harness.bundle_assembly_escalation import (
+            assemble_escalation_bundle,
         )
 
-        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        assemble_escalation_bundle(context, repo_root=repo_root)
 
     return _assembler
 

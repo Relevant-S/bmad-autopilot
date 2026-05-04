@@ -1,0 +1,425 @@
+# Scope-assertion-violation escalation-bundle contract (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 5.8 (this contract's authoring; epics.md lines 2460-2491). The
+#     standalone schema fragment under schemas/escalation-bundles/ extends
+#     the Story 4.10 cell-1 fragment style to the retry/scope-domain shape
+#     per the verbatim epic AC at epics.md line 2471 — "otherwise conforms
+#     to a retry/scope-domain shape extending the same pattern".
+#   - FR10 (PRD; Story 5.4 — fix-only constraint) + FR12 (verification
+#     logic) + FR58 (SubagentStop hook non-zero exit path). Story 5.4's
+#     :exc:`loud_fail_harness.scope_assertion.ScopeAssertionViolation` is
+#     the upstream trigger; Story 5.6's :func:`record_retry_budget_exhaustion`
+#     routes the violation into the exhaustion pathway with
+#     `trigger == ExhaustionTrigger.SCOPE_ASSERTION_VIOLATION` per epics.md
+#     line 2350 verbatim ("Story 5.4 reuses this exhaustion pathway").
+#   - FR15 (PRD line 826) — "Orchestrator assembles an **escalation bundle**
+#     (distinct from merge-ready bundle) on retry-budget exhaustion —
+#     contains retry history, outstanding findings, rationale, and a
+#     pointer to deferred-work.md." Even though the trigger is a contract
+#     violation (NOT a budget exhaustion in the strict FR8 sense), the
+#     pathway is shared per the dual-trigger fan-in commitment at epics.md
+#     line 2350 — the bundle structure conforms to FR15's enumeration.
+#   - Story 5.4 (epics.md lines 2261-2300) — scope-assertion verification
+#     + violation loud-fail. The `scope_violation_diagnostic` field
+#     mirrors :class:`loud_fail_harness.scope_assertion.ScopeAssertionDiagnostic`
+#     byte-for-byte (declared_scope, declared_expansion, violating_files,
+#     retry_round). The `scope-assertion-violation` marker class
+#     (marker-taxonomy.yaml line 237) was added by Story 5.4; this
+#     contract REFERENCES it via the strict-name `marker_class: const`
+#     rule per the Story 4.10 precedent.
+#   - Story 5.5 (epics.md lines 2348-2390) — externalized retry history.
+#     The `retry_history_refs` array's `retry_attempt_ref` shape mirrors
+#     :class:`loud_fail_harness.retry_history.RetryAttemptRef` byte-for-
+#     byte. Important note on retry-history semantics for this bundle
+#     class: per epics.md line 2349 verbatim ("the violation does NOT
+#     consume a retry round"), the array carries the retry rounds that
+#     EXISTED at violation-fire time — NOT a round for the violation
+#     itself. The array MAY be empty (the violation can fire on attempt
+#     1 before any retry round was recorded — this is common per Story
+#     5.4's structural posture).
+#   - Story 5.6 (epics.md lines 2396-2422) — retry-budget-exhaustion
+#     non-advance + state preservation + marker. The `preserved_branch_name`
+#     + `preserved_run_state_path` fields encode FR14's preservation
+#     invariants — the violation is structurally treated as an exhaustion
+#     for state-preservation purposes per the dual-trigger fan-in.
+#   - Story 5.7 (epics.md lines 2429-2458) — `deferred-work.md` format
+#     spec audit + integration. The `deferred_work_pointer` field
+#     references the BMAD-METHOD format ratified by Story 5.7 as
+#     `automator-internal` per `docs/extension-audit.md`. Same pointer
+#     shape as `retry-budget-exhausted.yaml`.
+#   - Story 4.10 (epics.md lines 2085-2122) — the Epic-4 contract precedent.
+#     This contract MIRRORS the Story 4.10 fragment style (file-header
+#     comment block, versioning-discipline block, co-versioning notes,
+#     boundary-doc cross-reference, structural-distinctness block, $defs)
+#     while OWNING the scope-domain shape per the Epic-4-vs-Epic-5
+#     deliberate boundary at epics.md lines 2108-2112.
+#   - ADR-002 cell-1 portability classification (architecture.md lines
+#     99-203). This fragment is a cell-1 (Host-Portable / Methodology-
+#     Portable) architectural-core artifact.
+#   - ADR-003 substrate-component closure at FIVE (architecture.md lines
+#     205-333). Substrate component 4's reconciliation pair gains a new
+#     participant; component count remains FIVE.
+#   - Pattern 1 (architecture.md lines 925-955) — snake_case structural
+#     keys (bundle_class, story_id, run_id, retry_history_refs,
+#     outstanding_findings_pointer, escalation_rationale,
+#     deferred_work_pointer, preserved_branch_name, preserved_run_state_path,
+#     scope_violation_diagnostic, declared_scope, declared_expansion,
+#     violating_files, retry_round, marker_class).
+#   - Pattern 2 (architecture.md line 961) — kebab-case marker class
+#     identifier value `scope-assertion-violation` sourced VERBATIM from
+#     marker-taxonomy.yaml line 237.
+#
+# Structural-distinctness invariant (vs the THREE other escalation-bundle
+# classes — verification-fail.yaml, env-setup-fail.yaml, retry-budget-
+# exhausted.yaml):
+#
+#   "the contract documents that scope-assertion-violation is structurally
+#    distinct from verification-fail, env-setup-fail, and retry-budget-
+#    exhausted — different trigger source, different content shape,
+#    different remediation surface (review Dev's diff vs. declared scope;
+#    possibly tighten retry's `affected_files`)"
+#
+# Mechanically encoded below by:
+#   (1) the narrowed `bundle_class: { enum: [scope-assertion-violation] }`
+#       discriminator (vs the three other contracts' enum values);
+#   (2) the narrowed `marker_class: { const: scope-assertion-violation }`
+#       (vs the three other contracts' marker_class const values);
+#   (3) the OMISSION of `failing_ac_result` (scope-assertion-violation
+#       is NOT a verification failure — the trigger fired during Dev's
+#       diff inspection, not from a QA verdict);
+#   (4) the OMISSION of `env_setup_diagnostic` (scope-assertion-
+#       violation is NOT an env-setup failure);
+#   (5) the PRESENCE of the REQUIRED `scope_violation_diagnostic` object
+#       carrying the four ScopeAssertionDiagnostic fields (declared_scope,
+#       declared_expansion, violating_files, retry_round) — the defining
+#       shape of this bundle class;
+#   (6) the PRESENCE of `retry_history_refs` (preserved across the
+#       fan-in even though the violation does not consume a round per
+#       epics.md line 2349) — the defining contract for retry/scope-
+#       domain bundles is to surface accumulated history regardless of
+#       the precise trigger; structurally distinct from QA-domain
+#       bundles where retry history is OPTIONAL.
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors marker-taxonomy.yaml lines 30-36):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Story 5.8's escalation-bundle assembly mechanism (epics.md lines
+#     2460-2491) consumes this fragment by JSON-Schema-2020-12
+#     conformance check. Bumps to this fragment trigger reconciliation
+#     review with the Story 5.8 assembler module
+#     (`tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_escalation.py`).
+#   - The `$defs/retry_attempt_ref` block mirrors Story 5.5's
+#     :class:`loud_fail_harness.retry_history.RetryAttemptRef` field
+#     declaration order byte-for-byte. Source-of-truth:
+#     tools/loud-fail-harness/src/loud_fail_harness/retry_history.py
+#     lines 244-273.
+#   - The `scope_violation_diagnostic` object mirrors Story 5.4's
+#     :class:`loud_fail_harness.scope_assertion.ScopeAssertionDiagnostic`
+#     field declaration order. Source-of-truth:
+#     tools/loud-fail-harness/src/loud_fail_harness/scope_assertion.py.
+#   - The `marker_class: const: scope-assertion-violation` field
+#     references marker-taxonomy.yaml line 237. Substrate component 4
+#     (enumeration_check.py) reconciles this reference at CI.
+#
+# Boundary doc cross-reference: see _bmad-output/planning-artifacts/epics.md
+# lines 2460-2491 for the prose source of this schema's structural shape and
+# rationale citations. Drift between this file and the boundary doc is a
+# review-time finding; reconcile by editing the more-out-of-date side.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/escalation-bundles/scope-assertion-violation.yaml"
+schema_version: "1.0"
+title: "Scope-assertion-violation escalation-bundle"
+description: >-
+  The escalation-bundle shape produced by Epic 5's bundle-assembler
+  (Story 5.8) when Story 5.4's
+  :exc:`loud_fail_harness.scope_assertion.ScopeAssertionViolation` fires
+  through Story 5.6's :func:`record_retry_budget_exhaustion` with
+  `trigger == ExhaustionTrigger.SCOPE_ASSERTION_VIOLATION`. Encodes the
+  FR10 (fix-only constraint) + FR12 (verification logic) violation as
+  the structurally-typed `scope_violation_diagnostic` object alongside
+  the FR15 retry/scope-domain bundle shape (retry_history_refs +
+  preserved_branch_name + preserved_run_state_path + deferred_work_pointer).
+  STRUCTURALLY DISTINCT from the three other escalation-bundle classes
+  per the structural-distinctness invariant block above. See
+  `_bmad-output/planning-artifacts/epics.md` lines 2460-2491 for the
+  architectural prose.
+
+type: object
+required:
+  - bundle_class
+  - story_id
+  - run_id
+  - retry_history_refs
+  - outstanding_findings_pointer
+  - escalation_rationale
+  - deferred_work_pointer
+  - preserved_branch_name
+  - preserved_run_state_path
+  - scope_violation_diagnostic
+  - marker_class
+additionalProperties: false
+
+properties:
+  bundle_class:
+    type: string
+    enum: [scope-assertion-violation]
+    description: >-
+      Structural discriminator distinguishing scope-assertion-violation
+      bundles from the three other escalation-bundle classes
+      (verification-fail, env-setup-fail, retry-budget-exhausted) at
+      consumer-side dispatch. Story 5.8's assembler reads this
+      discriminator to route to the correct schema fragment for
+      assembly-time conformance validation.
+
+  story_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-story identifier. Mirrors retry-budget-exhausted.yaml's
+      `story_id` byte-for-byte AND verification-fail.yaml's `story_id`
+      byte-for-byte. Free-form by BMAD convention; not regex-constrained.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating dispatch with the
+      run-state.yaml record per ADR-005.
+
+  retry_history_refs:
+    type: array
+    items:
+      $ref: "#/$defs/retry_attempt_ref"
+    description: >-
+      Array of references to the externalized per-round retry-history
+      artifacts at `_bmad-output/retry-history/{story_id}/{round_id}/`
+      per Story 5.5. The array MAY be empty (the violation can fire on
+      attempt 1 before any retry round was recorded — common per Story
+      5.4's structural posture). Per epics.md line 2349 verbatim, "the
+      violation does NOT consume a retry round" — so the array reflects
+      retry rounds that PRECEDED the violation, not a round for the
+      violation itself.
+
+  outstanding_findings_pointer:
+    type: object
+    required:
+      - envelope_path
+    additionalProperties: false
+    description: >-
+      Pointer to the artifact location associated with the scope
+      violation so the operator and downstream tooling can locate the
+      Dev specialist's diff that triggered the assertion. The pointer
+      shape is structurally identical to retry-budget-exhausted.yaml's
+      `outstanding_findings_pointer`.
+    properties:
+      envelope_path:
+        type: string
+        minLength: 1
+        description: >-
+          MVP: repo-relative path to the escalation bundle artifact
+          itself (populated from
+          :attr:`loud_fail_harness.retry_budget_exhaustion.ExhaustionContext.bundle_artifact_path`).
+          Future thickening: once :class:`ExhaustionContext` is extended
+          with a ``dispatch_log_path`` field, this will point to the Dev
+          specialist's dispatch log (typically
+          "_bmad-output/qa-evidence/{story_id}/{run_id}/logs/dev-{attempt}.log")
+          whose diff triggered the scope assertion. Same placeholder
+          discipline as retry-budget-exhausted.yaml.
+
+  escalation_rationale:
+    type: string
+    minLength: 1
+    description: >-
+      Free-form prose naming WHY the bundle was assembled. Canonical
+      phrasing mirrors marker-taxonomy.yaml line 238-244's
+      diagnostic_pointer for `scope-assertion-violation` ("FR10 (fix-
+      only constraint) + FR12 (verification logic) + FR58 (SubagentStop
+      hook non-zero exit path). Domain-specific contract violation
+      distinct from `hook-failed` because remediation differs (review
+      Dev's diff vs. declared scope; possibly tighten retry's
+      `affected_files`); markers are remediation-shaped, not emission-
+      point-shaped."). Substrate-side reuse of the taxonomy's
+      diagnostic_pointer prevents drift between the marker emission and
+      this bundle's rationale text.
+
+  deferred_work_pointer:
+    $ref: "#/$defs/deferred_work_pointer"
+    description: >-
+      REQUIRED structured pointer to `deferred-work.md` per FR15's
+      verbatim "pointer to deferred-work.md" enumeration. Same pointer
+      shape as retry-budget-exhausted.yaml. The pointer-section is
+      REQUIRED in the bundle structure even if the target file does not
+      yet exist on disk.
+
+  preserved_branch_name:
+    type: string
+    minLength: 1
+    description: >-
+      The git branch the orchestrator preserves for human inspection
+      per FR14. Sourced from
+      :attr:`loud_fail_harness.retry_budget_exhaustion.ExhaustionContext.branch_name`.
+
+  preserved_run_state_path:
+    type: string
+    minLength: 1
+    description: >-
+      Repo-relative path to the run-state.yaml file the orchestrator
+      preserves for human inspection per FR14. Canonical default
+      `_bmad/automation/run-state.yaml` per architecture.md ADR-005.
+
+  scope_violation_diagnostic:
+    # NOTE on spec text vs implementation: Story 5.8 AC-5 (epics.md) lists the
+    # required fields as [declared_scope, actual_diff, violating_files,
+    # retry_round]. The AC-5 text contains a typo — `actual_diff` does not
+    # exist on ScopeAssertionDiagnostic; the correct field is
+    # `declared_expansion` per the dataclass source at
+    # tools/loud-fail-harness/src/loud_fail_harness/scope_assertion.py.
+    # This schema mirrors the actual dataclass (source of truth), not the
+    # spec text. The spec text error was identified during Story 5.8's code
+    # review; reconcile by treating `declared_expansion` as canonical.
+    type: object
+    required:
+      - declared_scope
+      - declared_expansion
+      - violating_files
+      - retry_round
+    additionalProperties: false
+    description: >-
+      Structured rendering of Story 5.4's
+      :class:`loud_fail_harness.scope_assertion.ScopeAssertionDiagnostic`
+      dataclass. The diagnostic carries the data necessary to inspect
+      the scope assertion that fired: which files Dev declared as in-
+      scope (`declared_scope`), which expansions Dev declared
+      (`declared_expansion`), which files actually changed in the diff
+      that triggered the violation (`violating_files`), and which retry
+      round produced the violation (`retry_round`). Field declaration
+      order is load-bearing for byte-stable JSON output and mirrors the
+      ScopeAssertionDiagnostic dataclass field order
+      (`tools/loud-fail-harness/src/loud_fail_harness/scope_assertion.py`).
+    properties:
+      declared_scope:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        description: >-
+          Files Dev declared as in-scope for the implementation (the
+          tightening surface per FR10 fix-only constraint). Tuple-like;
+          empty array is structurally legal (Dev declared no files —
+          which is itself a violation surface).
+      declared_expansion:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        description: >-
+          Files Dev declared as scope expansion via the
+          `scope_expanded_to` envelope field. Tuple-like; empty array
+          is structurally legal (no expansion declared).
+      violating_files:
+        type: array
+        items:
+          type: string
+          minLength: 1
+        description: >-
+          Files that actually changed in the diff but were NOT in
+          `declared_scope ∪ declared_expansion`. The violation is the
+          presence of any element here; an empty array means the
+          violation was structurally absent (which would be a
+          programmer error in upstream construction since this bundle
+          fires only when a violation IS detected).
+      retry_round:
+        type: integer
+        minimum: 1
+        description: >-
+          1-indexed retry round number at which the violation was
+          detected. Mirrors Story 5.4's
+          :attr:`ScopeAssertionDiagnostic.retry_round` semantic
+          (matches `run_state.retry_history[].retry_attempt`).
+
+  marker_class:
+    type: string
+    const: scope-assertion-violation
+    description: >-
+      References marker-taxonomy.yaml line 237 (`scope-assertion-violation`).
+      Substrate component 4 (enumeration_check.py) discovers this
+      reference via the strict-name `marker_class` rule and unwraps the
+      `const` to the marker-class string at check-time.
+
+$defs:
+  retry_attempt_ref:
+    # Mirrors :class:`loud_fail_harness.retry_history.RetryAttemptRef`
+    # byte-for-byte (Story 5.5 externalized retry history). Field
+    # declaration order is load-bearing for byte-stable JSON output:
+    # retry_attempt → retry_reason → round_id → path. Source-of-truth:
+    # tools/loud-fail-harness/src/loud_fail_harness/retry_history.py
+    # lines 244-273. SAME-FILE-SELF-CONTAINED discipline per Story 4.10
+    # precedent at verification-fail.yaml lines 340-358 (cross-fragment
+    # $ref resolution would create a co-versioning coupling NOT
+    # justified by a runtime invariant per ADR-003 Consequence 2).
+    type: object
+    required:
+      - retry_attempt
+      - retry_reason
+      - round_id
+      - path
+    additionalProperties: false
+    properties:
+      retry_attempt:
+        type: integer
+        minimum: 1
+      retry_reason:
+        type: string
+        minLength: 1
+      round_id:
+        type: string
+        pattern: "^round-\\d{2}$"
+      path:
+        type: string
+        minLength: 1
+
+  deferred_work_pointer:
+    # Encodes the BMAD-METHOD `deferred-work.md` format spec ratified
+    # by Story 5.7's audit as `automator-internal` per
+    # `docs/extension-audit.md`'s SEVENTH per-convention row. Same
+    # shape as retry-budget-exhausted.yaml's `deferred_work_pointer`
+    # (intentional structural mirror — both retry/scope-domain bundles
+    # consume the same pointer contract).
+    type: object
+    required:
+      - path
+    additionalProperties: false
+    properties:
+      path:
+        type: string
+        minLength: 1
+        description: >-
+          Repo-relative path to the deferred-work markdown file
+          (canonical default:
+          "_bmad-output/implementation-artifacts/deferred-work.md").
+      section_anchor:
+        type: string
+        minLength: 1
+        description: >-
+          OPTIONAL — markdown section heading the pointer targets within
+          the deferred-work file. Canonical shape:
+          `## Deferred from: code review of <story_id> (<YYYY-MM-DD>)`.

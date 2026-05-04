@@ -1,0 +1,429 @@
+# Retry-budget-exhausted escalation-bundle contract (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 5.8 (this contract's authoring; epics.md lines 2460-2491). The
+#     standalone schema fragment under schemas/escalation-bundles/ extends
+#     the Story 4.10 cell-1 fragment style to the retry/scope-domain shape
+#     per the verbatim epic AC at epics.md line 2471 — "otherwise conforms
+#     to a retry/scope-domain shape extending the same pattern".
+#   - FR15 (PRD line 826) — "Orchestrator assembles an **escalation bundle**
+#     (distinct from merge-ready bundle) on retry-budget exhaustion —
+#     contains retry history, outstanding findings, rationale, and a
+#     pointer to deferred-work.md." This contract encodes that retry-budget-
+#     exhaustion shape verbatim. Story 5.8's
+#     :func:`loud_fail_harness.bundle_assembly_escalation.assemble_escalation_bundle`
+#     consumes this fragment by JSON-Schema-2020-12 conformance check at
+#     assembly-time.
+#   - FR8 (PRD line 819) — "Orchestrator enforces a configurable whole-
+#     story retry budget (default: 2; configurable via
+#     `_bmad/automation/config.yaml`)." Story 5.1's
+#     :class:`RetryDecision.HALT_BUDGET_EXHAUSTED` is the upstream trigger
+#     producing the :class:`ExhaustionTrigger.BUDGET_EXHAUSTED` discriminator
+#     this bundle is assembled for.
+#   - FR14 (PRD line 825) — "On retry-budget exhaustion, Orchestrator does
+#     not auto-advance state, does not auto-retry, and preserves the branch
+#     and run-state file for human inspection." Encoded structurally below
+#     as the REQUIRED `preserved_branch_name` + `preserved_run_state_path`
+#     fields — a bundle missing these fails JSON-Schema-2020-12 validation
+#     before it is written, surfacing the FR14 preservation invariant as a
+#     contract violation rather than as silent drift.
+#   - Story 5.5 (epics.md lines 2348-2390) — externalized retry history.
+#     The `retry_history_refs` array's `retry_attempt_ref` shape mirrors
+#     :class:`loud_fail_harness.retry_history.RetryAttemptRef` byte-for-byte
+#     (retry_attempt: int >= 1; retry_reason: str minLength 1; round_id:
+#     str matching ^round-\d{2}$; path: str minLength 1).
+#   - Story 5.6 (epics.md lines 2396-2422) — retry-budget-exhaustion non-
+#     advance + state preservation + marker. The `retry-budget-exhausted`
+#     marker class (marker-taxonomy.yaml line 247) was added by Story 5.6;
+#     this contract REFERENCES it via the strict-name `marker_class: const`
+#     rule per the Story 4.10 precedent at verification-fail.yaml lines
+#     255-264. Substrate component 4 (enumeration_check.py) reconciles the
+#     reference automatically — no taxonomy edit needed.
+#   - Story 5.7 (epics.md lines 2429-2458) — `deferred-work.md` format
+#     spec audit + integration. The `deferred_work_pointer` field
+#     references the BMAD-METHOD format ratified by Story 5.7 as
+#     `automator-internal` per `docs/extension-audit.md`. The pointer's
+#     canonical default `path` is `_bmad-output/implementation-artifacts/
+#     deferred-work.md`; the OPTIONAL `section_anchor` matches the BMAD-
+#     METHOD section-header shape `## Deferred from: code review of
+#     <story_id> (<YYYY-MM-DD>)` per `_bmad/bmm/4-implementation/bmad-code-
+#     review/steps/step-04-present.md` line 32.
+#   - Story 4.10 (epics.md lines 2085-2122) — the Epic-4 contract precedent.
+#     This contract MIRRORS the Story 4.10 fragment style (file-header
+#     comment block, versioning-discipline block, co-versioning notes,
+#     boundary-doc cross-reference, structural-distinctness block, $defs)
+#     while OWNING the retry/scope-domain shape per the Epic-4-vs-Epic-5
+#     deliberate boundary at epics.md lines 2108-2112 (Epic-4 owns QA-
+#     domain content rules; Epic-5 owns retry/scope-domain content rules;
+#     Story 5.8's assembler consumes BOTH boundaries' fragments without
+#     redefining either).
+#   - ADR-002 cell-1 portability classification (architecture.md lines
+#     99-203). This fragment is a cell-1 (Host-Portable / Methodology-
+#     Portable) architectural-core artifact: the escalation-bundle
+#     contract is primitive-agnostic and methodology-agnostic. Cell-1
+#     schemas port unchanged across host-axis (Codex, Cursor) and
+#     methodology-axis (non-BMAD) boundaries. Mirrors the Story 4.10
+#     fragments' classification.
+#   - ADR-003 substrate-component closure at FIVE (architecture.md lines
+#     205-333). Substrate component 4 (enumeration_check.py)'s reconciliation
+#     pair `marker-taxonomy.yaml ↔ schemas/escalation-bundles/*.yaml`
+#     (added by Story 4.10) gains TWO new participants in this story; the
+#     component count remains FIVE per ADR-003 Consequence 7's "substrate
+#     evolution is internal to existing components" principle.
+#   - Pattern 1 (architecture.md lines 925-955) — snake_case structural
+#     keys (bundle_class, story_id, run_id, retry_history_refs,
+#     outstanding_findings_pointer, escalation_rationale,
+#     deferred_work_pointer, preserved_branch_name, preserved_run_state_path,
+#     marker_class).
+#   - Pattern 2 (architecture.md line 961) — kebab-case marker class
+#     identifier value `retry-budget-exhausted` sourced VERBATIM from
+#     marker-taxonomy.yaml line 247.
+#
+# Structural-distinctness invariant (vs the THREE other escalation-bundle
+# classes — verification-fail.yaml, env-setup-fail.yaml, scope-assertion-
+# violation.yaml):
+#
+#   "the contract documents that retry-budget-exhausted is structurally
+#    distinct from verification-fail, env-setup-fail, and scope-assertion-
+#    violation — different trigger source, different content shape,
+#    different remediation surface"
+#
+# Mechanically encoded below by:
+#   (1) the narrowed `bundle_class: { enum: [retry-budget-exhausted] }`
+#       discriminator (vs verification-fail.yaml's `[verification-fail]`,
+#       env-setup-fail.yaml's `[env-setup-fail]`, scope-assertion-
+#       violation.yaml's `[scope-assertion-violation]`);
+#   (2) the narrowed `marker_class: { const: retry-budget-exhausted }`
+#       (vs the other three contracts' marker_class const values);
+#   (3) the OMISSION of `failing_ac_result` (retry-budget-exhausted is
+#       NOT a verification failure — the trigger fired during dispatch,
+#       not from a QA verdict);
+#   (4) the OMISSION of `env_setup_diagnostic` (retry-budget-exhausted
+#       is NOT an env-setup failure — env-provisioning succeeded; the
+#       budget exhausted on retry rounds, not on env provisioning);
+#   (5) the OMISSION of `scope_violation_diagnostic` (retry-budget-
+#       exhausted is NOT a scope-assertion violation — that's a separate
+#       trigger with its own bundle class);
+#   (6) the PRESENCE of `retry_history_refs` (retry-budget-exhausted's
+#       defining shape is the accumulated retry rounds — required even
+#       when empty per the FR15 retry-history invariant; `retry_history_refs`
+#       is OPTIONAL on verification-fail and env-setup-fail because the
+#       QA-domain triggers may fire WITHOUT prior retry rounds);
+#   (7) the PRESENCE of `escalation_rationale` (a free-form text field
+#       carrying the FR8/FR14/FR15 narrative the operator reads to
+#       understand why the budget exhausted; required because the
+#       trigger is normal-flow halt, not a contract violation —
+#       structurally explaining the halt is the assembler's job).
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors marker-taxonomy.yaml lines 30-36):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Story 5.8's escalation-bundle assembly mechanism (epics.md lines
+#     2460-2491) consumes this fragment by JSON-Schema-2020-12 conformance
+#     check. Bumps to this fragment trigger reconciliation review with the
+#     Story 5.8 assembler module
+#     (`tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_escalation.py`).
+#   - The `$defs/retry_attempt_ref` block mirrors Story 5.5's
+#     :class:`loud_fail_harness.retry_history.RetryAttemptRef` field
+#     declaration order byte-for-byte. Drift between this duplicated block
+#     and the source-of-truth Pydantic model is a review-time finding;
+#     reconcile by editing the more-out-of-date side.
+#   - The `$defs/evidence_ref` block duplicates `envelope.schema.yaml`'s
+#     `$defs/evidence_ref` block (Story 4.8 three-tier evidence hierarchy).
+#     Same drift-reconciliation discipline applies — this is the same
+#     same-file-self-contained discipline at verification-fail.yaml
+#     lines 340-358 (cross-fragment $ref resolution would create a co-
+#     versioning coupling NOT justified by a runtime invariant per
+#     ADR-003 Consequence 2's "co-versioning is local; not generalized"
+#     principle).
+#   - The `marker_class: const: retry-budget-exhausted` field references
+#     marker-taxonomy.yaml line 247. Substrate component 4 (enumeration_check.py)
+#     reconciles this reference at CI; co-versioning between this
+#     contract and marker-taxonomy.yaml is enforced via that reconciliation.
+#
+# Boundary doc cross-reference: see _bmad-output/planning-artifacts/epics.md
+# lines 2460-2491 for the prose source of this schema's structural shape and
+# rationale citations. Drift between this file and the boundary doc is a
+# review-time finding; reconcile by editing the more-out-of-date side.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/escalation-bundles/retry-budget-exhausted.yaml"
+schema_version: "1.0"
+title: "Retry-budget-exhausted escalation-bundle"
+description: >-
+  The escalation-bundle shape produced by Epic 5's bundle-assembler (Story
+  5.8) when Story 5.1's :class:`RetryDecision.HALT_BUDGET_EXHAUSTED` fires
+  through Story 5.6's :func:`record_retry_budget_exhaustion` with
+  `trigger == ExhaustionTrigger.BUDGET_EXHAUSTED`. Encodes the FR8 (budget)
+  + FR14 (non-advance + state preservation) + FR15 (escalation bundle
+  assembly path) invariants as the structurally-typed `retry_history_refs`
+  + `preserved_branch_name` + `preserved_run_state_path` +
+  `deferred_work_pointer` fields. STRUCTURALLY DISTINCT from the three
+  other escalation-bundle classes per the structural-distinctness
+  invariant block above. See `_bmad-output/planning-artifacts/epics.md`
+  lines 2460-2491 for the architectural prose.
+
+type: object
+required:
+  - bundle_class
+  - story_id
+  - run_id
+  - retry_history_refs
+  - outstanding_findings_pointer
+  - escalation_rationale
+  - deferred_work_pointer
+  - preserved_branch_name
+  - preserved_run_state_path
+  - marker_class
+additionalProperties: false
+
+properties:
+  bundle_class:
+    type: string
+    enum: [retry-budget-exhausted]
+    description: >-
+      Structural discriminator distinguishing retry-budget-exhausted
+      bundles from the three other escalation-bundle classes
+      (verification-fail, env-setup-fail, scope-assertion-violation) at
+      consumer-side dispatch. Story 5.8's assembler reads this
+      discriminator to route to the correct schema fragment for
+      assembly-time conformance validation. The single-value enum
+      mirrors verification-fail.yaml's `bundle_class` precedent; future
+      bundle classes (Phase 1.5+ extensions) MAY extend the enum via a
+      follow-on schema bump recorded in `docs/extension-audit.md` per
+      the no-introductions principle.
+
+  story_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-story identifier. Mirrors verification-fail.yaml's
+      `story_id` byte-for-byte AND env-setup-fail.yaml's `story_id`
+      byte-for-byte. Anchors the orchestrator's per-story branch (FR4)
+      and PR-bundle assembly (FR32). Free-form by BMAD convention; not
+      regex-constrained here.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating dispatch with the
+      run-state.yaml record per ADR-005. Required for recovery semantics
+      (post-recovery run-state must reference the same run_id per
+      ADR-005 Consequence 1). Mirrors verification-fail.yaml's `run_id`
+      byte-for-byte.
+
+  retry_history_refs:
+    type: array
+    items:
+      $ref: "#/$defs/retry_attempt_ref"
+    description: >-
+      Array of references to the externalized per-round retry-history
+      artifacts at `_bmad-output/retry-history/{story_id}/{round_id}/`
+      per Story 5.5. Each entry mirrors
+      :class:`loud_fail_harness.retry_history.RetryAttemptRef` byte-for-
+      byte. The array MAY be empty (the budget exhausted before any
+      retry round was recorded — this is rare but legal per FR8's
+      "configurable budget; default 2" semantic; a budget configured to
+      zero produces zero retry rounds and an empty array). The field is
+      REQUIRED because retry-history is the defining shape of this
+      bundle class per FR15's "contains retry history" verbatim
+      enumeration.
+
+  outstanding_findings_pointer:
+    type: object
+    required:
+      - envelope_path
+    additionalProperties: false
+    description: >-
+      Pointer to the artifact location associated with the failing return
+      so the operator and downstream tooling can locate the findings that
+      drove the budget into exhaustion. Per FR15's "outstanding findings"
+      verbatim enumeration. The pointer shape is structurally minimal at
+      MVP — additive thickening (e.g., per-finding-bucket counts,
+      per-finding-severity rollups) lands as MINOR version bumps if
+      downstream tooling needs the data.
+    properties:
+      envelope_path:
+        type: string
+        minLength: 1
+        description: >-
+          MVP: repo-relative path to the escalation bundle artifact
+          itself (populated from
+          :attr:`loud_fail_harness.retry_budget_exhaustion.ExhaustionContext.bundle_artifact_path`,
+          e.g. "_bmad-output/escalation-bundles/{story_id}/{run_id}/escalation.md").
+          Future thickening: once :class:`ExhaustionContext` is extended
+          with a ``dispatch_log_path`` field carrying the actual dispatch
+          log (e.g. "_bmad-output/qa-evidence/{story_id}/{run_id}/logs/{specialist}-{attempt}.log"),
+          this field will point to that log instead. Until then, the
+          inline ``## Outstanding findings`` markdown section is the
+          primary findings surface; this pointer is a structural
+          placeholder for downstream tooling integration.
+
+  escalation_rationale:
+    type: string
+    minLength: 1
+    description: >-
+      Free-form prose naming WHY the bundle was assembled — the
+      operator-readable narrative explaining which trigger fired and
+      what the budget exhaustion means for the story's lifecycle. The
+      canonical phrasing for this bundle class mirrors Story 5.6's
+      :data:`loud_fail_harness.retry_budget_exhaustion._REMEDIATION_HINT`
+      verbatim ("FR8 (budget) + FR14 (non-advance + state preservation)
+      + FR15 (escalation bundle assembly path). Normal-flow halt event,
+      NOT a failure of any single specialist.") — substrate-side reuse
+      of the constant prevents drift between the marker emission's
+      remediation hint and this bundle's rationale text. The field is
+      REQUIRED because this bundle class fires for normal-flow halts
+      (NOT contract violations); structurally explaining the halt is
+      the assembler's job.
+
+  deferred_work_pointer:
+    $ref: "#/$defs/deferred_work_pointer"
+    description: >-
+      REQUIRED structured pointer to `deferred-work.md` per FR15's
+      verbatim "pointer to deferred-work.md" enumeration. The pointer
+      shape is ratified by Story 5.7's `automator-internal` audit per
+      `docs/extension-audit.md`'s SEVENTH per-convention row. The
+      pointer-section is REQUIRED in the bundle structure even if the
+      target file does not yet exist on disk (the pointer is data; file
+      existence is verified at consume-time, not at assembly-time per
+      FR15's "pointer to deferred-work.md" semantics — a dangling
+      pointer surfaces at consume-time as a separate diagnostic, NOT as
+      an assembly-time failure).
+
+  preserved_branch_name:
+    type: string
+    minLength: 1
+    description: >-
+      The git branch the orchestrator preserves for human inspection
+      per FR14. Sourced from
+      :attr:`loud_fail_harness.retry_budget_exhaustion.ExhaustionContext.branch_name`.
+      Free-form string per `_bmad/automation/run-state.yaml` shape; not
+      regex-constrained because the per-story branch-naming convention
+      is BMAD-side territory (orchestrator skill owns the convention).
+
+  preserved_run_state_path:
+    type: string
+    minLength: 1
+    description: >-
+      Repo-relative path to the run-state.yaml file the orchestrator
+      preserves for human inspection per FR14. Canonical default
+      `_bmad/automation/run-state.yaml` per architecture.md ADR-005.
+      Rendered relative to `repo_root` for portability — the consumer
+      resolves against repo_root at consume-time.
+
+  marker_class:
+    type: string
+    const: retry-budget-exhausted
+    description: >-
+      References marker-taxonomy.yaml line 247 (`retry-budget-exhausted`).
+      Substrate component 4 (enumeration_check.py) discovers this
+      reference via the strict-name `marker_class` rule and unwraps the
+      `const` to the marker-class string at check-time per
+      enumeration_check.py `discover_marker_class_references`. The
+      field's name + const value is the canonical mechanism for marker-
+      class reconciliation between this contract and marker-taxonomy.yaml.
+
+$defs:
+  retry_attempt_ref:
+    # Mirrors :class:`loud_fail_harness.retry_history.RetryAttemptRef`
+    # byte-for-byte (Story 5.5 externalized retry history). Field
+    # declaration order is load-bearing for byte-stable JSON output:
+    # retry_attempt → retry_reason → round_id → path. Source-of-truth:
+    # tools/loud-fail-harness/src/loud_fail_harness/retry_history.py
+    # lines 244-273. Drift between this duplicated block and the source-
+    # of-truth is a review-time finding; reconcile per the file-header
+    # co-versioning notes above.
+    type: object
+    required:
+      - retry_attempt
+      - retry_reason
+      - round_id
+      - path
+    additionalProperties: false
+    properties:
+      retry_attempt:
+        type: integer
+        minimum: 1
+        description: >-
+          1-indexed retry attempt number (mirrors Story 5.5's
+          :attr:`RetryAttemptRef.retry_attempt` ge=1 constraint).
+      retry_reason:
+        type: string
+        minLength: 1
+        description: >-
+          Free-form prose naming the reason this retry round was issued
+          (e.g., "review-bmad findings: bucket=fix-now"). Mirrors
+          Story 5.5's :attr:`RetryAttemptRef.retry_reason` minLength=1.
+      round_id:
+        type: string
+        pattern: "^round-\\d{2}$"
+        description: >-
+          Two-digit zero-padded round identifier (e.g., "round-01",
+          "round-02"). Mirrors Story 5.5's
+          :attr:`RetryAttemptRef.round_id` regex byte-for-byte.
+      path:
+        type: string
+        minLength: 1
+        description: >-
+          Repo-relative path to the on-disk per-round retry-history
+          artifact directory at
+          `_bmad-output/retry-history/{story_id}/{round_id}/`. Mirrors
+          Story 5.5's :attr:`RetryAttemptRef.path` minLength=1.
+
+  deferred_work_pointer:
+    # Encodes the BMAD-METHOD `deferred-work.md` format spec ratified
+    # by Story 5.7's audit as `automator-internal` per
+    # `docs/extension-audit.md`'s SEVENTH per-convention row. The
+    # pointer is structured (NOT a free-form string) so downstream
+    # tooling can resolve the path + the optional section anchor
+    # without parsing the markdown body.
+    type: object
+    required:
+      - path
+    additionalProperties: false
+    properties:
+      path:
+        type: string
+        minLength: 1
+        description: >-
+          Repo-relative path to the deferred-work markdown file
+          (canonical default:
+          "_bmad-output/implementation-artifacts/deferred-work.md").
+          Per Story 5.7's ratification of the BMAD-METHOD format; the
+          live exemplar is at the canonical default path.
+      section_anchor:
+        type: string
+        minLength: 1
+        description: >-
+          OPTIONAL — markdown section heading the pointer targets within
+          the deferred-work file. Canonical shape (per Story 5.7's
+          BMAD-METHOD audit):
+          `## Deferred from: code review of <story_id> (<YYYY-MM-DD>)`
+          per `_bmad/bmm/4-implementation/bmad-code-review/steps/step-04-present.md`
+          line 32. The field is OPTIONAL because (a) the bundle MAY
+          fire on a story with NO deferred findings yet, and (b)
+          Story 5.2's `record_defer_findings` writes the section AT
+          defer-time, not at escalation-time — so the section may not
+          exist on disk at bundle-assembly time. Free-form string
+          (not regex-constrained) because the per-story date suffix +
+          story-id segment vary and the consumer resolves the anchor
+          against the live deferred-work file at consume-time.

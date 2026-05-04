@@ -805,24 +805,26 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     assert rc == 0, f"enumeration-check failed: stdout={out.getvalue()!r} stderr={err.getvalue()!r}"
 
     text = out.getvalue()
-    # Post-Story-4.10: 8 passing + 23 orphans, no deferral note.
+    # Post-Story-5.8: 10 passing + 21 orphans, no deferral note.
     # Arithmetic: 29 total taxonomy markers (post-Story-4.9 baseline) −
-    # 6 distinct referenced markers across the two reconciliation pairs:
+    # 8 distinct referenced markers across the two reconciliation pairs:
     #   dependencies.yaml pair: env-setup-failed, mobile-blocked, LAD-skipped
     #   escalation-bundles pair: Tier-3-not-configured, plan-drift-detected,
-    #                            smoke-first-abort
+    #                            smoke-first-abort, retry-budget-exhausted (NEW
+    #                            in 5.8), scope-assertion-violation (NEW in 5.8)
     # (env-setup-failed appears in BOTH pairs but counts as ONE distinct
-    # taxonomy entry) → 29 − 6 = 23 orphans.
-    # The 8 passing references break down as:
+    # taxonomy entry) → 29 − 8 = 21 orphans.
+    # The 10 passing references break down as:
     #   dependencies.yaml: env-setup-failed ×1, mobile-blocked ×1,
     #                       LAD-skipped ×2 = 4 refs
     #   escalation-bundles: env-setup-failed ×1, Tier-3-not-configured ×1,
-    #                        plan-drift-detected ×1, smoke-first-abort ×1
-    #                        = 4 refs
+    #                        plan-drift-detected ×1, smoke-first-abort ×1,
+    #                        retry-budget-exhausted ×1 (NEW in 5.8),
+    #                        scope-assertion-violation ×1 (NEW in 5.8) = 6 refs
     # If a future story adds markers to marker-taxonomy.yaml or new
     # marker_class references to dependencies.yaml or to schemas/escalation-
     # bundles/*.yaml, update this count accordingly.
-    assert "Summary: 8 passing reference(s), 0 missing reference(s), 23 orphan marker class(es)" in text
+    assert "Summary: 10 passing reference(s), 0 missing reference(s), 21 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
