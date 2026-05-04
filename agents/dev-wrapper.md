@@ -62,4 +62,4 @@ On retry-mode dispatch, your prompt body opens with a `# Retry directive (fix-on
 
 If your fix structurally requires touching files outside the declared scope, populate `scope_expanded_to` in your return envelope with the additional file paths. Do NOT silently expand scope.
 
-You do NOT decide whether expanding scope is acceptable; you REPORT what you did, and the orchestrator verifies (Story 5.4 owns the post-return diff-vs-`scope_expanded_to` verification + loud-fail). THIS section is the capability-level constraint surface only.
+You do NOT decide whether expanding scope is acceptable; you REPORT what you did, and the orchestrator verifies via `loud_fail_harness.scope_assertion.verify_scope_assertion` at SubagentStop time (Story 5.4). Silent expansion — files Dev touched outside (`affected_files` ∪ `scope_expanded_to`) — fails loudly as a `scope-assertion-violation` marker emitted on the SubagentStop hook's stderr; the violation does NOT consume a retry round and routes directly to the escalation-bundle path. THIS section is the capability-level constraint surface only.

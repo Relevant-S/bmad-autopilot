@@ -351,6 +351,38 @@ CurrentState = Literal[
 DispatchedSpecialist = Literal["dev", "review-bmad", "qa", "lad"]
 
 
+class LastRetryDirective(BaseModel):
+    """Pydantic-v2 mirror of ``$defs.last_retry_directive`` in
+    ``schemas/run-state.yaml`` (added by Story 5.4 per the schema's
+    1.1 → 1.2 MINOR additive bump).
+
+    Snapshot of the most-recent fix-only retry directive declared by
+    the orchestrator at retry-dispatch time per FR10 / Story 5.3
+    (:class:`loud_fail_harness.retry_dispatch.RetryDispatchDirective`).
+    Persisted on disk so Story 5.4's SubagentStop hook
+    (``scope-assertion-verify`` CLI) can read the declared scope at
+    hook time and compare it against Dev's actual git diff per FR12.
+
+    Field semantics:
+        * ``retry_mode`` — closed-enum literal ``"fix-only"`` at MVP
+          mirroring ``schemas/orchestrator-event.yaml`` line 275 +
+          ``run-state.yaml``'s ``$defs.last_retry_directive.retry_mode``
+          enum verbatim.
+        * ``affected_files`` — frozen tuple of repo-relative file path
+          strings (the scope lock declaration). Sourced from
+          :func:`loud_fail_harness.retry_dispatch.derive_affected_files`'s
+          output. ``min_length=1`` mirrors the schema's ``minItems: 1``.
+
+    Frozen + ``extra="forbid"``; field declaration order is load-bearing
+    for byte-stable ``model_dump_json()`` output.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    retry_mode: Literal["fix-only"]
+    affected_files: tuple[str, ...] = Field(min_length=1)
+
+
 class RunState(BaseModel):
     """Orchestrator-domain canonical cache of flow-control state for
     the in-flight story loop.
@@ -374,7 +406,7 @@ class RunState(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    schema_version: Literal["1.1"]
+    schema_version: Literal["1.1", "1.2"]
     story_id: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
     current_state: CurrentState
@@ -385,6 +417,7 @@ class RunState(BaseModel):
     retry_history: tuple[RetryAttempt, ...]
     active_markers: tuple[str, ...]
     cost_to_date_by_specialist: CostToDateBySpecialist
+    last_retry_directive: LastRetryDirective | None = None
 
 
 class StoryDocCallbackResult(BaseModel):
@@ -632,6 +665,7 @@ __all__ = [
     "RunState",
     "RetryAttempt",
     "CostToDateBySpecialist",
+    "LastRetryDirective",
     "StoryDocCallback",
     "StoryDocCallbackResult",
     "StoryDocCallbackBlocked",

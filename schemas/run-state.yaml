@@ -120,7 +120,7 @@
 
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://bmad-autopilot.local/schemas/run-state.yaml"
-schema_version: "1.1"
+schema_version: "1.2"
 title: "Run-State"
 description: >-
   Orchestrator-domain canonical cache of flow-control state for the in-flight
@@ -149,11 +149,15 @@ additionalProperties: false
 properties:
   schema_version:
     type: string
-    enum: ["1.1"]
+    enum: ["1.1", "1.2"]
     description: >-
       Schema version of this run-state document. Closed enum at MVP so a
       future MINOR/MAJOR bump (per the contract-header versioning rules)
       requires an explicit additive change rather than silent acceptance.
+      Story 5.4 bumps from 1.1 → 1.2 (additive optional `last_retry_directive`
+      field per FR12 + FR58); the enum closes at both versions during the
+      transition window so existing 1.1 run-states remain valid post-bump
+      per the contract-header backward-compatibility posture.
 
   story_id:
     type: string
@@ -345,6 +349,22 @@ properties:
       `bmad-autopilot/docs/extension-audit.md` per the no-introductions
       principle Story 3.2 codified.
 
+  last_retry_directive:
+    oneOf:
+      - $ref: "#/$defs/last_retry_directive"
+      - type: "null"
+    description: >-
+      The most recent fix-only retry directive declared by the orchestrator
+      at retry-dispatch time per FR10 / Story 5.3 (`RetryDispatchDirective`).
+      Populated by Story 5.3's substrate at retry dispatch; cleared (key
+      removed OR set to `null`) at the next non-retry transition. Read by
+      Story 5.4's SubagentStop hook (`scope-assertion-verify` CLI) to
+      compare against Dev's actual git diff per FR12. Optional top-level
+      field — absent on first-dispatch + non-retry-mode states. MINOR
+      additive bump per the contract-header versioning rules; recorded in
+      `bmad-autopilot/docs/extension-audit.md` per the no-introductions
+      principle.
+
 $defs:
   provisioned_env:
     type: object
@@ -384,3 +404,29 @@ $defs:
           ISO-8601 timestamp marking when provisioning completed.
           Mirrors the orchestrator-event schema's `timestamp` field's
           `format: date-time` discipline at line 110.
+
+  last_retry_directive:
+    type: object
+    additionalProperties: false
+    required:
+      - retry_mode
+      - affected_files
+    properties:
+      retry_mode:
+        type: string
+        enum: [fix-only]
+        description: >-
+          The retry mode flag verbatim from the orchestrator-event schema
+          (`schemas/orchestrator-event.yaml` line 275; closed enum at MVP
+          per Story 5.3's `RetryDispatchDirective`).
+      affected_files:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          minLength: 1
+        description: >-
+          The repo-relative file-path scope lock declared by the
+          orchestrator at retry dispatch (Story 5.3's `derive_affected_files`
+          output). Mirrors `orchestrator-event.yaml`'s `retry-attempted`
+          event field at lines 267-272 byte-for-byte.

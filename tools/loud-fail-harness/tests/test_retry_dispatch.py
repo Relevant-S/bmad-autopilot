@@ -29,6 +29,7 @@ from typing import Any
 
 import pytest
 
+from loud_fail_harness import scope_assertion
 from loud_fail_harness.retry_dispatch import (
     RetryDispatchDirective,
     RetryDispatchError,
@@ -682,7 +683,7 @@ def test_extract_scope_expanded_to_does_not_mutate_envelope() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_fix_only_retry_contract_pair_end_to_end(
+def test_fix_only_retry_contract_pair_with_verifier_closure_end_to_end(
     tmp_path: pathlib.Path,
 ) -> None:
     """Per epics.md line 2319: "the pair test is a single test case,
@@ -692,7 +693,9 @@ def test_fix_only_retry_contract_pair_end_to_end(
     verification".
 
     Exercises the full route → derive → render → simulated-Dev-return
-    → extract path."""
+    → extract path. Story 5.4 thickens with step 14 (verifier closure)
+    appended to the SAME test function — keeping the contract atomic
+    per epics.md line 2319."""
 
     # 1. ARRANGE — orchestrator-side declares scope.
     rationale_marker = "DISTINCTIVE_REVIEW_PROSE_MARKER"
@@ -778,6 +781,37 @@ def test_fix_only_retry_contract_pair_end_to_end(
     # permits scope expansion as long as it is reported; Story 5.4
     # owns the diff-vs-declaration verification).
     assert set(directive.affected_files).isdisjoint(set(extracted))
+
+    # 14. ASSERT — verifier closure (Story 5.4 thickening).
+    declared_scope = directive.affected_files       # ("src/foo.py", "src/bar.py")
+    declared_expansion = extracted                  # ("src/baz.py",)
+    # Simulate Dev's actual diff: foo + bar (declared) + baz (declared expansion).
+    actual_files_clean = ("src/foo.py", "src/bar.py", "src/baz.py")
+    result_clean = scope_assertion.verify_scope_assertion(
+        affected_files=declared_scope,
+        scope_expanded_to=declared_expansion,
+        actual_files=actual_files_clean,
+    )
+    assert result_clean.is_violation is False
+    assert result_clean.violating_files == ()
+    # Simulate Dev's actual diff: foo + bar + baz + qux (qux is undeclared violation).
+    actual_files_violation = (
+        "src/foo.py",
+        "src/bar.py",
+        "src/baz.py",
+        "src/qux.py",
+    )
+    result_violation = scope_assertion.verify_scope_assertion(
+        affected_files=declared_scope,
+        scope_expanded_to=declared_expansion,
+        actual_files=actual_files_violation,
+    )
+    assert result_violation.is_violation is True
+    assert result_violation.violating_files == ("src/qux.py",)
+    diagnostic = scope_assertion.make_scope_assertion_diagnostic(
+        result_violation, story_id="5-3-test", retry_round=1,
+    )
+    assert diagnostic.marker_class == "scope-assertion-violation"
 
 
 # ---------------------------------------------------------------------------

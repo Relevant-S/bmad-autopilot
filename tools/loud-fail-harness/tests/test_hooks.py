@@ -9,9 +9,11 @@ subagent-stop.sh (AC-2, AC-3):
     [x] commit message ends with [bmad-automation story/<id>]      → test_subagent_stop_appends_commit_tag_per_nfr_o6
     [x] non-Dev dispatched_specialist → exit 0, no commit          → test_subagent_stop_no_op_on_non_dev_dispatched_specialist
     [x] missing proposed_commit_message → exit 1                   → test_subagent_stop_exits_one_on_missing_proposed_commit_message
-    [x] non-empty scope_expanded_to → exit 1, scope-assertion-violation, no commit → test_subagent_stop_exits_one_on_nonempty_scope_expanded_to
+    [x] undeclared scope expansion → exit 1, scope-assertion-violation (Story 5.4) → test_subagent_stop_exits_one_on_undeclared_scope_expansion
     [x] HEAD branch != run-state.branch_name → exit 1              → test_subagent_stop_exits_one_on_branch_mismatch
     [x] trunk branch in run-state → exit 1                          → test_subagent_stop_exits_one_on_trunk_branch_in_run_state
+    [x] full violation path emits marker on stderr (Story 5.4 AC-7) → test_subagent_stop_emits_scope_assertion_violation_marker_on_undeclared_diff
+    [x] declared diff exits 0 (Story 5.4 AC-7 symmetric)            → test_subagent_stop_exits_zero_on_declared_diff
 
 stop.sh (AC-4 of Story 2.7 + AC-6/AC-9 of Story 2.11):
     [x] writes structured bundle to documented path                → test_stop_writes_walking_skeleton_bundle_to_documented_path
@@ -113,8 +115,15 @@ def _write_run_state(
     dispatched_specialist: str | None = "dev",
     proposed_commit_message: str | None = "feat: walking-skeleton commit",
     scope_expanded_to: list[str] | None = None,
+    last_retry_affected_files: list[str] | None = None,
 ) -> pathlib.Path:
-    """Synthesize _bmad/automation/run-state.yaml under ``repo``."""
+    """Synthesize _bmad/automation/run-state.yaml under ``repo``.
+
+    Story 5.4 thickening: ``last_retry_affected_files`` populates the new
+    optional ``last_retry_directive`` field (schema 1.1 → 1.2 bump). When
+    provided, the SubagentStop hook's ``scope-assertion-verify`` CLI
+    invocation reads it as the declared scope.
+    """
     rs_dir = repo / "_bmad" / "automation"
     rs_dir.mkdir(parents=True, exist_ok=True)
     rs = rs_dir / "run-state.yaml"
@@ -132,8 +141,18 @@ def _write_run_state(
         scope_items = scope_expanded_to or []
         scope_line = "  scope_expanded_to: [" + ",".join(repr(p) for p in scope_items) + "]\n"
         envelope = "last_envelope:\n  status: green\n  rationale: x\n" + msg_line + scope_line
+    if last_retry_affected_files:
+        directive_block = (
+            "last_retry_directive:\n"
+            "  retry_mode: fix-only\n"
+            "  affected_files: ["
+            + ",".join(repr(p) for p in last_retry_affected_files)
+            + "]\n"
+        )
+    else:
+        directive_block = "last_retry_directive: null\n"
     rs.write_text(
-        f"schema_version: '1.1'\n"
+        f"schema_version: '1.2'\n"
         f"story_id: {story_id}\n"
         f"run_id: r1\n"
         f"current_state: {current_state}\n"
@@ -143,7 +162,8 @@ def _write_run_state(
         + "retry_history: []\n"
         + "active_markers: []\n"
         + "cost_to_date_by_specialist: {}\n"
-        + "pending_qa_dispatch_payload: null\n",
+        + "pending_qa_dispatch_payload: null\n"
+        + directive_block,
         encoding="utf-8",
     )
     return rs
@@ -250,21 +270,95 @@ def test_subagent_stop_exits_one_on_missing_proposed_commit_message(
     assert initial_head == final_head
 
 
-def test_subagent_stop_exits_one_on_nonempty_scope_expanded_to(
+def test_subagent_stop_exits_one_on_undeclared_scope_expansion(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
+    """Story 5.4 thickening (renamed from
+    test_subagent_stop_exits_one_on_nonempty_scope_expanded_to). The
+    placeholder length-based rejection is replaced by a real verifier
+    invocation: stage a diff containing a file outside the declared
+    `last_retry_directive.affected_files` ∪ `scope_expanded_to` set;
+    the hook commits the diff (per AC-6's commit-then-verify ordering)
+    and then exits 1 with the marker emitted by `scope-assertion-verify`.
+    """
+    # Stage Dev's diff: foo.py (declared) + baz.py (undeclared).
+    (fixture_repo / "src").mkdir(exist_ok=True)
+    (fixture_repo / "src" / "foo.py").write_text("x = 1\n", encoding="utf-8")
+    (fixture_repo / "src" / "baz.py").write_text("z = 3\n", encoding="utf-8")
+    _run_git("add", "src/foo.py", "src/baz.py", cwd=fixture_repo)
     _write_run_state(
         fixture_repo,
         proposed_commit_message="feat: x",
-        scope_expanded_to=["src/foo.py"],
+        scope_expanded_to=[],
+        last_retry_affected_files=["src/foo.py"],
     )
-    initial_head = _run_git("rev-parse", "HEAD", cwd=fixture_repo).stdout.strip()
+    pre_head = _run_git("rev-parse", "HEAD", cwd=fixture_repo).stdout.strip()
     result = _invoke_hook(hooks_dir / "subagent-stop.sh", fixture_repo)
-    assert result.returncode == 1
-    assert "subagent-stop: scope-assertion-violation" in result.stderr
-    assert "Story 5.4" in result.stderr
-    final_head = _run_git("rev-parse", "HEAD", cwd=fixture_repo).stdout.strip()
-    assert initial_head == final_head
+    post_head = _run_git("rev-parse", "HEAD", cwd=fixture_repo).stdout.strip()
+    # Hook must commit before verifying (commit-then-verify ordering per AC-6).
+    assert pre_head != post_head, "git commit must succeed before verification fires"
+    assert result.returncode == 1, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    assert "scope-assertion-violation" in result.stderr
+    assert "src/baz.py" in result.stderr
+
+
+def test_subagent_stop_emits_scope_assertion_violation_marker_on_undeclared_diff(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """Story 5.4 AC-7 — end-to-end SubagentStop hook integration:
+    real git fixture, scope-assertion-verify CLI, full violation path.
+
+    ARRANGE: tmp_path repo on per-story branch; modify foo + baz where
+    only foo is in `last_retry_directive.affected_files`. ACT: invoke
+    the hook (which commits and then verifies). ASSERT: hook commits
+    Dev's changes; CLI computes diff against HEAD~1; emits the marker
+    on stderr; hook propagates exit 1. The git commit is NOT rolled back
+    per the loud-fail-but-preserve-state discipline.
+    """
+    # Stage Dev's diff: foo + baz (latter is undeclared).
+    (fixture_repo / "src").mkdir(exist_ok=True)
+    (fixture_repo / "src" / "foo.py").write_text("x = 1\n", encoding="utf-8")
+    (fixture_repo / "src" / "baz.py").write_text("z = 3\n", encoding="utf-8")
+    _run_git("add", "src/foo.py", "src/baz.py", cwd=fixture_repo)
+    _write_run_state(
+        fixture_repo,
+        proposed_commit_message="feat: foo + undeclared baz",
+        scope_expanded_to=[],
+        last_retry_affected_files=["src/foo.py"],
+    )
+    pre_head = _run_git("rev-parse", "HEAD", cwd=fixture_repo).stdout.strip()
+    result = _invoke_hook(hooks_dir / "subagent-stop.sh", fixture_repo)
+    assert result.returncode == 1, f"stderr={result.stderr!r}"
+    # Hook committed Dev's changes per AC-6's commit-then-verify ordering.
+    post_head = _run_git("rev-parse", "HEAD", cwd=fixture_repo).stdout.strip()
+    assert pre_head != post_head, "git commit must succeed before verification fires"
+    log = _run_git("log", "-1", "--format=%s", cwd=fixture_repo)
+    assert "feat: foo + undeclared baz" in log.stdout
+    # CLI emitted the marker class identifier + violating file + remediation hint on stderr.
+    assert "scope-assertion-violation" in result.stderr
+    assert "src/baz.py" in result.stderr
+    assert "review Dev's diff vs. declared scope" in result.stderr
+
+
+def test_subagent_stop_exits_zero_on_declared_diff(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """Story 5.4 AC-7 symmetric clean-path test — the hook exits 0 when
+    Dev's actual diff falls within (`affected_files` ∪
+    `scope_expanded_to`); CLI stdout includes `scope-assertion: clean`."""
+    (fixture_repo / "src").mkdir(exist_ok=True)
+    (fixture_repo / "src" / "foo.py").write_text("x = 1\n", encoding="utf-8")
+    (fixture_repo / "src" / "baz.py").write_text("z = 3\n", encoding="utf-8")
+    _run_git("add", "src/foo.py", "src/baz.py", cwd=fixture_repo)
+    _write_run_state(
+        fixture_repo,
+        proposed_commit_message="feat: foo + declared baz",
+        scope_expanded_to=["src/baz.py"],
+        last_retry_affected_files=["src/foo.py"],
+    )
+    result = _invoke_hook(hooks_dir / "subagent-stop.sh", fixture_repo)
+    assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    assert "scope-assertion: clean" in result.stdout
 
 
 def test_subagent_stop_exits_one_on_branch_mismatch(
