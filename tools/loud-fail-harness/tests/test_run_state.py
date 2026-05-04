@@ -702,3 +702,96 @@ def _iter_dotted_keys(d: dict[str, Any], prefix: str = "") -> Iterable[str]:
 # Sanity: ensure imports we use directly are not flagged as unused by the
 # contract-coverage matrix maintenance pattern.
 _ = (find_repo_root, os, _iter_dotted_keys)
+
+
+# ---------------------------------------------------------------------------
+# Story 5.5 — externalized retry-history backward-compat (AC-9)
+# ---------------------------------------------------------------------------
+
+
+def test_retry_attempt_externalized_round_trip(
+    schema_validator: Draft202012Validator,
+) -> None:
+    """A RetryAttempt with the Story-5.5 thickened fields populated
+    serializes via RunState.model_dump_json + yaml.safe_dump and
+    parses back identically; the schema accepts the thickened shape
+    without further bumps."""
+    rs = _minimal_run_state(
+        retry_history=(
+            RetryAttempt(
+                retry_attempt=1,
+                retry_reason="patch-bucket-retry",
+                round_id="round-01",
+                path="_bmad-output/retry-history/foo/round-01/artifacts.yaml",
+            ),
+        ),
+    )
+    payload = json.loads(rs.model_dump_json())
+    assert _validate(schema_validator, payload) == []
+    body = yaml.safe_dump(payload, sort_keys=False)
+    parsed = yaml.safe_load(body)
+    assert parsed["retry_history"][0] == {
+        "retry_attempt": 1,
+        "retry_reason": "patch-bucket-retry",
+        "round_id": "round-01",
+        "path": "_bmad-output/retry-history/foo/round-01/artifacts.yaml",
+    }
+
+
+def test_retry_attempt_mvp_shape_still_validates(
+    schema_validator: Draft202012Validator,
+) -> None:
+    """Story 2.2-era + Story 5.1-era MVP-shape entries (no round_id /
+    no path) continue to validate post-Story-5.5 PATCH bump — the new
+    fields are optional."""
+    rs = _minimal_run_state(
+        retry_history=(
+            RetryAttempt(retry_attempt=1, retry_reason="dev-test-failure"),
+            RetryAttempt(retry_attempt=2, retry_reason="lint-regression"),
+        ),
+    )
+    payload = json.loads(rs.model_dump_json())
+    assert _validate(schema_validator, payload) == []
+
+
+def test_retry_attempt_co_presence_both_none_valid() -> None:
+    """Both round_id and path None (MVP shape) is valid — co-presence satisfied."""
+    attempt = RetryAttempt(retry_attempt=1, retry_reason="x")
+    assert attempt.round_id is None
+    assert attempt.path is None
+
+
+def test_retry_attempt_co_presence_both_set_valid() -> None:
+    """Both round_id and path set is valid — co-presence satisfied."""
+    attempt = RetryAttempt(
+        retry_attempt=1,
+        retry_reason="x",
+        round_id="round-01",
+        path="_bmad-output/retry-history/foo/round-01/artifacts.yaml",
+    )
+    assert attempt.round_id == "round-01"
+    assert attempt.path is not None
+
+
+def test_retry_attempt_co_presence_round_id_only_rejected() -> None:
+    """round_id set but path=None is rejected by the co-presence validator."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="co-presence"):
+        RetryAttempt(
+            retry_attempt=1,
+            retry_reason="x",
+            round_id="round-01",
+        )
+
+
+def test_retry_attempt_co_presence_path_only_rejected() -> None:
+    """path set but round_id=None is rejected by the co-presence validator."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="co-presence"):
+        RetryAttempt(
+            retry_attempt=1,
+            retry_reason="x",
+            path="_bmad-output/retry-history/foo/round-01/artifacts.yaml",
+        )

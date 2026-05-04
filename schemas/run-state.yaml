@@ -276,6 +276,34 @@ properties:
             Free-form (at MVP) human-readable reason for the retry; Epic 5
             tightens this to a closed enum sourced from the bucket-driven
             retry router (epics.md story 5-2) via additive MINOR bump.
+        round_id:
+          type: string
+          minLength: 1
+          pattern: "^round-\\d{2}$"
+          description: >-
+            Round identifier (zero-padded 2-digit retry-attempt suffix; e.g.
+            "round-01"). Optional sub-property added by Story 5.5's
+            externalization (PATCH bump per the contract-header versioning
+            rules; absent on Story 2.2-era + Story 5.1-era MVP-shape entries).
+            When populated, paired with `path` to reference the on-disk
+            per-round artifact at `_bmad-output/retry-history/{story_id}/{round_id}/artifacts.yaml`.
+        path:
+          type: string
+          minLength: 1
+          description: >-
+            Repo-relative posix-style path string from repo root to the
+            round's `artifacts.yaml` file. Optional sub-property added by
+            Story 5.5's externalization. NULL/absent entries predate this
+            story's externalization and are NOT dangling — only entries with
+            a non-null path are subject to dangling-reference detection per
+            FR13 + NFR-R5. Emits `dangling-evidence-ref` marker (taxonomy line
+            199-206 REUSED) when the path does not resolve to an on-disk
+            artifact.
+      dependentRequired:
+        round_id:
+          - path
+        path:
+          - round_id
 
   active_markers:
     type: array

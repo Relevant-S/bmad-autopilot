@@ -47,6 +47,7 @@ naming-lint = "loud_fail_harness.naming_lint:main"
 # discriminator. Listed last because all prior entries pre-date Story 3.3.
 review-layer-failure-emission-gate = "loud_fail_harness.review_layer_failure_emission_gate:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
+retry-history-resolve = "loud_fail_harness.retry_history:_main"
 
 [dependency-groups]
 dev = [

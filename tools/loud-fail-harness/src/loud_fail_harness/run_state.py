@@ -248,7 +248,7 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 #: Marker-class string identifier (consumed from
 #: ``schemas/marker-taxonomy.yaml``; same source-of-truth posture as
@@ -277,17 +277,66 @@ class RetryAttempt(BaseModel):
     """One retry attempt entry inside :attr:`RunState.retry_history`.
 
     Mirrors the AC-1 schema's ``retry_history.items`` shape 1:1. MVP
-    shape (this story); Epic 5 thickens via additive MINOR bump per the
-    schema's contract-header versioning rules.
+    shape opened in Story 2.2; thickened additively in Story 5.5 with
+    the optional ``round_id`` + ``path`` reference fields per the
+    contract-header PATCH-version-additive discipline (sub-property
+    addition under an existing field; no rename, no constraint
+    tightening). Story 2.2-era + Story 5.1-era instances continue to
+    instantiate cleanly with both new fields defaulting to ``None``.
 
     Frozen for hashability + determinism; field declaration order is
-    load-bearing for byte-stable ``model_dump_json()`` output.
+    load-bearing for byte-stable ``model_dump_json()`` output. The
+    field declaration order ``retry_attempt → retry_reason → round_id
+    → path`` matches the schema's property declaration order
+    verbatim.
+
+    Serialization drops the ``round_id`` + ``path`` fields when
+    ``None`` so that the YAML output matches the AC-2 JSON-Schema
+    shape — the new sub-properties are optional (no ``required``
+    constraint) and typed ``string`` (not nullable). Pre-Story-5.5
+    entries serialize as ``{retry_attempt: N, retry_reason: "..."}``;
+    a thickened entry serializes as ``{retry_attempt: N, retry_reason:
+    "...", round_id: "round-NN", path: "..."}``. Mirrors
+    :class:`CostToDateBySpecialist`'s ``_drop_none_costs`` pattern.
+
+    Co-presence invariant (Story 5.5 review finding D-1): ``round_id``
+    and ``path`` must be both set or both ``None``. A half-thickened
+    entry (one set, the other absent) indicates a producer bug;
+    :class:`RetryAttempt` rejects it at construction time so the
+    invariant is enforced at the model boundary, not scattered across
+    consumers.
     """
 
     model_config = ConfigDict(frozen=True)
 
     retry_attempt: int = Field(ge=1)
     retry_reason: str = Field(min_length=1)
+    round_id: str | None = Field(
+        default=None, min_length=1, pattern=r"^round-\d{2}$"
+    )
+    path: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _require_co_presence(self) -> "RetryAttempt":
+        if (self.round_id is None) != (self.path is None):
+            raise ValueError(
+                "RetryAttempt.round_id and .path must be both set or both "
+                "None (co-presence invariant); got "
+                f"round_id={self.round_id!r}, path={self.path!r}"
+            )
+        return self
+
+    @model_serializer(mode="wrap")
+    def _drop_none_optional_fields(
+        self,
+        handler: Callable[["RetryAttempt"], dict[str, Any]],
+    ) -> dict[str, Any]:
+        dumped = handler(self)
+        return {
+            k: v
+            for k, v in dumped.items()
+            if not (k in ("round_id", "path") and v is None)
+        }
 
 
 class CostToDateBySpecialist(BaseModel):
