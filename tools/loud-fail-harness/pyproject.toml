@@ -46,6 +46,11 @@ naming-lint = "loud_fail_harness.naming_lint:main"
 # marker class, and the meta: review-completeness synthetic-finding
 # discriminator. Listed last because all prior entries pre-date Story 3.3.
 review-layer-failure-emission-gate = "loud_fail_harness.review_layer_failure_emission_gate:main"
+# marker-coverage-audit (story 6.3; FR30 + FR33 + Pattern 5) is library-as-CLI-aid,
+# NOT a CI gate at this story's landing — invoked manually at epic close OR by
+# future contributors when extending coverage. Mirrors `story-doc-validator`
+# posture per pyproject.toml lines 25-32. CI gating is forward-scoped.
+marker-coverage-audit = "loud_fail_harness.marker_coverage_audit:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 

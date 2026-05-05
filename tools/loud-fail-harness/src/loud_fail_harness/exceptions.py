@@ -13,6 +13,8 @@ modules) and intentionally do NOT inherit from :class:`ContractViolation`.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 
 class ContractViolation(Exception):
     """Base class for Pattern-5 named-invariant contract-violation diagnostics.
@@ -62,4 +64,64 @@ class MarkerContextMissing(ContractViolation):
             f"Marker {self.marker_class} requires context field "
             f"'{self.missing_field}' but it was not provided in "
             "run_state.marker_contexts"
+        )
+
+
+class MarkerCoverageAuditFailure(ContractViolation):
+    """Raised by the marker emission coverage audit (Story 6.3) on any inconsistency.
+
+    Story 6.3 (FR30 + FR33 + Pattern 5) — the audit module
+    :mod:`loud_fail_harness.marker_coverage_audit` walks the canonical
+    (marker_class × code_surface) coverage matrix declared in
+    ``_data/marker_coverage_surfaces.yaml`` and validates that every
+    intersection has exactly one verdict, every ``emitted`` row's
+    ``code_path`` resolves to a real file:line carrying a marker reference,
+    every ``not-applicable`` row carries non-empty rationale, and every
+    ``scheduled-by-story`` row carries a ``discharging_story`` matching the
+    ``<epic>.<story>`` pattern. Pattern 5 (loud-fail / named invariants) and
+    NFR-O5 (named-invariant diagnostics) require that any inconsistency
+    surface as a contract violation rather than silently rendering a
+    misleading audit artifact.
+
+    The exception aggregates three orthogonal failure modes (any combination
+    may be non-empty) so a single audit invocation reports every defect
+    rather than failing at the first one — mirrors the
+    :class:`loud_fail_harness.fr33_fixture_gate.FR33FixtureGateFailure`
+    aggregation discipline.
+
+    Attributes:
+        missing_intersections: ``(marker_class, surface_name)`` tuples that
+            are absent from the verdicts list (no row covers the
+            intersection). Empty tuple means the Cartesian product is
+            covered.
+        invalid_verdicts: Per-row diagnostic strings (``"<marker> ×
+            <surface>: <reason>"``) for verdicts whose shape is malformed
+            (``not-applicable`` missing rationale, ``scheduled-by-story``
+            missing or malformed ``discharging_story``, ``gap`` verdict in
+            production data, etc.).
+        unresolved_code_paths: Per-row diagnostic strings for ``emitted``
+            verdicts whose ``code_path`` does not point to a file containing
+            a marker-class reference.
+    """
+
+    def __init__(
+        self,
+        *,
+        missing_intersections: Sequence[tuple[str, str]] = (),
+        invalid_verdicts: Sequence[str] = (),
+        unresolved_code_paths: Sequence[str] = (),
+    ) -> None:
+        self.missing_intersections: tuple[tuple[str, str], ...] = tuple(
+            missing_intersections
+        )
+        self.invalid_verdicts: tuple[str, ...] = tuple(invalid_verdicts)
+        self.unresolved_code_paths: tuple[str, ...] = tuple(unresolved_code_paths)
+        super().__init__()
+
+    def __str__(self) -> str:
+        return (
+            "MarkerCoverageAuditFailure: "
+            f"missing_intersections={self.missing_intersections!r}; "
+            f"invalid_verdicts={self.invalid_verdicts!r}; "
+            f"unresolved_code_paths={self.unresolved_code_paths!r}"
         )

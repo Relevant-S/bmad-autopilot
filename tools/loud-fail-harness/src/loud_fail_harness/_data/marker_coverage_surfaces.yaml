@@ -1,0 +1,3065 @@
+# Marker emission coverage audit data (Story 6.3).
+#
+# Authoritative source for the (marker_class × code_surface) coverage matrix
+# walked by tools/loud-fail-harness/src/loud_fail_harness/marker_coverage_audit.py.
+# Static-analysis substrate complementing Story 1.8's fixture-driven gate
+# (fr33_fixture_gate.py) and Story 6.8's runtime gate (forward-scheduled).
+#
+# Schema:
+#   schema_version: "1.0"
+#   surfaces:                  # the canonical code-surface inventory
+#     - name: <kebab-case>
+#       category: <orchestrator|specialist-wrapper|hook|bundle-assembler|cost-telemetry|reconciliation-gate>
+#       file_paths: [<relative-to-repo-root>, ...]
+#       description: <one-line>
+#   verdicts:                  # one row per (marker_class × surface_name) intersection
+#     - marker_class: <kebab-case from marker-taxonomy.yaml>
+#       surface_name: <matches a surface above>
+#       verdict: <emitted|not-applicable|scheduled-by-story|gap>
+#       code_path: <file:line>          # required when verdict == emitted
+#       rationale: <prose>              # required when verdict in {not-applicable, scheduled-by-story}
+#       discharging_story: <X.Y>        # required when verdict == scheduled-by-story
+#       audit_date: "YYYY-MM-DD"
+#
+# Verdict semantics (per Story 6.3 AC-2):
+#   - emitted: production code path exists at code_path that emits the marker.
+#   - not-applicable: marker is structurally inapplicable to this surface (rationale required).
+#   - scheduled-by-story: marker IS expected at this surface but the emission code
+#     hasn't landed yet (discharging_story + rationale required).
+#   - gap: TRUE gap; production data MUST NOT carry gap verdicts at Story 6.3 close.
+#
+# Contributor extension (per Story 6.3 AC-4):
+#   To add a new code surface or marker class:
+#     1. Append a row to `surfaces:` (new surface) or `verdicts:` (new (marker × surface)
+#        intersection — and one row per existing surface for a new marker class).
+#     2. Regenerate the artifact via `uv run marker-coverage-audit --regenerate`.
+#     3. Commit both files together.
+#
+# Schema-version history:
+#   1.0 (Story 6.3) — initial landing.
+
+schema_version: "1.0"
+
+surfaces:
+  - name: bundle-assembler
+    category: bundle-assembler
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py
+      - tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_escalation.py
+    description: |-
+      PR-bundle and escalation-bundle assembler (Story 2.11 + Story 6.1). Renders the merge-
+      ready PR bundle from envelope + event log + run-state.
+  - name: cost-telemetry-pipeline
+    category: cost-telemetry
+    file_paths: []
+    description: |-
+      Per-specialist × per-retry OTel cost-event pipeline (forward-scheduled to Stories 6.4 +
+      6.5; ADR-006 + NFR-P5). No production source exists at Story 6.3 landing.
+  - name: hook-session-start
+    category: hook
+    file_paths:
+      - hooks/session-start.sh
+    description: |-
+      SessionStart hook (FR46). Story 2.7 stub; full reattachment lands in Story 8.1.
+  - name: hook-stop
+    category: hook
+    file_paths:
+      - hooks/stop.sh
+    description: |-
+      Stop hook (FR59). Invokes bundle_assembly substrate to render the merge-ready PR bundle
+      at the canonical path.
+  - name: hook-subagent-stop
+    category: hook
+    file_paths:
+      - hooks/subagent-stop.sh
+    description: |-
+      SubagentStop hook (FR58 / FR50 / NFR-O6 / FR12). Commits Dev's proposed_commit_message
+      and verifies scope assertion (Story 5.4).
+  - name: orchestrator-dispatch-wrapper
+    category: orchestrator
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py
+      - tools/loud-fail-harness/src/loud_fail_harness/retry_dispatch.py
+      - tools/loud-fail-harness/src/loud_fail_harness/retry_router.py
+    description: |-
+      Orchestrator-side specialist dispatch wrapper (ADR-004). Owns marker-class registry
+      validation, envelope validation, dispatch-event emission, and per-specialist timeout.
+  - name: orchestrator-lifecycle-transitions
+    category: orchestrator
+    file_paths:
+      - skills/bmad-automation/workflow.md
+      - skills/bmad-automation/steps/run.md
+      - skills/bmad-automation/steps/dispatch.md
+    description: |-
+      Orchestrator skill steps that drive BMAD lifecycle transitions (ready-for-dev → in-
+      progress → review → qa → done). LLM-runtime prose; consumes substrate Python via Task
+      tool dispatch.
+  - name: orchestrator-run-state-helper
+    category: orchestrator
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/run_state.py
+      - tools/loud-fail-harness/src/loud_fail_harness/branch_lifecycle.py
+      - tools/loud-fail-harness/src/loud_fail_harness/orchestrator_run_entry.py
+      - tools/loud-fail-harness/src/loud_fail_harness/retry_history.py
+    description: |-
+      Orchestrator run-state read/write helpers (ADR-005). Owns per-story branch lifecycle,
+      run-state atomic writes, and externalized retry history.
+  - name: orchestrator-state-machine
+    category: orchestrator
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/lifecycle_state_machine.py
+      - tools/loud-fail-harness/src/loud_fail_harness/retry_budget.py
+      - tools/loud-fail-harness/src/loud_fail_harness/retry_budget_exhaustion.py
+    description: |-
+      Orchestrator BMAD-lifecycle state machine + retry-budget enforcement (Story 2.4 + Story
+      5.1 + Story 5.6). Owns proposed-qa state, retry-budget exhaustion.
+  - name: reconciliation-gate-fixture
+    category: reconciliation-gate
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/fr33_fixture_gate.py
+    description: |-
+      FR33 fixture-driven reconciliation CI gate (Story 1.8). Tests harness reconciler logic
+      against synthetic fixtures; complementary to Story 6.3's static audit and Story 6.8's
+      runtime gate.
+  - name: reconciliation-gate-runtime
+    category: reconciliation-gate
+    file_paths: []
+    description: |-
+      FR33 runtime reconciliation gate (forward-scheduled to Story 6.8). Detects skip-events
+      that the actual reference-project run produced but no marker emission captured. No
+      production source exists at Story 6.3 landing.
+  - name: specialist-wrapper-dev
+    category: specialist-wrapper
+    file_paths:
+      - agents/dev-wrapper.md
+    description: |-
+      Dev specialist wrapper (Story 2.8). Markdown agent definition consumed by the dispatch
+      wrapper as DATA per ADR-004; story-doc writes gated by the substrate's
+      story_doc_validator.
+  - name: specialist-wrapper-qa
+    category: specialist-wrapper
+    file_paths:
+      - agents/qa.md
+    description: |-
+      QA specialist wrapper (Stories 2.10 + 4.13). Markdown agent definition consumed by the
+      dispatch wrapper; QA-side substrate (env_provisioning, playwright_driver, qa_*) is the
+      actual emission code path.
+  - name: specialist-wrapper-review-bmad
+    category: specialist-wrapper
+    file_paths:
+      - agents/review-bmad-wrapper.md
+    description: |-
+      Review-BMAD specialist wrapper (Stories 2.9 + 3.1-3.4). Markdown agent definition
+      consumed by the dispatch wrapper; review-BMAD substrate (review_layer_failure) is the
+      actual emission code path.
+
+verdicts:
+  - marker_class: LAD-skipped
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: LAD-skipped
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes LAD MCP review path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: orchestrator-run-state-helper
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side
+      run_state.marker_contexts append for the {ac_id} field is gated by Story 6.7's
+      specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1).
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_tier.py:354
+    audit_date: "2026-05-05"
+  - marker_class: Tier-3-not-configured
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: bundle-assembler
+    verdict: scheduled-by-story
+    discharging_story: "6.9"
+    rationale: |-
+      Bundle-assembly failure detection + bundle-assembly-failed marker emission lands in
+      Story 6.9.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: hook-stop
+    verdict: scheduled-by-story
+    discharging_story: "6.9"
+    rationale: |-
+      Stop hook invokes bundle_assembly substrate; failure-detection marker emission lands
+      in Story 6.9.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: bundle-assembly-failed
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook
+      seam; this surface has no bundle-assembly code path.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: bundle-assembler
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      context-near-limit marker rendering in PR bundle's loud-fail block lands in Story 6.7.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      context-near-limit degradation signal emission lands in Story 6.7 (specialist-timeout
+      / hook-failed / context-near-limit fully wired into PR bundle).
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: context-near-limit
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: cost-telemetry-pipeline
+    verdict: scheduled-by-story
+    discharging_story: "6.5"
+    rationale: |-
+      In-flight cost streaming + 75%-threshold detection + cost-near-ceiling marker emission
+      lands in Story 6.5 (specialist boundary cadence).
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-near-ceiling
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: cost-telemetry-pipeline
+    verdict: scheduled-by-story
+    discharging_story: "6.4"
+    rationale: |-
+      Per-specialist × per-retry OTel cost-event pipeline + cost-telemetry-unavailable
+      graceful-degrade marker emission lands in Story 6.4 (ADR-006 + NFR-P5).
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: cost-telemetry-unavailable
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: bundle-assembler
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/retry_history.py:690
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: dangling-evidence-ref
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/env_provisioning.py:875
+    audit_date: "2026-05-05"
+  - marker_class: env-setup-failed
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_persistence.py:468
+    audit_date: "2026-05-05"
+  - marker_class: evidence-truncated
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: orchestrator-run-state-helper
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/branch_lifecycle.py:473
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: git-uncommitted-work-detected
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_exploratory_heuristics.py:242
+    audit_date: "2026-05-05"
+  - marker_class: heuristic-skipped
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: bundle-assembler
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      hook-failed marker rendering in PR bundle's loud-fail block lands in Story 6.7
+      (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: hook-subagent-stop
+    verdict: emitted
+    code_path: hooks/subagent-stop.sh:8
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: hook-failed
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent-
+      stop is the only hook with current failure paths; stop is exec-only and session-start
+      is a Story 2.7 stub).
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: orchestrator-state-machine
+    verdict: scheduled-by-story
+    discharging_story: "7.6"
+    rationale: |-
+      Non-destructive init guard + explicit override path + init-would-destroy-existing-
+      artifact marker emission lands in Story 7.6 (FR41 + FR42).
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: init-would-destroy-existing-artifact
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has
+      no init path.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: mobile-blocked
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP
+      surface emits this marker.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/env_provisioning.py:1321
+    audit_date: "2026-05-05"
+  - marker_class: orphan-process-cleanup
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: orchestrator-run-state-helper
+    verdict: scheduled-by-story
+    discharging_story: "8.5"
+    rationale: |-
+      Multi-story status enumerator + orphan-run-state-detected marker emission lands in
+      Story 8.5 (FR48b).
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: orphan-run-state-detected
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the
+      status enumerator.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_plan_drift.py:385
+    audit_date: "2026-05-05"
+  - marker_class: plan-drift-detected
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: orchestrator-run-state-helper
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side
+      run_state.marker_contexts append for {project_type} + {version_range} is gated by
+      Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1).
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/playwright_driver.py:1260
+    audit_date: "2026-05-05"
+  - marker_class: playwright-mcp-unavailable
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: reconciliation-gate-runtime
+    verdict: scheduled-by-story
+    discharging_story: "6.8"
+    rationale: |-
+      FR33 runtime reconciliation gate + reconciler-mismatch-runtime marker emission is
+      forward-scoped to Story 6.8.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: reconciler-mismatch-runtime
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      FR33 runtime reconciler-mismatch marker; this surface is not the runtime
+      reconciliation gate.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: hook-session-start
+    verdict: scheduled-by-story
+    discharging_story: "8.2"
+    rationale: |-
+      SessionStart reattachment full implementation (Story 8.1 — replaces the Story 2.7
+      literal stub) + recovery-state-conflict marker integration lands in Story 8.2.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: orchestrator-run-state-helper
+    verdict: scheduled-by-story
+    discharging_story: "8.2"
+    rationale: |-
+      Cross-state consistency recovery algorithm + recovery-state-conflict marker emission
+      lands in Story 8.2 (NFR-R2 + NFR-R8).
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: recovery-state-conflict
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper +
+      hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: orchestrator-state-machine
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/retry_budget_exhaustion.py:386
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: retry-budget-exhausted
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-state-machine retry-budget exhaustion marker; this surface has no code
+      path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Review-BMAD layer-failure marker emitted only by the review-BMAD specialist's
+      substrate; this surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: review-layer-failed
+    surface_name: specialist-wrapper-review-bmad
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/review_layer_failure.py:285
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: hook-subagent-stop
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/scope_assertion.py:579
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: scope-assertion-violation
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Scope-assertion verification fires only at the SubagentStop hook (Story 5.4); this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py:433
+    audit_date: "2026-05-05"
+  - marker_class: smoke-first-abort
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (env_provisioning /
+      playwright_driver / qa_*); this surface has no code path that produces this skip-
+      event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: bundle-assembler
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      specialist-timeout marker rendering in PR bundle's loud-fail block lands in Story 6.7
+      (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle).
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py:963
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: orchestrator-run-state-helper
+    verdict: scheduled-by-story
+    discharging_story: "6.7"
+    rationale: |-
+      Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side
+      run_state.marker_contexts append for {specialist} + {timeout_seconds} is gated by
+      Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1).
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: specialist-timeout
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Specialist-dispatch-time degradation marker; this surface has no code path that
+      produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: orchestrator-state-machine
+    verdict: scheduled-by-story
+    discharging_story: "7.7"
+    rationale: |-
+      BMAD story-doc N-2 version tolerance + story-doc-version-out-of-window marker contract
+      pair lands in Story 7.7 (FR43 + NFR-I5).
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: story-doc-version-out-of-window
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc
+      load; this surface has no story-doc-load path.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: orchestrator-run-state-helper
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/branch_lifecycle.py:517
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: trunk-branch-write-rejected
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
+      surface has no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Story-doc allowlist enforcement fires inside specialist-wrapper substrate
+      (story_doc_validator); this surface does not write story-doc sections.
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: specialist-wrapper-dev
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300
+    audit_date: "2026-05-05"
+  - marker_class: undocumented-section-write
+    surface_name: specialist-wrapper-review-bmad
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: bundle-assembler
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1176
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
+  - marker_class: walking-skeleton-bundle
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
+      no code path that produces this skip-event.
+    audit_date: "2026-05-05"
