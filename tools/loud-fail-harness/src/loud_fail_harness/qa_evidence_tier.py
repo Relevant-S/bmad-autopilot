@@ -123,10 +123,11 @@ SemanticVerificationRequirement = Literal[
 #: this constant equals the YAML's ``diagnostic_pointer`` field for
 #: the ``Tier-3-not-configured`` entry, preventing silent drift.
 _HOW_TO_ENABLE_POINTER: Final[str] = (
-    "QA Tier-3 (semantic verification) is not configured for this AC.\n"
+    "QA Tier-3 (semantic verification) is not configured for {ac_id}.\n"
     "Verification proceeds with Tier-1/Tier-2 evidence only. Remediation:\n"
-    "configure semantic verification per `qa-runbook.yaml`, OR accept the\n"
-    "lower-tier evidence as sufficient for this AC.\n"
+    "configure semantic verification for {ac_id} per `qa-runbook.yaml` at\n"
+    "`<project-root>/_bmad-output/qa-runbook.yaml`, OR accept the lower-tier\n"
+    "evidence as sufficient for this AC.\n"
 )
 
 # --------------------------------------------------------------------------- #

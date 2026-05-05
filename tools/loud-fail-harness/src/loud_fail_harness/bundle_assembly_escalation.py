@@ -762,7 +762,9 @@ def _render_bundle_body(
     # position + shape are byte-identical for any given ``active_markers``
     # set per AC-5.
     loud_fail_block = _render_loud_fail_block(
-        context.active_markers, marker_registry=marker_registry
+        context.active_markers,
+        marker_registry=marker_registry,
+        marker_contexts=context.marker_contexts,
     )
 
     sections: list[str] = [

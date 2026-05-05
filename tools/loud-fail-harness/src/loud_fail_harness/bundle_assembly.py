@@ -110,7 +110,7 @@ import pathlib
 import re
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from types import ModuleType
 from typing import Any
@@ -120,6 +120,7 @@ import yaml
 from loud_fail_harness import thickening_flags as _default_thickening_flags
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
+from loud_fail_harness.exceptions import MarkerContextMissing
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.qa_plan_persistence_compromise import (
@@ -882,18 +883,6 @@ def _render_per_layer_marker(marker_class: str, sub_classification: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
-#: The literal "How to enable" placeholder string emitted by
-#: :func:`_render_loud_fail_block` for every active marker entry. Story
-#: 6.2 thickens this slot by interpolating the ``diagnostic_pointer``
-#: text against per-marker context (``{ac_id}`` / ``{specialist}`` /
-#: ``{port}`` / ``{version_range}``) per FR31; Story 6.1 emits the raw
-#: placeholder so the structural slot exists.
-_HOW_TO_ENABLE_PLACEHOLDER: str = (
-    "(actionable pointer interpolation lands at Story 6.2 — see "
-    "marker-taxonomy.yaml entry for the diagnostic_pointer template)"
-)
-
-
 #: Sentinel H2 + body emitted when ``run_state.active_markers`` is
 #: empty. Per AC-3 the block's *presence* is structural — the H2 is
 #: rendered even when no markers are active so downstream tooling can
@@ -947,10 +936,95 @@ def _load_marker_taxonomy_entries(
     return entries
 
 
+def _interpolate_actionable_pointer(
+    template: str,
+    context: Mapping[str, str],
+    *,
+    required_fields: Sequence[str],
+) -> str:
+    """Interpolate a marker's ``diagnostic_pointer`` template against
+    runtime context to produce the actionable ``- How to enable:`` text.
+
+    Story 6.2 / FR31 / Pattern 5 / NFR-O5. Single interpolation surface
+    consumed by :func:`_render_loud_fail_block`; consolidates the
+    "validate required fields → loud-fail on missing → interpolate"
+    discipline into one place so every marker class with declared
+    ``pointer_context_fields`` (in ``marker-taxonomy.yaml``) follows the
+    same contract.
+
+    Behavior:
+
+        * When ``required_fields`` is empty the function returns
+          ``template`` verbatim — context-free markers (24 of the 27
+          taxonomy entries at Story 6.2's landing) pass through
+          unchanged. This is the AC-2 no-op path.
+        * When ``required_fields`` is non-empty, every named field must
+          be present in ``context``; the first missing field surfaces as
+          a :exc:`MarkerContextMissing` with ``marker_class=""``
+          (the caller — :func:`_render_loud_fail_block` — late-binds the
+          marker_class on the raised exception so the diagnostic carries
+          full context). Pattern 5 named-invariant convention; NFR-O5
+          named-invariant diagnostic.
+        * On success, the function returns ``template.format(**context)``
+          — Python's :meth:`str.format` substitution with the context
+          dict as kwargs. Excess context keys (not referenced by any
+          ``{placeholder}`` in ``template``) are tolerated; ``format``
+          ignores unused kwargs by design.
+        * If ``template`` contains a ``{placeholder}`` whose name is
+          NOT in ``required_fields`` AND not in ``context``, Python's
+          ``format`` raises :exc:`KeyError`; this is mapped to
+          :exc:`MarkerContextMissing` for diagnostic uniformity (the
+          orphan-placeholder case is structurally rejected by the
+          taxonomy-contract test in ``test_marker_taxonomy.py`` per
+          AC-3, but the runtime mapping defends against drift).
+
+    Args:
+        template: The ``diagnostic_pointer`` template string from
+            ``marker-taxonomy.yaml`` for the marker class being rendered.
+        context: The marker's per-emission context — typically
+            ``run_state.marker_contexts.get(marker_class, {})``.
+        required_fields: The marker's declared ``pointer_context_fields``
+            list from ``marker-taxonomy.yaml``; the names that MUST be
+            present in ``context`` for interpolation to succeed.
+
+    Returns:
+        The rendered actionable pointer text, with all
+        ``{placeholders}`` substituted from ``context``.
+
+    Raises:
+        MarkerContextMissing: A required field is absent from
+            ``context`` (or a template placeholder lacks a context
+            value). Caller late-binds ``marker_class`` for diagnostic
+            clarity.
+    """
+    if not required_fields:
+        return template
+
+    for field_name in required_fields:
+        if field_name not in context:
+            raise MarkerContextMissing(
+                marker_class="",
+                missing_field=field_name,
+            )
+
+    try:
+        return template.format(**context)
+    except KeyError as exc:
+        # Orphan placeholder: template references {field} not declared
+        # in required_fields and absent from context. Map to the named
+        # invariant diagnostic per NFR-O5 instead of leaking KeyError.
+        missing = exc.args[0] if exc.args else ""
+        raise MarkerContextMissing(
+            marker_class="",
+            missing_field=str(missing),
+        ) from exc
+
+
 def _render_loud_fail_block(
     active_markers: tuple[str, ...],
     *,
     marker_registry: MarkerClassRegistry,
+    marker_contexts: Mapping[str, Mapping[str, str]] | None = None,
     taxonomy_entries: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> str:
     """Render the Story 6.1 dedicated top-of-bundle loud-fail block.
@@ -967,14 +1041,17 @@ def _render_loud_fail_block(
     by:
 
         * ``- Sub-classification: <str>`` — rendered as ``none`` if the
-          taxonomy lists ``sub_classifications: []``; placeholder slot
-          for Story 6.2's per-marker interpolation.
+          taxonomy lists ``sub_classifications: []``.
         * ``- Diagnostic pointer: <text>`` — verbatim text from the
-          marker-taxonomy entry's ``diagnostic_pointer`` field; Story
-          6.2 thickens the interpolation, 6.1 emits the raw text.
-        * ``- How to enable: <placeholder>`` — the literal
-          :data:`_HOW_TO_ENABLE_PLACEHOLDER` string; Story 6.2 fills
-          this slot with the actionable pointer per FR31.
+          marker-taxonomy entry's ``diagnostic_pointer`` field (the
+          practitioner-facing reference; un-interpolated).
+        * ``- How to enable: <actionable>`` — Story 6.2 fills this slot
+          with the actionable pointer per FR31. The bullet's content is
+          the marker's ``diagnostic_pointer`` template interpolated
+          against ``marker_contexts.get(marker_class, {})`` per the
+          marker's declared ``pointer_context_fields``. Missing
+          required-context fields surface as
+          :exc:`MarkerContextMissing` per Pattern 5 / NFR-O5.
 
     Marker-class identifiers are validated against ``marker_registry``
     per Story 2.6's pattern; rejection raises :exc:`UnknownMarkerClass`
@@ -989,6 +1066,12 @@ def _render_loud_fail_block(
             :class:`loud_fail_harness.specialist_dispatch.MarkerClassRegistry`
             used to validate every marker-class identifier; rejection
             raises :exc:`UnknownMarkerClass` per Pattern 5.
+        marker_contexts: Per-marker-class context map sourced from
+            :attr:`loud_fail_harness.run_state.RunState.marker_contexts`.
+            Used to interpolate ``diagnostic_pointer`` templates per the
+            marker's declared ``pointer_context_fields``. Defaults to an
+            empty mapping; markers without ``pointer_context_fields``
+            entries render their template verbatim.
         taxonomy_entries: Optional pre-loaded mapping from marker-class
             string to taxonomy entry (per
             :func:`_load_marker_taxonomy_entries`'s return shape).
@@ -998,6 +1081,13 @@ def _render_loud_fail_block(
     Returns:
         The rendered markdown body (no leading or trailing newline
         beyond the canonical structural shape).
+
+    Raises:
+        MarkerContextMissing: A marker class with non-empty
+            ``pointer_context_fields`` lacks one or more required fields
+            in ``marker_contexts``. The exception's ``marker_class``
+            attribute is late-bound to the offending class for
+            diagnostic clarity per NFR-O5.
     """
     if not active_markers:
         return _LOUD_FAIL_NONE_SENTINEL
@@ -1007,23 +1097,39 @@ def _render_loud_fail_block(
         if taxonomy_entries is not None
         else _load_marker_taxonomy_entries()
     )
+    contexts: Mapping[str, Mapping[str, str]] = (
+        marker_contexts if marker_contexts is not None else {}
+    )
 
     parts: list[str] = ["## ⚠️ Loud-Fail Markers", ""]
     for marker_class in active_markers:
         validate_marker_emission(marker_registry, marker_class)
         entry = entries.get(marker_class, {})
-        diagnostic_pointer = " ".join(str(entry.get("diagnostic_pointer", "")).split())
+        diagnostic_pointer_raw = str(entry.get("diagnostic_pointer", ""))
+        diagnostic_pointer = " ".join(diagnostic_pointer_raw.split())
         sub_classifications = entry.get("sub_classifications") or []
         sub_class_str = (
             ", ".join(_format_sub_classification(sc) for sc in sub_classifications)
             if sub_classifications
             else "none"
         )
+        required_fields = tuple(entry.get("pointer_context_fields") or ())
+        marker_context = contexts.get(marker_class, {})
+        try:
+            actionable_pointer_raw = _interpolate_actionable_pointer(
+                template=diagnostic_pointer_raw,
+                context=marker_context,
+                required_fields=required_fields,
+            )
+        except MarkerContextMissing as exc:
+            exc.marker_class = marker_class
+            raise
+        actionable_pointer = " ".join(actionable_pointer_raw.split())
         parts.append(f"### {marker_class}")
         parts.append("")
         parts.append(f"- Sub-classification: {sub_class_str}")
         parts.append(f"- Diagnostic pointer: {diagnostic_pointer}")
-        parts.append(f"- How to enable: {_HOW_TO_ENABLE_PLACEHOLDER}")
+        parts.append(f"- How to enable: {actionable_pointer}")
         parts.append("")
     # Drop the trailing blank line so the joined block does not
     # double-newline against the assembler's section separator.
@@ -1200,7 +1306,9 @@ def assemble_bundle(
     # Step 4: Render header + section bodies.
     header_text = _render_walking_skeleton_header(flags)
     loud_fail_block = _render_loud_fail_block(
-        run_state.active_markers, marker_registry=registry
+        run_state.active_markers,
+        marker_registry=registry,
+        marker_contexts=run_state.marker_contexts,
     )
     per_ac_body = _render_per_ac_section(
         envelopes["qa"], marker_registry=registry

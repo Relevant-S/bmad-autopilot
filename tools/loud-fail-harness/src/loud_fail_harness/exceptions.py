@@ -32,3 +32,34 @@ class ContractViolation(Exception):
         except ContractViolation:
             ...
     """
+
+
+class MarkerContextMissing(ContractViolation):
+    """Raised when a marker emission lacks a required ``pointer_context_fields`` value.
+
+    Story 6.2 (FR31) — every loud-fail marker carries an actionable
+    ``- How to enable:`` pointer rendered from its ``diagnostic_pointer``
+    template in ``marker-taxonomy.yaml``. When the template carries
+    ``{field}`` placeholders, runtime context populates them at emission
+    time via ``run_state.marker_contexts``. Pattern 5 (loud-fail / named
+    invariants) and NFR-O5 (named-invariant diagnostics) require that a
+    missing required context field surface as a contract violation rather
+    than silently emitting raw template text.
+
+    Attributes:
+        marker_class: The marker class (taxonomy entry name) being emitted.
+        missing_field: The first ``pointer_context_fields`` entry that was
+            not present in ``run_state.marker_contexts[marker_class]``.
+    """
+
+    def __init__(self, *, marker_class: str, missing_field: str) -> None:
+        self.marker_class = marker_class
+        self.missing_field = missing_field
+        super().__init__()
+
+    def __str__(self) -> str:
+        return (
+            f"Marker {self.marker_class} requires context field "
+            f"'{self.missing_field}' but it was not provided in "
+            "run_state.marker_contexts"
+        )

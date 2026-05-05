@@ -60,8 +60,13 @@
 #   1.0 → 1.1 (Story 2.3) — additive: appended `git-uncommitted-work-detected`
 #                            and `trunk-branch-write-rejected` per the file's
 #                            documented MINOR-bump rule (adding a marker class).
+#   1.1 → 1.2 (Story 6.2) — additive: appended `pointer_context_fields` field
+#                            per entry; rewrote `diagnostic_pointer` text for
+#                            the 3 enriched classes (`Tier-3-not-configured`,
+#                            `playwright-mcp-unavailable`, `specialist-timeout`)
+#                            to interpolate run-specific context per FR31.
 
-schema_version: "1.1"
+schema_version: "1.2"
 
 markers:
 
@@ -73,14 +78,17 @@ markers:
       path). Emitted when LAD MCP is unavailable or API key is absent during
       code review; loop continues without the 4th adversarial layer.
       Remediation: configure LAD MCP + API key, OR accept the 3-layer review.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: Tier-3-not-configured
     diagnostic_pointer: |
-      QA Tier-3 (semantic verification) is not configured for this AC.
+      QA Tier-3 (semantic verification) is not configured for {ac_id}.
       Verification proceeds with Tier-1/Tier-2 evidence only. Remediation:
-      configure semantic verification per `qa-runbook.yaml`, OR accept the
-      lower-tier evidence as sufficient for this AC.
+      configure semantic verification for {ac_id} per `qa-runbook.yaml` at
+      `<project-root>/_bmad-output/qa-runbook.yaml`, OR accept the lower-tier
+      evidence as sufficient for this AC.
+    pointer_context_fields: [ac_id]
     sub_classifications: []
 
   - marker_class: heuristic-skipped
@@ -89,6 +97,7 @@ markers:
       AC's input or UI surface. NOT a failure — a structural-bound case. The
       QA Behavioral Plan's `verification_mode` field documents which
       heuristic was skipped.
+    pointer_context_fields: []
     sub_classifications:
       - empty-state
       - error-state
@@ -100,6 +109,7 @@ markers:
       profile). At MVP, requesting QA on a mobile project surfaces this
       marker and halts the QA phase. Remediation: wait for Phase 1.5 OR mark
       the AC as web/api/manual.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: env-setup-failed
@@ -109,6 +119,7 @@ markers:
       assembly. See `sub_classifications` for the specific provisioning step
       that failed. Remediation: inspect the env-setup logs at the qa-evidence
       path.
+    pointer_context_fields: []
     sub_classifications:
       - port-bind-failed
       - playwright-launch-failed
@@ -120,15 +131,17 @@ markers:
       resets; re-derivation triggers on next QA dispatch. Remediation: review
       the AC change to confirm the new Plan reflects intent; rare false
       positives are acceptable per loud-fail discipline.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: specialist-timeout
     diagnostic_pointer: |
-      A Task-tool-dispatched specialist exceeded the orchestrator's
-      per-specialist timeout budget. Envelope is treated as failed;
+      Specialist {specialist} exceeded the orchestrator's per-specialist
+      timeout budget ({timeout_seconds}s). Envelope is treated as failed;
       remediation targets the specialist's prompt or evidence size. See
       `sub_classifications` for the specific timeout cause (`timeout-exceeded`
       vs. `context-budget-exceeded`).
+    pointer_context_fields: [specialist, timeout_seconds]
     sub_classifications:
       - timeout-exceeded
       - context-budget-exceeded
@@ -139,6 +152,7 @@ markers:
       budget. Signals to the orchestrator that retry should be `fix-only`
       rather than `from-scratch`. NOT a terminal failure — a degradation
       signal.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: evidence-truncated
@@ -147,6 +161,7 @@ markers:
       and was truncated for the bundle. Remediation: inspect the truncated
       artifact at its on-disk path under
       `_bmad-output/qa-evidence/{story-id}/{run-id}/`.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: hook-failed
@@ -156,6 +171,7 @@ markers:
       vs-scope remediation): `hook-failed` remediates against the bash
       script's environment. See `sub_classifications` for the specific
       failure mode (`non-zero-exit`, `timeout`, `missing-binary`).
+    pointer_context_fields: []
     sub_classifications:
       - non-zero-exit
       - timeout
@@ -170,6 +186,7 @@ markers:
       NOT filesystem-permission-enforced. Remediation: route the write to a
       documented section OR amend the allowlist via the upstream-proposal
       workflow.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: orphan-process-cleanup
@@ -178,6 +195,7 @@ markers:
       an earlier teardown. Cleaned up implicitly + visible in the bundle so
       users can investigate root cause. Remediation: review the env-teardown
       logic for the specific provisioning path.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: cost-near-ceiling
@@ -186,6 +204,7 @@ markers:
       budget (default: 75% of ceiling per Epic 6 specialist boundary cadence).
       Signal to the practitioner before the budget exhausts; loop continues.
       Remediation: monitor or interrupt before exhaustion.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: smoke-first-abort
@@ -194,6 +213,7 @@ markers:
       ran; loop aborts without spending further QA effort on a known-broken
       surface. Distinct from `env-setup-failed` (env up but smoke fails).
       Remediation: fix the smoke-failing surface, then re-run QA.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: dangling-evidence-ref
@@ -203,6 +223,7 @@ markers:
       reference. Distinct from `orphan-run-state-detected`: dangling-evidence
       is about evidence-file disappearance for a known story; orphan-run-
       state is about run-state for a deleted story-doc.
+    pointer_context_fields: []
     sub_classifications: []
 
   # ---- Cross-epic-named marker classes (12) ---------------------------------
@@ -216,6 +237,7 @@ markers:
       produced by a substrate that lacks the loud-fail block; emission rule
       is "absent loud-fail block triggers the marker," NOT "Epic 2 era
       triggers the marker" (rule clarified by Epic 6).
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: review-layer-failed
@@ -224,14 +246,17 @@ markers:
       the `decision_needed` finding pattern in Epic 3's Story 3.3. A review
       layer's failure surfaces as both a marker (for tooling) AND a
       `decision_needed: HIGH` finding (for the human reviewer).
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: playwright-mcp-unavailable
     diagnostic_pointer: |
-      FR17 (Playwright MCP as web-driving primitive) + ADR-002's
-      graceful-degrade dependency profile. Runtime unavailability of
-      Playwright MCP for a web-project QA dispatch surfaces as this marker
-      and skips the dependent phase rather than killing the loop.
+      Playwright MCP runtime unavailable for {project_type} project QA
+      dispatch (FR17 + ADR-002 graceful-degrade). Required version range:
+      {version_range} per `dependencies.yaml`. Remediation: install Playwright
+      MCP at the declared version range, OR mark this story for later runs
+      once MCP is available.
+    pointer_context_fields: [project_type, version_range]
     sub_classifications: []
 
   - marker_class: scope-assertion-violation
@@ -242,6 +267,7 @@ markers:
       (review Dev's diff vs. declared scope; possibly tighten retry's
       `affected_files`); markers are remediation-shaped, not emission-point-
       shaped.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: retry-budget-exhausted
@@ -249,6 +275,7 @@ markers:
       FR8 (budget) + FR14 (non-advance + state preservation) + FR15
       (escalation bundle assembly path). Normal-flow halt event, NOT a
       failure of any single specialist.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: bundle-assembly-failed
@@ -259,6 +286,7 @@ markers:
       remediates against the assembler logic (envelope shape, finding
       rendering, taxonomy mismatch). Practitioner needs to know which surface
       to inspect.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: reconciler-mismatch-runtime
@@ -269,6 +297,7 @@ markers:
       skip-event the marker emission missed; remediation targets the
       specialist or hook that missed the event, not the harness/synthetic
       fixture.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: cost-telemetry-unavailable
@@ -277,6 +306,7 @@ markers:
       observability). Graceful-degrade behavior when OTel pipeline fails:
       cost data unavailable for the run; loop continues; bundle's
       cost-breakdown section shows the marker rather than fabricated zeros.
+    pointer_context_fields: []
     sub_classifications:
       - otel-pipeline-unreachable
       - prompt-id-correlation-missing
@@ -286,6 +316,7 @@ markers:
       FR43 (N-2 minor-version tolerance window) + NFR-I5 (story-doc version
       tolerance behavior). An out-of-window story-doc template version
       surfaces this marker plus upgrade guidance, rather than failing hard.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: init-would-destroy-existing-artifact
@@ -297,6 +328,7 @@ markers:
       accept overwrite explicitly. Distinct from `env-setup-failed` (env
       present but broken) and from `story-doc-version-out-of-window`
       (artifact present but wrong version).
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: recovery-state-conflict
@@ -306,6 +338,7 @@ markers:
       when run-state and story-doc disagree and the recovery algorithm
       cannot reconcile cleanly. Remediation requires human triage of which
       state representation reflects reality, then explicit reconciliation.
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: orphan-run-state-detected
@@ -317,6 +350,7 @@ markers:
       conflict` (state inconsistency for a *known* story) and from
       `dangling-evidence-ref` (story-doc is the canonical anchor, not
       evidence in the FR49 sense — conflating semantics is forbidden).
+    pointer_context_fields: []
     sub_classifications: []
 
   # ---- Story 2.3 branch-lifecycle write-time guards (2) ---------------------
@@ -337,6 +371,7 @@ markers:
       probe diagnostic firing at recovery-time on commit-state mismatch
       (visibility-only, not flow-blocking); this marker is a write-time halt
       diagnostic (flow-blocking pre-write).
+    pointer_context_fields: []
     sub_classifications: []
 
   - marker_class: trunk-branch-write-rejected
@@ -352,4 +387,5 @@ markers:
       level BEFORE any `git checkout`-form invocation; no git command runs
       against the protected branch. Remediation: review the project's actual
       trunk branch name and the orchestrator's `trunk_allowlist` configuration.
+    pointer_context_fields: []
     sub_classifications: []

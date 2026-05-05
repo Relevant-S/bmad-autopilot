@@ -42,6 +42,21 @@ Story 6.1 regeneration delta:
         `_THICKENING_SENTENCES`, OR `_emit_walking_skeleton_marker` was
         required — the inversion flows entirely through the new flag
         semantics per AC-4.
+
+Story 6.2 update (FR31 actionable-pointer enrichment):
+  - The per-marker `- How to enable:` bullet's content is now the
+    interpolated `diagnostic_pointer` text (un-interpolated for
+    context-free markers like `walking-skeleton-bundle`) instead of
+    the literal `_HOW_TO_ENABLE_PLACEHOLDER` string Story 6.1 emitted
+    at the same structural position.
+  - Fixture body is unchanged at this story's landing because
+    `active_markers` is empty here (the `## ✓ Loud-Fail Markers —
+    None` sentinel renders; no per-marker H3 entries are produced and
+    therefore no actionable-pointer bullet is rendered for this
+    fixture). When a future fixture seeds an enriched marker
+    (`Tier-3-not-configured` / `playwright-mcp-unavailable` /
+    `specialist-timeout`), the seeded `marker_contexts` field flows
+    through to the bullet's interpolated text.
 -->
 # PR bundle — story sample-auto-001 (run run-2026-04-29-001)
 

@@ -29,7 +29,7 @@ Determinism (AC-5):
 Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.1):
     [x] all 29 expected marker_class identifiers present         → test_taxonomy_has_29_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.1" at top level                       → test_taxonomy_declares_schema_version_1_1
+    [x] schema_version: "1.2" at top level                       → test_taxonomy_declares_schema_version_1_2
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -378,8 +378,8 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_1(taxonomy_data: dict) -> None:
-    assert taxonomy_data.get("schema_version") == "1.1"
+def test_taxonomy_declares_schema_version_1_2(taxonomy_data: dict) -> None:
+    assert taxonomy_data.get("schema_version") == "1.2"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:

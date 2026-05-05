@@ -244,7 +244,7 @@ import json
 import os
 import pathlib
 import secrets
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, Literal
 
 import yaml
@@ -451,11 +451,25 @@ class RunState(BaseModel):
     Field declaration order matches ``schemas/run-state.yaml``'s
     ``required`` enumeration order (load-bearing for byte-stable
     ``model_dump_json()`` output).
+
+    Fields:
+        marker_contexts: Per-marker-class run-specific context populated
+            at marker emission time and consumed by the loud-fail-block
+            render path to interpolate each marker's ``diagnostic_pointer``
+            template into an actionable "how to enable" pointer per FR31
+            (Story 6.2). Keys are marker-class string identifiers (parallel
+            to ``active_markers`` items); values are mappings of
+            ``pointer_context_fields`` field name → string value.
+            Required-context completeness is enforced loudly at render
+            time per Pattern 5 / NFR-O5: a marker emission whose declared
+            ``pointer_context_fields`` lacks a value surfaces as
+            :exc:`MarkerContextMissing` rather than emitting raw
+            ``{placeholder}`` text.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    schema_version: Literal["1.1", "1.2"]
+    schema_version: Literal["1.1", "1.2", "1.3"]
     story_id: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
     current_state: CurrentState
@@ -465,6 +479,12 @@ class RunState(BaseModel):
     pending_qa_dispatch_payload: dict[str, Any] | None
     retry_history: tuple[RetryAttempt, ...]
     active_markers: tuple[str, ...]
+    marker_contexts: Mapping[str, Mapping[str, str]] = Field(default_factory=dict)
+    # Note: MappingProxyType({}) default was specified by Story 6.2 for immutability
+    # parity with active_markers:tuple. Pydantic v2's Rust JSON serializer rejects
+    # MappingProxyType (PydanticSerializationError); dict is used instead. The Mapping
+    # annotation signals the read-only contract; ConfigDict(frozen=True) blocks
+    # attribute reassignment; direct in-place mutation is a caller-side discipline.
     cost_to_date_by_specialist: CostToDateBySpecialist
     last_retry_directive: LastRetryDirective | None = None
 

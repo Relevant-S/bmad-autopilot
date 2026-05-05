@@ -43,6 +43,19 @@ Story 6.1 regeneration delta:
   (iv)  The `plan-drift-detected` marker comment continues to emit
         co-located with the `### Plan drift detected` H3 sub-section
         (Story 4.2's surface is unaffected by 6.1's flag flip).
+
+Story 6.2 update (FR31 actionable-pointer enrichment):
+  - The per-marker `- How to enable:` bullet's content is now the
+    interpolated `diagnostic_pointer` text from `marker-taxonomy.yaml`
+    (un-interpolated for context-free markers like
+    `plan-drift-detected`, which has `pointer_context_fields: []`)
+    instead of the literal `_HOW_TO_ENABLE_PLACEHOLDER` string Story
+    6.1 emitted at the same structural position.
+  - Fixture body is unchanged at this story's landing because
+    `active_markers` is empty here (the `## ✓ Loud-Fail Markers —
+    None` sentinel renders; the `plan-drift-detected` indicator
+    surfaces via the inline `bmad-automation:marker plan-drift-detected`
+    HTML comment in `## Per-AC results`, not the loud-fail block).
 -->
 # PR bundle — story sample-auto-001 (run run-2026-04-30-001)
 

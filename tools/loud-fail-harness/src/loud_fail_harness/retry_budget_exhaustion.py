@@ -342,6 +342,15 @@ class ExhaustionContext(BaseModel):
     # IS the source of truth (Story 2.2) and the empty default lands the
     # ``## ✓ Loud-Fail Markers — None`` sentinel per AC-3.
     active_markers: tuple[str, ...] = ()
+    # Story 6.2: the ``run_state.marker_contexts`` snapshot for the run,
+    # consumed by the escalation-bundle's loud-fail block sub-renderer
+    # to interpolate per-marker ``diagnostic_pointer`` templates against
+    # the per-emission context populated by Story 6.2's emission-site
+    # edits. Defaults to the empty mapping so existing call sites that
+    # do not yet surface ``marker_contexts`` continue to work; markers
+    # without ``pointer_context_fields`` (24 of the 27 taxonomy entries
+    # at Story 6.2's landing) render their template verbatim.
+    marker_contexts: dict[str, dict[str, str]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _require_trigger_diagnostic_co_presence(self) -> ExhaustionContext:

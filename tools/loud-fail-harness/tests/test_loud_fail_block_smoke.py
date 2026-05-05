@@ -118,10 +118,11 @@ def _write_run_state(
     *,
     active_markers: tuple[str, ...],
     story_id: str = _STORY_ID,
+    marker_contexts: dict[str, dict[str, str]] | None = None,
 ) -> pathlib.Path:
     rs_path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
-        "schema_version": "1.1",
+        "schema_version": "1.3",
         "story_id": story_id,
         "run_id": _RUN_ID,
         "current_state": "done",
@@ -131,6 +132,7 @@ def _write_run_state(
         "pending_qa_dispatch_payload": None,
         "retry_history": [],
         "active_markers": list(active_markers),
+        "marker_contexts": marker_contexts or {},
         "cost_to_date_by_specialist": {},
     }
     rs_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
@@ -168,10 +170,12 @@ def _assemble_merge_ready(
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
+    marker_contexts: dict[str, dict[str, str]] | None = None,
 ) -> AssembleBundleResult:
     rs_path = _write_run_state(
         tmp_path / "_bmad" / "automation" / "run-state.yaml",
         active_markers=active_markers,
+        marker_contexts=marker_contexts,
     )
     logs_root = tmp_path / "qa-evidence"
     _seed_log(logs_root, specialist="dev", return_envelope=canonical_dev_envelope)
@@ -192,7 +196,9 @@ def _assemble_merge_ready(
 
 
 def _build_exhaustion_context(
-    *, active_markers: tuple[str, ...]
+    *,
+    active_markers: tuple[str, ...],
+    marker_contexts: dict[str, dict[str, str]] | None = None,
 ) -> ExhaustionContext:
     return ExhaustionContext(
         trigger=ExhaustionTrigger.BUDGET_EXHAUSTED,
@@ -210,6 +216,7 @@ def _build_exhaustion_context(
         scope_violation_diagnostic=None,
         bundle_artifact_path="_bmad-output/escalation-bundles/x/y/escalation.md",
         active_markers=active_markers,
+        marker_contexts=marker_contexts or {},
     )
 
 
@@ -238,6 +245,7 @@ def test_merge_ready_bundle_renders_loud_fail_block_with_active_markers(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-7"}},
     )
     body = result.bundle_path.read_text(encoding="utf-8")
 
@@ -305,6 +313,7 @@ def test_merge_ready_bundle_renders_multiple_loud_fail_markers_in_order(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-3"}},
     )
     body = result.bundle_path.read_text(encoding="utf-8")
     tier3_idx = body.index("### Tier-3-not-configured")
@@ -364,7 +373,8 @@ def test_escalation_bundle_renders_loud_fail_block_at_same_position(
     core invariant per Story 5.8 AC-4).
     """
     context = _build_exhaustion_context(
-        active_markers=("retry-budget-exhausted", "Tier-3-not-configured")
+        active_markers=("retry-budget-exhausted", "Tier-3-not-configured"),
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-5"}},
     )
     result = assemble_escalation_bundle(
         context,
@@ -439,10 +449,187 @@ def test_loud_fail_block_byte_identical_across_variants(
     )
 
     markers = ("Tier-3-not-configured",)
+    contexts: dict[str, dict[str, str]] = {
+        "Tier-3-not-configured": {"ac_id": "AC-9"}
+    }
     rendered_via_merge_ready = bundle_assembly._render_loud_fail_block(
-        markers, marker_registry=runtime_marker_registry
+        markers,
+        marker_registry=runtime_marker_registry,
+        marker_contexts=contexts,
     )
     rendered_via_escalation = bundle_assembly_escalation._render_loud_fail_block(
-        markers, marker_registry=runtime_marker_registry
+        markers,
+        marker_registry=runtime_marker_registry,
+        marker_contexts=contexts,
     )
     assert rendered_via_merge_ready == rendered_via_escalation
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.2 — actionable-pointer interpolation end-to-end (FR31)              #
+# --------------------------------------------------------------------------- #
+
+
+def test_loud_fail_block_renders_interpolated_actionable_pointer(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.2 AC-1 + AC-6 (a): seed ``run_state.active_markers`` with
+    the enriched ``Tier-3-not-configured`` class plus
+    ``marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-7"}}`` —
+    end-to-end witness of context flowing through emission → render →
+    interpolation. The rendered ``- How to enable:`` bullet contains
+    the seeded ``AC-7`` value AND no ``{ac_id}`` literal substring
+    survives.
+    """
+    result = _assemble_merge_ready(
+        tmp_path=tmp_path,
+        active_markers=("Tier-3-not-configured",),
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-7"}},
+    )
+    body = result.bundle_path.read_text(encoding="utf-8")
+
+    how_line = next(
+        line
+        for line in body.splitlines()
+        if line.startswith("- How to enable:")
+    )
+    # Interpolated text: AC-7 substituted for {ac_id}.
+    assert "AC-7" in how_line
+    # Loud-fail discipline: no surviving {placeholder} literal in the
+    # actionable bullet for an enriched class with seeded context.
+    assert "{ac_id}" not in how_line
+    # Concrete-config-path discipline (FR31): rendered text names the
+    # specific configuration file to modify, not just generic phrasing.
+    assert "qa-runbook.yaml" in how_line
+
+
+def test_loud_fail_block_raises_on_missing_marker_context(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.2 AC-2 + AC-6 (b): seed an enriched marker with
+    ``marker_contexts={}`` — the helper raises
+    :exc:`MarkerContextMissing` per Pattern 5 / NFR-O5 at bundle
+    assembly time (loud-fail; NOT silent emission of raw template text).
+    The diagnostic names ``ac_id`` as the missing field.
+    """
+    from loud_fail_harness.exceptions import MarkerContextMissing
+
+    with pytest.raises(MarkerContextMissing) as exc_info:
+        _assemble_merge_ready(
+            tmp_path=tmp_path,
+            active_markers=("Tier-3-not-configured",),
+            canonical_dev_envelope=canonical_dev_envelope,
+            canonical_review_envelope=canonical_review_envelope,
+            canonical_qa_envelope=canonical_qa_envelope,
+            runtime_marker_registry=runtime_marker_registry,
+            marker_contexts={},  # missing!
+        )
+    assert exc_info.value.missing_field == "ac_id"
+    # Caller late-binds marker_class on the raised exception (the
+    # render path's diagnostic-clarity contract).
+    assert exc_info.value.marker_class == "Tier-3-not-configured"
+
+
+def test_loud_fail_block_handles_context_free_markers_unchanged(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.2 AC-1 + AC-6 (c): a context-free marker
+    (``pointer_context_fields: []``) renders its ``diagnostic_pointer``
+    text verbatim with NO interpolation and NO raised exception
+    regardless of ``marker_contexts`` content.
+    """
+    result = _assemble_merge_ready(
+        tmp_path=tmp_path,
+        active_markers=("plan-drift-detected",),
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+        marker_contexts={},
+    )
+    body = result.bundle_path.read_text(encoding="utf-8")
+    assert "### plan-drift-detected" in body
+    how_line = next(
+        line for line in body.splitlines() if line.startswith("- How to enable:")
+    )
+    # For context-free markers the actionable bullet IS the verbatim
+    # diagnostic_pointer (no interpolation). Assert structural
+    # properties without coupling to the taxonomy's prose:
+    # (a) non-empty content after the bullet prefix, and
+    # (b) no surviving {placeholder} literals.
+    content = how_line[len("- How to enable: "):]
+    assert content, "how_to_enable bullet must not be empty for plan-drift-detected"
+    assert "{" not in content, (
+        f"no placeholder literals should survive for a context-free marker; got: {how_line!r}"
+    )
+
+
+def test_loud_fail_block_renders_three_enriched_markers_via_real_taxonomy(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.2 AC-1 + AC-6 (d): all three enriched marker classes
+    (``Tier-3-not-configured``, ``playwright-mcp-unavailable``,
+    ``specialist-timeout``) interpolate correctly via the real
+    taxonomy. Witnesses the full enriched-class set end-to-end.
+    """
+    markers = (
+        "Tier-3-not-configured",
+        "playwright-mcp-unavailable",
+        "specialist-timeout",
+    )
+    contexts: dict[str, dict[str, str]] = {
+        "Tier-3-not-configured": {"ac_id": "AC-2"},
+        "playwright-mcp-unavailable": {
+            "project_type": "web",
+            "version_range": ">=0.0.27,<0.1",
+        },
+        "specialist-timeout": {
+            "specialist": "qa",
+            "timeout_seconds": "120",
+        },
+    }
+    rendered = bundle_assembly._render_loud_fail_block(
+        markers,
+        marker_registry=runtime_marker_registry,
+        marker_contexts=contexts,
+    )
+
+    how_lines = [
+        line
+        for line in rendered.splitlines()
+        if line.startswith("- How to enable:")
+    ]
+    # One actionable-pointer bullet per active marker.
+    assert len(how_lines) == 3
+    # Enriched values surface in the rendered actionable text.
+    assert any("AC-2" in line for line in how_lines)
+    assert any("web" in line and ">=0.0.27,<0.1" in line for line in how_lines)
+    assert any("qa" in line and "120s" in line for line in how_lines)
+    # No surviving {placeholder} literals in any actionable bullet.
+    for line in how_lines:
+        for placeholder in (
+            "{ac_id}",
+            "{project_type}",
+            "{version_range}",
+            "{specialist}",
+            "{timeout_seconds}",
+        ):
+            assert placeholder not in line, (
+                f"placeholder {placeholder} survived in: {line}"
+            )

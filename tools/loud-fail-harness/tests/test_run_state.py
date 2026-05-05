@@ -180,7 +180,7 @@ def test_schema_meta_validates(run_state_schema: dict[str, Any]) -> None:
     Draft202012Validator.check_schema(run_state_schema)
     assert run_state_schema.get("$schema", "").endswith("/draft/2020-12/schema")
     assert run_state_schema.get("$id", "").endswith("schemas/run-state.yaml")
-    assert run_state_schema.get("schema_version") == "1.2"
+    assert run_state_schema.get("schema_version") == "1.3"
     assert run_state_schema.get("type") == "object"
     assert run_state_schema.get("additionalProperties") is False
 
@@ -795,3 +795,58 @@ def test_retry_attempt_co_presence_path_only_rejected() -> None:
             retry_reason="x",
             path="_bmad-output/retry-history/foo/round-01/artifacts.yaml",
         )
+
+
+# ---------------------------------------------------------------------------
+# Story 6.2 — marker_contexts round-trip (FR31)
+# ---------------------------------------------------------------------------
+
+
+def test_marker_contexts_round_trips_through_yaml(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 6.2 AC-4 / AC-6: a ``RunState`` with non-empty
+    ``marker_contexts`` round-trips through the atomic-write helper's
+    YAML serialization path without loss. Witnesses the new field's
+    integration with the existing serialization pipeline (Story 2.2's
+    ``_serialize_run_state``: ``model_dump_json`` → ``json.loads`` →
+    ``yaml.safe_dump``).
+    """
+    target = tmp_path / "run-state.yaml"
+    rs = _minimal_run_state(
+        schema_version="1.3",
+        marker_contexts={
+            "Tier-3-not-configured": {"ac_id": "AC-7"},
+            "specialist-timeout": {
+                "specialist": "qa",
+                "timeout_seconds": "120",
+            },
+        },
+    )
+
+    advance_run_state(target, rs, story_doc_callback=_success_callback)
+
+    on_disk = yaml.safe_load(target.read_text(encoding="utf-8"))
+    assert on_disk["marker_contexts"] == {
+        "Tier-3-not-configured": {"ac_id": "AC-7"},
+        "specialist-timeout": {
+            "specialist": "qa",
+            "timeout_seconds": "120",
+        },
+    }
+
+
+def test_marker_contexts_default_empty_round_trips_clean(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 6.2 AC-4: ``marker_contexts`` is optional with default
+    empty mapping; runs without enriched markers serialize an empty
+    object and remain conformant after round-trip.
+    """
+    target = tmp_path / "run-state.yaml"
+    rs = _minimal_run_state()  # default marker_contexts=={}
+
+    advance_run_state(target, rs, story_doc_callback=_success_callback)
+
+    on_disk = yaml.safe_load(target.read_text(encoding="utf-8"))
+    assert on_disk["marker_contexts"] == {}

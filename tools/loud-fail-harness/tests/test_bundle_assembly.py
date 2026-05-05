@@ -2081,9 +2081,14 @@ def test_render_loud_fail_block_one_marker_renders_h2_plus_h3_with_four_element_
 ) -> None:
     """Story 6.1 AC-1 + AC-6 (b): one active marker → H2 + one H3 entry
     with the four-element structural shape (H3 header + three bullets).
+    Story 6.2 AC-1: the ``- How to enable:`` bullet content is the
+    ``diagnostic_pointer`` template interpolated against
+    ``marker_contexts`` (here ``{ac_id: AC-2}``) per FR31.
     """
     rendered = bundle_assembly._render_loud_fail_block(
-        ("Tier-3-not-configured",), marker_registry=runtime_marker_registry
+        ("Tier-3-not-configured",),
+        marker_registry=runtime_marker_registry,
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-2"}},
     )
     assert rendered.startswith("## ⚠️ Loud-Fail Markers")
     assert "### Tier-3-not-configured" in rendered
@@ -2091,7 +2096,15 @@ def test_render_loud_fail_block_one_marker_renders_h2_plus_h3_with_four_element_
     assert "- Diagnostic pointer:" in rendered
     assert "QA Tier-3 (semantic verification) is not configured" in rendered
     assert "- How to enable:" in rendered
-    assert "Story 6.2" in rendered
+    # Story 6.2: the actionable-pointer bullet is interpolated against
+    # the supplied marker_contexts (NOT a literal Story-6.2 placeholder).
+    # The diagnostic_pointer bullet IS the un-interpolated taxonomy
+    # template — `{ac_id}` survives there per AC-1's dual-bullet shape.
+    how_line = next(
+        line for line in rendered.splitlines() if line.startswith("- How to enable:")
+    )
+    assert "{ac_id}" not in how_line
+    assert "is not configured for AC-2" in how_line
 
 
 def test_render_loud_fail_block_multiple_markers_render_in_provided_order(
@@ -2102,7 +2115,9 @@ def test_render_loud_fail_block_multiple_markers_render_in_provided_order(
     """
     markers = ("Tier-3-not-configured", "plan-drift-detected")
     rendered = bundle_assembly._render_loud_fail_block(
-        markers, marker_registry=runtime_marker_registry
+        markers,
+        marker_registry=runtime_marker_registry,
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-1"}},
     )
     tier3_idx = rendered.index("### Tier-3-not-configured")
     plan_drift_idx = rendered.index("### plan-drift-detected")
@@ -2150,7 +2165,9 @@ def test_render_loud_fail_block_diagnostic_pointer_byte_matches_taxonomy(
         ).split()
     )
     rendered = bundle_assembly._render_loud_fail_block(
-        ("Tier-3-not-configured",), marker_registry=runtime_marker_registry
+        ("Tier-3-not-configured",),
+        marker_registry=runtime_marker_registry,
+        marker_contexts={"Tier-3-not-configured": {"ac_id": "AC-7"}},
     )
     assert diagnostic_text in rendered, (
         "diagnostic_pointer text must be sourced from marker-taxonomy.yaml "
@@ -2174,3 +2191,140 @@ def test_render_loud_fail_block_sub_classification_renders_taxonomy_values(
     # playwright-launch-failed, dev-server-not-ready]
     assert "port-bind-failed" in rendered
     assert "playwright-launch-failed" in rendered
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.2 — _interpolate_actionable_pointer (FR31 / Pattern 5 / NFR-O5)     #
+# --------------------------------------------------------------------------- #
+
+
+def test_interpolate_actionable_pointer_no_op_when_required_fields_empty() -> None:
+    """AC-2: ``required_fields=[]`` → returns the template verbatim;
+    context-free markers (24 of 27 taxonomy entries) pass through
+    unchanged. NO-OP path.
+    """
+    template = "Plain text with no placeholders."
+    result = bundle_assembly._interpolate_actionable_pointer(
+        template,
+        context={},
+        required_fields=(),
+    )
+    assert result == template
+
+
+def test_interpolate_actionable_pointer_happy_path_substitutes_placeholders() -> None:
+    """AC-2: ``required_fields=["ac_id"]`` + context with the field +
+    template containing ``{ac_id}`` → returns the substituted text.
+    """
+    template = "Tier-3 not configured for {ac_id}; remediation per qa-runbook."
+    result = bundle_assembly._interpolate_actionable_pointer(
+        template,
+        context={"ac_id": "AC-7"},
+        required_fields=("ac_id",),
+    )
+    assert result == "Tier-3 not configured for AC-7; remediation per qa-runbook."
+    assert "{ac_id}" not in result
+
+
+def test_interpolate_actionable_pointer_missing_field_raises_named_invariant() -> None:
+    """AC-2: ``required_fields=["ac_id"]`` + context lacking ``ac_id`` →
+    raises :exc:`MarkerContextMissing` per Pattern 5 / NFR-O5; the
+    diagnostic message names the missing field.
+    """
+    from loud_fail_harness.exceptions import MarkerContextMissing
+
+    template = "Tier-3 not configured for {ac_id}."
+    with pytest.raises(MarkerContextMissing) as exc_info:
+        bundle_assembly._interpolate_actionable_pointer(
+            template,
+            context={},
+            required_fields=("ac_id",),
+        )
+    assert exc_info.value.missing_field == "ac_id"
+    # Caller late-binds marker_class; helper itself emits the empty
+    # default per the docstring contract.
+    assert exc_info.value.marker_class == ""
+    # Diagnostic message names BOTH fields (ac_id + the late-bound
+    # marker_class slot, even when empty).
+    assert "ac_id" in str(exc_info.value)
+
+
+def test_interpolate_actionable_pointer_extra_context_keys_tolerated() -> None:
+    """AC-2: extra keys in ``context`` (not referenced by any
+    ``{placeholder}``) are tolerated — :meth:`str.format` ignores
+    unused kwargs by design.
+    """
+    template = "Tier-3 not configured for {ac_id}."
+    result = bundle_assembly._interpolate_actionable_pointer(
+        template,
+        context={"ac_id": "AC-1", "extra": "ignored", "other": "also-ignored"},
+        required_fields=("ac_id",),
+    )
+    assert result == "Tier-3 not configured for AC-1."
+
+
+def test_interpolate_actionable_pointer_multi_field_template_interpolates_correctly() -> None:
+    """AC-2: ``required_fields=["specialist", "timeout_seconds"]`` +
+    multi-field template → returns the substituted text. Witnesses the
+    ``specialist-timeout`` enriched marker class's interpolation path.
+    """
+    template = (
+        "Specialist {specialist} exceeded the orchestrator's per-specialist "
+        "timeout budget ({timeout_seconds}s)."
+    )
+    result = bundle_assembly._interpolate_actionable_pointer(
+        template,
+        context={"specialist": "qa", "timeout_seconds": "120"},
+        required_fields=("specialist", "timeout_seconds"),
+    )
+    assert "qa" in result
+    assert "120s" in result
+    assert "{specialist}" not in result
+    assert "{timeout_seconds}" not in result
+
+
+def test_interpolate_actionable_pointer_first_missing_field_named() -> None:
+    """AC-2: when MULTIPLE required fields are missing, the FIRST one
+    (per ``required_fields`` order) is named on the raised exception —
+    deterministic diagnostic output.
+    """
+    from loud_fail_harness.exceptions import MarkerContextMissing
+
+    template = "Specialist {specialist} timed out after {timeout_seconds}s."
+    with pytest.raises(MarkerContextMissing) as exc_info:
+        bundle_assembly._interpolate_actionable_pointer(
+            template,
+            context={"timeout_seconds": "30"},
+            required_fields=("specialist", "timeout_seconds"),
+        )
+    assert exc_info.value.missing_field == "specialist"
+
+
+def test_interpolate_actionable_pointer_orphan_placeholder_maps_to_named_invariant() -> None:
+    """AC-2: a ``{placeholder}`` in ``template`` whose name is NOT in
+    ``required_fields`` AND not in ``context`` → ``str.format`` raises
+    ``KeyError``; the helper maps it to :exc:`MarkerContextMissing`
+    naming the missing field per NFR-O5 (no leaked stdlib KeyError).
+
+    This test exercises the ``except KeyError`` branch specifically:
+    all ``required_fields`` are satisfied (validation loop passes),
+    but the template contains an extra ``{orphan_field}`` that is not
+    in ``context`` and not in ``required_fields``. The ``str.format``
+    call raises ``KeyError("orphan_field")``, which is mapped to
+    :exc:`MarkerContextMissing`.
+    """
+    from loud_fail_harness.exceptions import MarkerContextMissing
+
+    template = "Declared {declared_field} but also {orphan_field} undeclared."
+    with pytest.raises(MarkerContextMissing) as exc_info:
+        bundle_assembly._interpolate_actionable_pointer(
+            template,
+            context={"declared_field": "value"},
+            # declared_field IS required and present — validation loop passes.
+            # orphan_field is NOT in required_fields and NOT in context.
+            # str.format(**context) raises KeyError("orphan_field") →
+            # mapped to MarkerContextMissing per NFR-O5.
+            required_fields=("declared_field",),
+        )
+    assert exc_info.value.missing_field == "orphan_field"
+    assert exc_info.value.marker_class == ""  # late-bound by _render_loud_fail_block
