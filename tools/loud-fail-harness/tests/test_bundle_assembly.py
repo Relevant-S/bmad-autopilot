@@ -743,13 +743,18 @@ def test_dev_section_renders_scope_expanded_to_empty_at_epic_2(
     assert "Scope expanded to: (none)" in body
 
 
-def test_bundle_does_not_contain_loud_fail_block_section(
+def test_bundle_contains_loud_fail_block_section_at_epic_6(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
+    """Story 6.1 inversion: the Epic-2 baseline ASSERTED the loud-fail
+    block was absent; post-6.1 the block IS present (rendered as the
+    ``## ✓ Loud-Fail Markers — None`` sentinel when active_markers is
+    empty per AC-3 — the block's *presence* is structural).
+    """
     _, bundle_path = _assemble(
         tmp_path=tmp_path,
         canonical_dev_envelope=canonical_dev_envelope,
@@ -758,8 +763,7 @@ def test_bundle_does_not_contain_loud_fail_block_section(
         runtime_marker_registry=runtime_marker_registry,
     )
     body = bundle_path.read_text(encoding="utf-8")
-    assert "## Loud-fail" not in body
-    assert "## Loud-Fail Block" not in body
+    assert "## ✓ Loud-Fail Markers — None" in body
 
 
 def test_bundle_does_not_contain_cost_breakdown_section(
@@ -815,8 +819,12 @@ def test_h2_section_ordering_is_canonical(
     )
     body = bundle_path.read_text(encoding="utf-8")
     h2_lines = [line for line in body.splitlines() if line.startswith("## ")]
+    # Story 6.1: the loud-fail block is the FIRST content section after
+    # the title metadata block + the Walking Skeleton Mode header,
+    # BEFORE Per-AC results / Review findings / Dev per AC-1.
     assert h2_lines == [
         "## ⚠️ Walking Skeleton Mode",
+        "## ✓ Loud-Fail Markers — None",
         "## Per-AC results",
         "## Review findings",
         "## Dev",
@@ -874,19 +882,27 @@ def test_walking_skeleton_marker_suppressed_when_loud_fail_block_present(
     assert "walking-skeleton-bundle" not in result.emitted_markers
 
 
-def test_walking_skeleton_marker_in_emitted_markers_tuple(
+def test_walking_skeleton_marker_in_emitted_markers_tuple_when_loud_fail_block_absent(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
+    """Story 6.1 AC-4: against an Epic-2-baseline flag namespace
+    (``is_loud_fail_block_present`` returning False), the marker
+    appears in ``emitted_markers``. Against the post-6.1 production
+    module the marker is absent — covered by
+    ``test_walking_skeleton_marker_stops_emitting_at_epic_6_substrate_state``
+    below.
+    """
     result, _ = _assemble(
         tmp_path=tmp_path,
         canonical_dev_envelope=canonical_dev_envelope,
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
+        flags=_flags_namespace(loud_fail_block=False),
     )
     assert result.emitted_markers == ("walking-skeleton-bundle",)
 
@@ -898,12 +914,19 @@ def test_walking_skeleton_marker_uses_structured_form_not_legacy_placeholder(
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
+    """Story 2.11 AC-4 structural-form discipline. Story 6.1 inverts
+    the production-flag emission rule (the marker stops emitting on
+    post-6.1 runs because ``is_loud_fail_block_present()`` now returns
+    True), so this test pins an Epic-2-baseline flag namespace where
+    the marker does emit; the structured form is the assertion target.
+    """
     _, bundle_path = _assemble(
         tmp_path=tmp_path,
         canonical_dev_envelope=canonical_dev_envelope,
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
+        flags=_flags_namespace(loud_fail_block=False),
     )
     body = bundle_path.read_text(encoding="utf-8")
     # Structured form present.
@@ -926,6 +949,12 @@ def test_unknown_marker_class_raises_per_pattern_5(
     """Empty registry rejects 'walking-skeleton-bundle' →
     UnknownMarkerClass; the failure surfaces BEFORE the bundle file is
     written (defense-in-depth).
+
+    Story 6.1 note: the production module's
+    ``is_loud_fail_block_present()`` now returns True, which suppresses
+    the walking-skeleton-bundle emission against production flags. The
+    test pins an Epic-2-baseline flag namespace so the marker still
+    emits and the registry-rejection code path is exercised.
     """
     rs_path = _write_run_state_yaml(
         tmp_path / "_bmad" / "automation" / "run-state.yaml"
@@ -949,6 +978,7 @@ def test_unknown_marker_class_raises_per_pattern_5(
             logs_root=logs_root,
             bundle_root=bundle_root,
             marker_registry=empty_registry,
+            thickening_flags=_flags_namespace(loud_fail_block=False),
         )
     bundle_dir = bundle_root / "sample-auto-001"
     assert not bundle_dir.exists() or list(bundle_dir.glob("*.md")) == [], (
@@ -1403,6 +1433,7 @@ def test_dev_section_renders_backtick_containing_commit_message_without_breaking
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
+        flags=_flags_namespace(loud_fail_block=False),
     )
     body = bundle_path.read_text(encoding="utf-8")
     # The ## Dev H2 must be followed by the ## marker comment at end of bundle —
@@ -1417,6 +1448,7 @@ def test_dev_section_renders_backtick_containing_commit_message_without_breaking
         "_fenced_code_block must use a 4-backtick fence when content contains ```"
     )
     # Structured marker must still appear after the Dev section (bundle is intact).
+    # Story 6.1 note: pinned to Epic-2-baseline flags so the marker emits.
     assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
 
 
@@ -1644,25 +1676,20 @@ def test_review_findings_section_meta_only_envelope_renders_only_meta_subsection
     assert "review-layer-failed: edge" in body
 
 
-def test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3(
+def test_walking_skeleton_header_renders_all_thickenings_landed_sentinel_at_epic_6(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 3.4 AC-3 + Story 4.13 AC-3 + AC-5 + Story 5.9 AC-2: with
-    the post-5.9 production thickening_flags (``is_full_review_present``
-    returns ``True`` since Story 3.4; ``is_full_qa_present`` returns
-    ``True`` since Story 4.13; ``is_retry_present`` returns ``True``
-    since Story 5.9 — closing Epic 5), the Walking Skeleton Mode body
-    enumerates EXACTLY ONE missing-thickening sentence; the
-    "Single-layer review (Epic 3 thickens to 3-layer adversarial pass)."
-    sentence (Story 3.4) AND the "Tier-1 evidence only (Epic 4 thickens
-    to Tier-2 + Tier-3-where-configured)." sentence (Story 4.13) AND
-    the "No retry (Epic 5 thickens with whole-story retry budget +
-    bucket-driven action item derivation)." sentence (Story 5.9) are
-    OMITTED. The remaining "No loud-fail block" sentence is rendered.
+    """Story 6.1 AC-7 + Story 5.9 AC-2 — relaxation. Post-Story-6.1
+    substrate state has FOUR flags returning ``True`` (Stories 3.4 +
+    4.13 + 5.9 + 6.1), so :func:`_render_walking_skeleton_header`
+    enters the all-thickenings-landed branch and returns the sentinel
+    string; bullet count is implicitly zero (the function returns the
+    sentinel, not a bullet list). The four sentence-prefixes (one per
+    flag) MUST NOT appear in the header.
     """
     result, _ = _assemble(
         tmp_path=tmp_path,
@@ -1670,42 +1697,37 @@ def test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
-        flags=thickening_flags,  # production module — post-5.9 substrate state
+        flags=thickening_flags,  # production module — post-6.1 substrate state
     )
     header = result.header_text
 
-    # Bullet count: exactly one sentence (lines beginning with `- `).
-    bullets = [line for line in header.splitlines() if line.startswith("- ")]
-    assert len(bullets) == 1, (
-        f"expected 1 missing-thickening bullet at post-5.9 substrate state; "
-        f"got {len(bullets)}: {bullets!r}"
-    )
+    # All-thickenings-landed sentinel asserts the four-flag closure.
+    assert "All thickening features are present" in header
 
-    # The dropped sentences are the structural witnesses of the flag flips.
+    # The four sentence-prefixes are the structural witnesses of the
+    # four flag flips (Stories 3.4 / 4.13 / 5.9 / 6.1); none appear.
     assert "Single-layer review (Epic 3 thickens" not in header
     assert "Tier-1 evidence only" not in header
     assert "No retry" not in header
-
-    # The remaining sentence (Epic 6 still owes its thickening) is present.
-    assert "No loud-fail block" in header
+    assert "No loud-fail block" not in header
 
 
-def test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state(
+def test_walking_skeleton_marker_stops_emitting_at_epic_6_substrate_state(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 3.4 AC-4 regression baseline: with the post-3.4 production
-    thickening_flags (``is_loud_fail_block_present`` continues to
-    return ``False``), the ``walking-skeleton-bundle`` marker continues
-    to emit. The emission rule is structural (`absent loud-fail block
-    triggers the marker`), NOT era-based; Epic 3 is NOT the era that
-    triggers suppression — Epic 6 / Story 6.1 owns the loud-fail block
-    landing that flips the flag. This test guards against accidental
-    pre-emption of Epic 6's responsibility in the Epic 3 / 4 / 5
-    timeframes.
+    """Story 6.1 AC-3 / AC-4 — assertion inversion. With the post-6.1
+    production thickening_flags (``is_loud_fail_block_present()`` now
+    returns ``True`` via the structural derivation), the structural
+    rule ``if flags.is_loud_fail_block_present(): return ()`` at
+    :func:`_emit_walking_skeleton_marker` fires; the
+    ``walking-skeleton-bundle`` marker stops emitting on new runs as a
+    structural consequence of the flag's new semantics — NOT a special
+    suppression task. The structured marker comment is absent from the
+    bundle body and ``result.emitted_markers`` is the empty tuple.
     """
     result, bundle_path = _assemble(
         tmp_path=tmp_path,
@@ -1713,36 +1735,28 @@ def test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
-        flags=thickening_flags,  # production module — post-3.4 substrate state
+        flags=thickening_flags,  # production module — post-6.1 substrate state
     )
     body = bundle_path.read_text(encoding="utf-8")
-    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
-    assert "walking-skeleton-bundle" in result.emitted_markers
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in body
+    assert "walking-skeleton-bundle" not in result.emitted_markers
+    assert result.emitted_markers == ()
 
 
-def test_walking_skeleton_header_drops_tier_1_evidence_only_sentence_at_epic_5(
+def test_walking_skeleton_header_renders_no_per_flag_sentences_at_epic_6(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 4.13 AC-3 + AC-5 + Story 5.9 AC-2 — the post-5.9 analogue
-    of Story 3.4's
-    ``test_walking_skeleton_header_drops_single_layer_review_sentence_at_epic_3``.
+    """Story 6.1 AC-7 + Story 5.9 AC-2 — second post-6.1 relaxation.
 
-    With the post-5.9 production thickening_flags
-    (``is_retry_present`` returns ``True`` per Story 5.9's flag flip;
-    ``is_full_qa_present`` returns ``True`` per Story 4.13's prior
-    flip; ``is_full_review_present`` returns ``True`` per Story 3.4's
-    prior flip), the Walking Skeleton Mode body enumerates EXACTLY ONE
-    missing-thickening sentence; the "No retry (Epic 5 thickens with
-    whole-story retry budget + bucket-driven action item derivation)."
-    sentence is OMITTED — the structural witness of Story 5.9's flag
-    flip. The "Tier-1 evidence only" sentence (Story 4.13 flip) and
-    the "Single-layer review" sentence (Story 3.4 flip) remain absent.
-    No edit to ``_render_walking_skeleton_header`` or
-    ``_THICKENING_SENTENCES`` is required for the omission to fire.
+    With the post-6.1 production thickening_flags (FOUR flags True —
+    Stories 3.4 / 4.13 / 5.9 / 6.1 closing the in-place-flip cohort),
+    the header enters the all-thickenings-landed branch and returns
+    the sentinel string. None of the four sentence-prefixes appears
+    (each is the structural witness of one flag's flip).
     """
     result, _ = _assemble(
         tmp_path=tmp_path,
@@ -1750,51 +1764,36 @@ def test_walking_skeleton_header_drops_tier_1_evidence_only_sentence_at_epic_5(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
-        flags=thickening_flags,  # production module — post-5.9 substrate state
+        flags=thickening_flags,  # production module — post-6.1 substrate state
     )
     header = result.header_text
 
-    # Bullet count: exactly one sentence (lines beginning with `- `).
-    bullets = [line for line in header.splitlines() if line.startswith("- ")]
-    assert len(bullets) == 1, (
-        f"expected 1 missing-thickening bullet at post-5.9 substrate state; "
-        f"got {len(bullets)}: {bullets!r}"
-    )
+    # All-thickenings-landed sentinel.
+    assert "All thickening features are present" in header
 
-    # The "No retry" sentence is the structural witness of Story 5.9's
-    # flag flip — it MUST NOT appear in the rendered body.
+    # The four sentence-prefixes are absent.
     assert "No retry" not in header
-
-    # The "Tier-1 evidence only" sentence (Story 4.13 flip) and the
-    # "Single-layer review" sentence (Story 3.4 flip) remain absent.
     assert "Tier-1 evidence only" not in header
     assert "Single-layer review (Epic 3 thickens" not in header
-
-    # The remaining sentence (Epic 6 still owes its thickening) is present.
-    assert "No loud-fail block" in header
+    assert "No loud-fail block" not in header
 
 
-def test_walking_skeleton_marker_still_emitted_at_epic_4_substrate_state(
+def test_walking_skeleton_marker_emission_is_structurally_inverted_at_epic_6(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 4.13 AC-4 + AC-5 — regression baseline against accidental
-    Epic-4 pre-emption of Epic 6 / Story 6.1's loud-fail-block landing
-    responsibility.
+    """Story 6.1 AC-3 / AC-4 — assertion inversion (second variant).
 
-    With the post-4.13 production thickening_flags
-    (``is_loud_fail_block_present`` continues to return ``False``), the
-    ``walking-skeleton-bundle`` marker continues to emit. The emission
-    rule is structural (`absent loud-fail block triggers the marker`),
-    NOT era-based; Epic 4 is NOT the era that triggers suppression —
-    Epic 6 / Story 6.1 owns the loud-fail block landing that flips the
-    flag and inverts emission via the structural-not-era-based posture
-    Story 2.11 AC-4 ratified. This test mirrors Story 3.4's
-    ``test_walking_skeleton_marker_still_emitted_at_epic_3_substrate_state``
-    one-Epic-forward.
+    The post-6.1 production thickening_flags has
+    ``is_loud_fail_block_present()`` returning ``True`` via the
+    structural derivation; the ``walking-skeleton-bundle`` marker
+    stops emitting on new runs. This test mirrors
+    ``test_walking_skeleton_marker_stops_emitting_at_epic_6_substrate_state``
+    above (the inversion fires uniformly across the production
+    substrate; the two tests pin the contract from two angles).
     """
     result, bundle_path = _assemble(
         tmp_path=tmp_path,
@@ -1802,11 +1801,12 @@ def test_walking_skeleton_marker_still_emitted_at_epic_4_substrate_state(
         canonical_review_envelope=canonical_review_envelope,
         canonical_qa_envelope=canonical_qa_envelope,
         runtime_marker_registry=runtime_marker_registry,
-        flags=thickening_flags,  # production module — post-4.13 substrate state
+        flags=thickening_flags,  # production module — post-6.1 substrate state
     )
     body = bundle_path.read_text(encoding="utf-8")
-    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
-    assert "walking-skeleton-bundle" in result.emitted_markers
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in body
+    assert "walking-skeleton-bundle" not in result.emitted_markers
+    assert result.emitted_markers == ()
 
 
 def test_review_findings_section_per_layer_marker_emission_preserved(
@@ -2052,3 +2052,125 @@ def test_ordering_per_ac_then_plan_drift_then_heuristic_findings(
     plan_drift_idx = body.index("### Plan drift detected")
     heuristic_idx = body.index("### Exploratory heuristic findings")
     assert ac_idx < plan_drift_idx < heuristic_idx
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.1 — _render_loud_fail_block sub-renderer (AC-1 + AC-3 + AC-6)       #
+# --------------------------------------------------------------------------- #
+
+
+def test_render_loud_fail_block_zero_markers_renders_none_sentinel(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.1 AC-3 + AC-6 (a): zero active markers → the block
+    renders as the ``## ✓ Loud-Fail Markers — None`` sentinel + body
+    text. The block's *presence* is structural per AC-3; the sentinel
+    phrasing is the absence-of-content contract.
+    """
+    rendered = bundle_assembly._render_loud_fail_block(
+        (), marker_registry=runtime_marker_registry
+    )
+    assert rendered.startswith("## ✓ Loud-Fail Markers — None")
+    assert "No loud-fail markers are active on this run." in rendered
+    # The block ends without trailing newline (assembler joins parts).
+    assert "## ⚠️" not in rendered
+
+
+def test_render_loud_fail_block_one_marker_renders_h2_plus_h3_with_four_element_shape(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.1 AC-1 + AC-6 (b): one active marker → H2 + one H3 entry
+    with the four-element structural shape (H3 header + three bullets).
+    """
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("Tier-3-not-configured",), marker_registry=runtime_marker_registry
+    )
+    assert rendered.startswith("## ⚠️ Loud-Fail Markers")
+    assert "### Tier-3-not-configured" in rendered
+    assert "- Sub-classification: none" in rendered
+    assert "- Diagnostic pointer:" in rendered
+    assert "QA Tier-3 (semantic verification) is not configured" in rendered
+    assert "- How to enable:" in rendered
+    assert "Story 6.2" in rendered
+
+
+def test_render_loud_fail_block_multiple_markers_render_in_provided_order(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.1 AC-1 + AC-6 (c): multiple active markers → one entry
+    per marker, in the order provided (NOT re-sorted alphabetically).
+    """
+    markers = ("Tier-3-not-configured", "plan-drift-detected")
+    rendered = bundle_assembly._render_loud_fail_block(
+        markers, marker_registry=runtime_marker_registry
+    )
+    tier3_idx = rendered.index("### Tier-3-not-configured")
+    plan_drift_idx = rendered.index("### plan-drift-detected")
+    assert tier3_idx < plan_drift_idx, (
+        "marker entries must render in active_markers tuple order; "
+        "alphabetical re-sorting would put plan-drift-detected first"
+    )
+
+
+def test_render_loud_fail_block_unknown_marker_class_raises_per_pattern_5(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.1 AC-1 + AC-6 (d): unknown marker class → raises
+    :exc:`UnknownMarkerClass` per Pattern 5; the loud-fail block does
+    NOT silently render an unknown identifier.
+    """
+    with pytest.raises(UnknownMarkerClass):
+        bundle_assembly._render_loud_fail_block(
+            ("not-a-real-marker-class",),
+            marker_registry=runtime_marker_registry,
+        )
+
+
+def test_render_loud_fail_block_diagnostic_pointer_byte_matches_taxonomy(
+    runtime_marker_registry: MarkerClassRegistry, repo_root: pathlib.Path
+) -> None:
+    """Story 6.1 AC-1 + AC-6 (e): the rendered ``Diagnostic pointer:``
+    bullet text byte-matches the verbatim
+    ``schemas/marker-taxonomy.yaml`` ``diagnostic_pointer`` field for
+    the marker class. Story 1.4's authoritative-source rule is
+    structurally enforced.
+    """
+    raw_taxonomy = yaml.safe_load(
+        (repo_root / "schemas" / "marker-taxonomy.yaml").read_text(encoding="utf-8")
+    )
+    # Normalize using the same whitespace-collapse the renderer applies so the
+    # assertion matches the rendered output. The taxonomy's |block scalars wrap
+    # at column width; " ".join(...split()) collapses those line-continuation
+    # newlines to spaces without altering content.
+    diagnostic_text = " ".join(
+        next(
+            entry["diagnostic_pointer"]
+            for entry in raw_taxonomy["markers"]
+            if entry["marker_class"] == "Tier-3-not-configured"
+        ).split()
+    )
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("Tier-3-not-configured",), marker_registry=runtime_marker_registry
+    )
+    assert diagnostic_text in rendered, (
+        "diagnostic_pointer text must be sourced from marker-taxonomy.yaml "
+        "(after whitespace normalization) — Story 1.4 single-source-of-truth invariant"
+    )
+
+
+def test_render_loud_fail_block_sub_classification_renders_taxonomy_values(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.1 AC-1: when the taxonomy entry's ``sub_classifications``
+    is non-empty, the rendered ``Sub-classification:`` bullet surfaces
+    the taxonomy values (placeholder slot for Story 6.2's per-context
+    interpolation).
+    """
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("env-setup-failed",), marker_registry=runtime_marker_registry
+    )
+    assert "### env-setup-failed" in rendered
+    # taxonomy entry has sub_classifications: [port-bind-failed,
+    # playwright-launch-failed, dev-server-not-ready]
+    assert "port-bind-failed" in rendered
+    assert "playwright-launch-failed" in rendered

@@ -335,6 +335,13 @@ class ExhaustionContext(BaseModel):
     last_retry_directive: LastRetryDirective | None
     scope_violation_diagnostic: ScopeAssertionDiagnostic | None
     bundle_artifact_path: str = Field(min_length=1)
+    # Story 6.1: the ``run_state.active_markers`` snapshot for the run,
+    # consumed by the escalation-bundle's loud-fail block sub-renderer.
+    # Defaults to the empty tuple so existing call sites that do not yet
+    # surface ``active_markers`` continue to work; the on-disk run-state
+    # IS the source of truth (Story 2.2) and the empty default lands the
+    # ``## ✓ Loud-Fail Markers — None`` sentinel per AC-3.
+    active_markers: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def _require_trigger_diagnostic_co_presence(self) -> ExhaustionContext:
@@ -785,6 +792,7 @@ def record_retry_budget_exhaustion(
         last_retry_directive=current_state.last_retry_directive,
         scope_violation_diagnostic=scope_violation_diagnostic,
         bundle_artifact_path=bundle_artifact_path,
+        active_markers=current_state.active_markers,
     )
 
     # Step 4: construct next_state — only current_state field mutates.

@@ -748,10 +748,12 @@ def test_bundle_render_emits_marker_when_plan_drift_present(
         f"got {marker_count}"
     )
     assert "### Plan drift detected" in body
-    # Story 3.4's walking-skeleton-bundle marker still emits at Epic 4
-    # substrate state (the structural-not-era-based rule from
-    # architecture.md line 1581).
-    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+    # Story 6.1 inversion: the walking-skeleton-bundle marker stops
+    # emitting on post-6.1 runs because ``is_loud_fail_block_present()``
+    # now returns True via the structural derivation. The plan-drift
+    # marker emits independently (its rule is based on the QA
+    # envelope's ``plan_drift`` field, not on any thickening flag).
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in body
 
 
 # 18

@@ -176,6 +176,7 @@ from typing import ClassVar, Literal
 import yaml
 
 from loud_fail_harness._shared import find_repo_root
+from loud_fail_harness.exceptions import ContractViolation
 
 
 @dataclasses.dataclass(frozen=True)
@@ -251,7 +252,7 @@ class ScopeAssertionDiagnostic:
     declared_expansion: tuple[str, ...]
 
 
-class ScopeAssertionViolation(Exception):
+class ScopeAssertionViolation(ContractViolation):
     """Raised when an operator wants the violation surfaced as an
     exception (not used by the verifier itself — the verifier returns
     a :class:`ScopeAssertionResult`; the exception class exists for

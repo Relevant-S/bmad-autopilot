@@ -18,9 +18,10 @@ Each test asserts the structural witnesses Story 5.9 AC-4 calls out:
         variants; the run-state's ``retry_history`` field is populated
         and the on-disk retry-history artifacts exist for the patch-fix
         path);
-    (c) the marker-emission set contains ``walking-skeleton-bundle``
-        (still emits because ``is_loud_fail_block_present()`` is
-        ``False`` per AC-3);
+    (c) the marker-emission set does NOT contain ``walking-skeleton-bundle``
+        (Story 6.1 AC-4 structural inversion — ``is_loud_fail_block_present()``
+        now returns ``True``; the existing ``_emit_walking_skeleton_marker``
+        rule ``if flags.is_loud_fail_block_present(): return ()`` fires);
     (d) the per-trigger marker (``scope-assertion-violation`` for the
         violation path; ``retry-budget-exhausted`` for the exhaustion
         path) is present on the diagnostic + the bundle's machine-
@@ -302,7 +303,7 @@ def test_walking_skeleton_smoke_patch_fix_path(tmp_path: pathlib.Path) -> None:
         )
 
     # Assemble the merge-ready bundle against the production thickening_flags
-    # module (post-5.9 substrate state — three flags True, one flag False).
+    # module (post-6.1 substrate state — FOUR flags True; in-place-flip cohort closed).
     bundle_root = tmp_path / "pr-bundles"
     result = assemble_bundle(
         story_id=story_id,
@@ -331,25 +332,25 @@ def test_walking_skeleton_smoke_patch_fix_path(tmp_path: pathlib.Path) -> None:
     assert persisted_artifact["round_id"] == "round-01"
     assert persisted_artifact["retry_attempt"] == 1
 
-    # (c) marker-emission set contains walking-skeleton-bundle.
+    # (c) Story 6.1 inversion: walking-skeleton-bundle marker stops
+    # emitting on post-6.1 runs because ``is_loud_fail_block_present()``
+    # returns True via the structural derivation. The Epic-2 emission
+    # invariant lives at ``test_walking_skeleton_smoke_bundle_thickening_flags_state``
+    # (test_walking_skeleton_smoke.py) where the flag is patched.
     bundle_text = result.bundle_path.read_text(encoding="utf-8")
     assert (
-        "<!-- bmad-automation:marker walking-skeleton-bundle -->" in bundle_text
+        "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in bundle_text
     )
-    assert "walking-skeleton-bundle" in result.emitted_markers
+    assert "walking-skeleton-bundle" not in result.emitted_markers
 
-    # (e) Walking Skeleton header omits the "No retry" sentence — the
-    # post-Story-5.9 structural witness of the is_retry_present() flip.
+    # (e) Walking Skeleton header enters the all-thickenings-landed
+    # branch post-6.1 — none of the four flag-witness sentences appear.
     assert "No retry" not in result.header_text
     assert "No retry" not in bundle_text
-
-    # The other prior-flip invariants are preserved.
     assert "Single-layer review (Epic 3 thickens" not in bundle_text
     assert "Tier-1 evidence only" not in bundle_text
-
-    # Epic 6 still owes its thickening — "No loud-fail block" remains in the
-    # rendered header (this is the only bullet at the post-5.9 substrate state).
-    assert "No loud-fail block" in result.header_text
+    assert "No loud-fail block" not in result.header_text
+    assert "All thickening features are present" in result.header_text
 
     # tmp_path scoping: every emitted artifact lives inside the sandbox.
     assert result.bundle_path.is_relative_to(tmp_path)
@@ -481,10 +482,11 @@ def test_walking_skeleton_smoke_scope_violation_path(tmp_path: pathlib.Path) -> 
     # The diagnostic's violating-files path is rendered.
     assert "bmad-autopilot/unrelated.py" in body
 
-    # (c) walking-skeleton-bundle marker present on bundle.
-    assert "walking-skeleton-bundle" in bundle_result.emitted_markers
+    # (c) Story 6.1 inversion: walking-skeleton-bundle marker is absent
+    # post-6.1 (structural inversion via the computed flag).
+    assert "walking-skeleton-bundle" not in bundle_result.emitted_markers
     assert (
-        "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+        "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in body
     )
 
     # (d) per-trigger marker present on the diagnostic + the bundle's
@@ -650,12 +652,13 @@ def test_walking_skeleton_smoke_budget_exhaustion_path(
     assert "round-01" in body
     assert "round-02" in body
 
-    # (c) walking-skeleton-bundle marker present on bundle.
+    # (c) Story 6.1 inversion: walking-skeleton-bundle marker absent
+    # post-6.1 (structural inversion via the computed flag).
     assert (
-        bundle_assembly.WALKING_SKELETON_MARKER in bundle_result.emitted_markers
+        bundle_assembly.WALKING_SKELETON_MARKER not in bundle_result.emitted_markers
     )
     assert (
-        "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
+        "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in body
     )
 
     # (d) per-trigger marker present on the diagnostic + the bundle's

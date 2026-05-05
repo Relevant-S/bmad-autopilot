@@ -1,39 +1,48 @@
 <!--
 Canonical example PR bundle fixture — Story 4.2 (AC-hash plan-drift
-detection + plan_status reset); regenerated at Story 5.9 (walking-
-skeleton thickening flag flip — `is_retry_present` → True; Epic 5
-close; post-3.4 + post-4.13 + post-5.9 cumulative flag-flip state —
-THREE flags True (`is_full_review_present` since Story 3.4;
-`is_full_qa_present` since Story 4.13; `is_retry_present` since Story
-5.9); ONE flag False (`is_loud_fail_block_present` — Epic 6 owns).
+detection + plan_status reset); regenerated at Story 6.1 (loud-fail
+block + structural-derivation flag flip; Epic 6 OPEN; the in-place-
+flip cohort closes — FOUR flags True (`is_full_review_present` since
+Story 3.4; `is_full_qa_present` since Story 4.13; `is_retry_present`
+since Story 5.9; `is_loud_fail_block_present` since Story 6.1 —
+flipped via *structural derivation* per AC-2's drift-prevention
+contract-pair contract).
 
 Source story: bmad-autopilot/_bmad-output/implementation-artifacts/4-2-ac-hash-plan-drift-detection-plan-status-reset.md
-Story 5.9 regeneration source: bmad-autopilot/_bmad-output/implementation-artifacts/5-9-walking-skeleton-thickening-flag-flip-is-retry-present-true.md
-Source envelopes (canonical corpus — unchanged at Story 5.9 because
-Story 5.9 is a flag flip + retry-domain smoke fixtures; no edit to the
-canonical envelope corpus or assembler-rendering code is required for
-the omission to fire):
+Story 6.1 regeneration source: bmad-autopilot/_bmad-output/implementation-artifacts/6-1-loud-fail-block-pr-bundle-structure-computed-flag-marker-emission-inversion.md
+Source envelopes (canonical corpus — unchanged at Story 6.1):
   - examples/envelopes/dev-pass.yaml                       (Story 1.2)
   - examples/envelopes/review-pass-three-layer.yaml        (Story 3.1)
   - examples/envelopes/qa-pass-with-plan-drift.yaml        (Story 4.2)
 Assembler module: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py
 
-This fixture is a regression baseline. Subsequent epic (6) regenerates
-this fixture in place when bundle rendering thickens — review the diff
-before committing the regenerated fixture. The Story 5.9 regeneration
-delta is the dropped "No retry" bullet from the Walking Skeleton Mode
-header (the structural witness of `is_retry_present()` flipping True);
-no edit to the assembler's `_render_walking_skeleton_header` or
-`_THICKENING_SENTENCES` was required.
+This fixture is a regression baseline. The pre-Epic-6 snapshot is
+preserved at `pre-epic-6-snapshot.md` (Story 6.1 AC-4 + Story 1.4
+permanence rule). Subsequent epics regenerate THIS fixture in place
+when bundle rendering thickens; the snapshot is NEVER touched.
 
 Story 4.2 surface exercised: the QA envelope's `plan_drift` field is
 non-null, so the assembler renders an `### Plan drift detected` H3
 sub-section under `## Per-AC results` carrying the four-field
 diagnostic context plus the structured `plan-drift-detected` marker
-comment co-located. The Story 3.4 `walking-skeleton-bundle` marker
-continues to emit at the bundle's bottom because Epic 6 / Story 6.1's
-loud-fail-block landing has not flipped `is_loud_fail_block_present`
-yet.
+comment co-located.
+
+Story 6.1 regeneration delta:
+  (i)   Walking Skeleton Mode header now renders the all-thickenings-
+        landed sentinel (the four sentence-prefixes — "Single-layer
+        review" / "Tier-1 evidence only" / "No retry" / "No loud-fail
+        block" — are all dropped because all four flags return True).
+  (ii)  New `## ✓ Loud-Fail Markers — None` H2 block rendered as the
+        FIRST content section after the title metadata block + Walking
+        Skeleton header per AC-1 + AC-3.
+  (iii) The structured `bmad-automation:marker walking-skeleton-bundle`
+        comment is dropped from the bundle — the structural rule
+        `if flags.is_loud_fail_block_present(): return ()` at
+        `_emit_walking_skeleton_marker` fires (the rule itself is
+        unchanged; only the flag's return value changed).
+  (iv)  The `plan-drift-detected` marker comment continues to emit
+        co-located with the `### Plan drift detected` H3 sub-section
+        (Story 4.2's surface is unaffected by 6.1's flag flip).
 -->
 # PR bundle — story sample-auto-001 (run run-2026-04-30-001)
 
@@ -43,9 +52,11 @@ Generated: 2026-04-30T12:00:00+00:00
 
 ## ⚠️ Walking Skeleton Mode
 
-This PR bundle is a walking-skeleton — it enumerates the structural shape of the BMAD automation loop while the following thickenings remain unfinished:
+All thickening features are present; this bundle is no longer a walking-skeleton. The Walking Skeleton Mode header section is retained for structural-historical continuity.
 
-- No loud-fail block (Epic 6 thickens with the dedicated top-of-bundle loud-fail block + per-specialist × per-retry cost breakdown + actionable how-to-enable pointers).
+## ✓ Loud-Fail Markers — None
+
+No loud-fail markers are active on this run.
 
 ## Per-AC results
 
@@ -97,6 +108,3 @@ feat(harness): land envelope schema + validator (substrate component 1)
 ```
 
 Scope expanded to: (none)
-
-
-<!-- bmad-automation:marker walking-skeleton-bundle -->

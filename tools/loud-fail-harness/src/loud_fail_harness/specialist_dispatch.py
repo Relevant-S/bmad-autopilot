@@ -319,6 +319,7 @@ from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from loud_fail_harness._shared import find_repo_root, load_schema
+from loud_fail_harness.exceptions import ContractViolation
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
 from loud_fail_harness.event_validator import validate_event
 from loud_fail_harness.orchestrator_run_entry import (
@@ -416,7 +417,7 @@ def validate_marker_emission(
         )
 
 
-class UnknownMarkerClass(Exception):
+class UnknownMarkerClass(ContractViolation):
     """Raised by :func:`validate_marker_emission` when the candidate marker
     class is not in the registry's enumeration.
 

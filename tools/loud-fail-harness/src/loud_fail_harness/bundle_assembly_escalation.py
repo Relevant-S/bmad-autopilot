@@ -139,6 +139,7 @@ from loud_fail_harness.bundle_assembly import (
     _atomic_write_bundle,
     _emit_walking_skeleton_marker,
     _render_finding_bullet,
+    _render_loud_fail_block,
     _render_marker,
     _render_walking_skeleton_header,
     _THICKENING_SENTENCES,
@@ -171,6 +172,7 @@ __all__ = [
     "_default_thickening_flags",
     "_emit_walking_skeleton_marker",
     "_render_finding_bullet",
+    "_render_loud_fail_block",
     "_render_marker",
     "_render_walking_skeleton_header",
     "validate_payload_against_schema",
@@ -743,6 +745,7 @@ def _render_bundle_body(
     header_text: str,
     payload: Mapping[str, Any],
     emitted_markers: tuple[str, ...],
+    marker_registry: MarkerClassRegistry,
 ) -> str:
     """Render the full markdown body for an Epic-5-domain escalation
     bundle (retry-budget-exhausted OR scope-assertion-violation).
@@ -750,6 +753,18 @@ def _render_bundle_body(
     The six AC-2 sections are rendered in fixed order; the trailing
     machine-readable block carries the validated payload.
     """
+    # Story 6.1: the loud-fail block is the FIRST content section after
+    # the title metadata block + the ``## ⚠️ Walking Skeleton Mode``
+    # header, BEFORE ``## Escalation rationale`` per AC-1's verbatim
+    # structural-position contract. Rendered via the SAME
+    # :func:`_render_loud_fail_block` sub-renderer as merge-ready bundles
+    # (single source of truth per Story 5.8 AC-4); content differs but
+    # position + shape are byte-identical for any given ``active_markers``
+    # set per AC-5.
+    loud_fail_block = _render_loud_fail_block(
+        context.active_markers, marker_registry=marker_registry
+    )
+
     sections: list[str] = [
         f"# Escalation bundle — story {context.story_id} (run {context.run_id})",
         "",
@@ -760,6 +775,8 @@ def _render_bundle_body(
         "## ⚠️ Walking Skeleton Mode",
         "",
         header_text,
+        "",
+        loud_fail_block,
         "",
         "## Escalation rationale",
         "",
@@ -933,6 +950,7 @@ def assemble_escalation_bundle(
         header_text=header_text,
         payload=payload,
         emitted_markers=emitted_markers,
+        marker_registry=registry,
     )
 
     # Step 5: Atomic write at the deterministic per-run path.

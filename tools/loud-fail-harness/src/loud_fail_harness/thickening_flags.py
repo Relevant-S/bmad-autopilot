@@ -2,17 +2,20 @@
 
 Four boolean-returning functions naming the four thickening features
 that downstream Epics flip in place as their thickenings land.
-Post-Story-5.9 substrate state: THREE flags return ``True``
-(:func:`is_full_review_present` flipped at Story 3.4 — the first
-production in-place flip; :func:`is_full_qa_present` flipped at Story
-4.13 — the second production in-place flip closing Epic 4;
-:func:`is_retry_present` flipped at Story 5.9 — the third production
-in-place flip closing Epic 5); ONE flag continues to return ``False``
-(:func:`is_loud_fail_block_present` — Epic 6 owns). The Story 3.4 +
-Story 4.13 + Story 5.9 relaxations confirm the in-place-flip pattern's
-structural posture: each Epic flips its corresponding flag in this
-same module (same module identity, same function signatures), only the
-function bodies thicken:
+Post-Story-6.1 substrate state: FOUR flags return ``True`` — the
+in-place-flip cohort closes (:func:`is_full_review_present` flipped at
+Story 3.4 — the first production in-place flip; :func:`is_full_qa_present`
+flipped at Story 4.13 — the second production in-place flip closing
+Epic 4; :func:`is_retry_present` flipped at Story 5.9 — the third
+production in-place flip closing Epic 5; :func:`is_loud_fail_block_present`
+flipped at Story 6.1 — the FOURTH and FINAL production in-place flip
+opening Epic 6, distinguished from the three priors by being a
+*structural derivation* rather than a literal ``return True`` per
+AC-2's drift-prevention contract-pair pattern). The Story 3.4 + Story
+4.13 + Story 5.9 + Story 6.1 relaxations confirm the in-place-flip
+pattern's structural posture: each Epic flips its corresponding flag
+in this same module (same module identity, same function signatures),
+only the function bodies thicken:
 
     * Epic 3 (3-layer adversarial review) flips :func:`is_full_review_present`.
     * Epic 4 (full QA specialist with Tier-2 + Tier-3 evidence + plan
@@ -42,6 +45,9 @@ section-emission registry) without breaking the call sites in
 :mod:`loud_fail_harness.bundle_assembly`. This mirrors the
 runtime-load-not-compile-time-bake posture established by Story 2.6's
 :func:`loud_fail_harness.specialist_dispatch.load_marker_class_registry`.
+Story 6.1 IS the production landing of this forward-compat posture —
+:func:`is_loud_fail_block_present` reads the assembler's source via
+:func:`inspect.getsource` to derive its return value structurally.
 
 The marker-emission rule the assembler (Story 2.11) implements is
 predicated on :func:`is_loud_fail_block_present` per the verbatim epic
@@ -61,6 +67,59 @@ component beyond ADR-003's enumerated five.
 """
 
 from __future__ import annotations
+
+import inspect
+
+from loud_fail_harness.exceptions import ContractViolation
+
+
+#: The name of the loud-fail-block sub-renderer Story 6.1 wires into
+#: :func:`loud_fail_harness.bundle_assembly.assemble_bundle`. Used by
+#: :func:`is_loud_fail_block_present`'s structural-derivation path to
+#: assert the assembler's source references the sub-renderer.
+_LOUD_FAIL_BLOCK_RENDERER_NAME: str = "_render_loud_fail_block"
+
+
+class LoudFailBlockWireUpBroken(ContractViolation):
+    """Raised by :func:`is_loud_fail_block_present` when the assembler's
+    source does NOT reference the loud-fail-block sub-renderer.
+
+    Pattern 5 named-invariant diagnostic per the Story 6.1 AC-2
+    drift-prevention contract-pair contract. The computed flag and the
+    assembler's render path are a contract pair (Story 5.3 precedent +
+    Story 2.2 atomic-write-helper precedent) — when the contract is
+    broken, the failure mode is loud, NOT silently-``False``. Silent
+    ``False`` would be a structural drift that subsequent Epic-6 stories
+    (6.2 actionable pointers, 6.3 coverage audit, 6.7 timeout/hook-failed
+    wiring, 6.9 bundle-assembly-failed marker) would build atop without
+    notice.
+
+    Attributes:
+        renderer_name: The sub-renderer identifier the flag expected to
+            find in the assembler's source.
+        assembler_qualname: The qualified name of the assembler function
+            whose source was inspected.
+    """
+
+    def __init__(
+        self,
+        *,
+        renderer_name: str,
+        assembler_qualname: str,
+    ) -> None:
+        self.renderer_name = renderer_name
+        self.assembler_qualname = assembler_qualname
+        super().__init__(
+            f"LoudFailBlockWireUpBroken: assembler {assembler_qualname!r} "
+            f"source does not reference {renderer_name!r}; "
+            "is_loud_fail_block_present() refuses to silently return False "
+            "(Story 6.1 AC-2 contract-pair invariant — Pattern 5 loud-fail "
+            "doctrine: the flag and the assembler's render path are a "
+            "contract pair per Story 5.3 / Story 2.2 precedent). "
+            "Remediation: re-wire the loud-fail block sub-renderer into "
+            "the assembler's body, OR remove the call site for "
+            "is_loud_fail_block_present."
+        )
 
 
 def is_full_review_present() -> bool:
@@ -141,16 +200,62 @@ def is_retry_present() -> bool:
 
 def is_loud_fail_block_present() -> bool:
     """``True`` once Epic 6's dedicated top-of-bundle loud-fail block
-    section + per-specialist × per-retry cost breakdown + actionable
-    how-to-enable pointer enrichment lands.
+    section has landed in the assembler.
 
-    Epic 2 substrate state: returns ``False`` unconditionally — the
-    Epic-2-era PR bundle does NOT include a ``## Loud-fail`` H2 section
-    (the absence is structural, NOT a placeholder), and the
-    ``walking-skeleton-bundle`` marker emits unconditionally per AC-4
-    of Story 2.11. Epic 6's Story 6.1 lands the loud-fail block, at
-    which point this function flips in place AND the marker emission
-    rule (predicated on this flag in :mod:`loud_fail_harness.bundle_assembly`)
-    inverts: the marker stops emitting.
+    Post-Story-6.1 substrate state: returns ``True`` via *structural
+    derivation*. The function imports
+    :mod:`loud_fail_harness.bundle_assembly` lazily (avoids import-cycle
+    with the assembler), reads
+    ``inspect.getsource(bundle_assembly.assemble_bundle)``, and returns
+    ``True`` iff the assembler's source references the
+    ``_render_loud_fail_block`` sub-renderer. There is no internal
+    stored boolean, no hardcoded ``return True``, no module-level
+    constant — the return value is derived from the assembler's source
+    at every call.
+
+    This is the drift-prevention contract-pair pattern Story 5.3
+    ratified for ``affected_files / scope_expanded_to`` (where the
+    scope assertion is structurally verified, not stored as a separate
+    flag) and Story 2.2 ratified for atomic-write ordering (where the
+    write order is enforced by the helper's signature, not by external
+    orchestration). The flag and the assembler's render path form a
+    contract pair: the function literally returns ``True`` if and only
+    if the bundle assembler emits the loud-fail block; there is no path
+    that returns ``True`` while the block is missing or ``False`` while
+    the block is present.
+
+    Loud-fail discipline (Pattern 5): if the assembler exists but the
+    sub-renderer is not wired into it, the function raises
+    :exc:`LoudFailBlockWireUpBroken` — a named-invariant
+    :exc:`ContractViolation`-class diagnostic — rather than silently
+    returning ``False``. Silent ``False`` would be a structural drift
+    that subsequent Epic-6 stories (6.2 actionable pointers, 6.3
+    coverage audit, 6.7 timeout/hook-failed wiring, 6.9 bundle-
+    assembly-failed marker) would build atop without notice.
+
+    The flag's return value is derived from
+    :func:`inspect.getsource` ``(bundle_assembly.assemble_bundle)``;
+    there is no path that returns ``True`` while the block is missing
+    or ``False`` while the block is present — the function and the
+    assembler's render path are a contract pair per Story 5.3's
+    ``affected_files / scope_expanded_to`` precedent and Story 2.2's
+    atomic-write-helper precedent.
     """
-    return False
+    # Lazy import: avoid a module-import-time cycle between
+    # ``thickening_flags`` and ``bundle_assembly`` (the assembler
+    # imports this module at the top level).
+    from loud_fail_harness import bundle_assembly
+
+    try:
+        source = inspect.getsource(bundle_assembly.assemble_bundle)
+    except (OSError, TypeError) as exc:
+        raise LoudFailBlockWireUpBroken(
+            renderer_name=_LOUD_FAIL_BLOCK_RENDERER_NAME,
+            assembler_qualname=bundle_assembly.assemble_bundle.__qualname__,
+        ) from exc
+    if _LOUD_FAIL_BLOCK_RENDERER_NAME in source:
+        return True
+    raise LoudFailBlockWireUpBroken(
+        renderer_name=_LOUD_FAIL_BLOCK_RENDERER_NAME,
+        assembler_qualname=bundle_assembly.assemble_bundle.__qualname__,
+    )

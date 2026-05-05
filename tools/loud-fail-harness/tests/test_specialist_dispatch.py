@@ -285,6 +285,7 @@ _INTRA_PACKAGE_IMPORT_ALLOWLIST = frozenset(
         "loud_fail_harness._shared",
         "loud_fail_harness.envelope_validator",
         "loud_fail_harness.event_validator",
+        "loud_fail_harness.exceptions",
         "loud_fail_harness.orchestrator_run_entry",
         "loud_fail_harness.reconciler",
     }

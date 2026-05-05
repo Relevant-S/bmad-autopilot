@@ -20,7 +20,7 @@ Contract-coverage matrix (AC-4 of Story 2.13):
         → test_walking_skeleton_smoke_per_specialist_logs_include_runtime_duration_ms
     [x] bundle has '## ⚠️ Walking Skeleton Mode' first content section
         → test_walking_skeleton_smoke_run_end_to_end
-    [x] bundle has 'walking-skeleton-bundle' marker line
+    [x] bundle does NOT have 'walking-skeleton-bundle' marker (Story 6.1 structural inversion)
         → test_walking_skeleton_smoke_run_end_to_end
     [x] bundle does NOT carry loud-fail block / retry history sections
         → test_walking_skeleton_smoke_run_end_to_end
@@ -680,9 +680,11 @@ def test_walking_skeleton_smoke_run_end_to_end(
 
     Asserts the bundle's structural shape per AC-4: the
     ``## ⚠️ Walking Skeleton Mode`` H2 is the FIRST content section after
-    the H1 + metadata block; the ``walking-skeleton-bundle`` marker line is
-    present (Story 2.11 AC-2 + AC-5); the bundle does NOT contain the
-    Epic-5 retry-history section or the Epic-6 loud-fail-block section.
+    the H1 + metadata block; the ``walking-skeleton-bundle`` marker is ABSENT
+    (Story 6.1 AC-4 structural inversion — ``is_loud_fail_block_present()``
+    returns ``True`` so ``_emit_walking_skeleton_marker`` returns ``()``);
+    the bundle contains the ``## ✓ Loud-Fail Markers — None`` block (AC-3)
+    and does NOT contain the Epic-5 retry-history section.
     Asserts the bundle's per-AC + review + Dev sections render the canned
     envelopes' content. Asserts every emitted artifact lives under
     ``tmp_path`` per the test-isolation contract.
@@ -696,14 +698,21 @@ def test_walking_skeleton_smoke_run_end_to_end(
         f"first H2 is {h2_headers[0]!r}, expected '## ⚠️ Walking Skeleton Mode'"
     )
 
-    # Walking-skeleton-bundle marker is present (machine-readable per Story 2.11 AC-5).
-    assert "walking-skeleton-bundle" in smoke_run.bundle_emitted_markers
-    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in bundle
+    # Story 6.1 inversion: walking-skeleton-bundle marker is ABSENT
+    # post-6.1 because ``is_loud_fail_block_present()`` now returns
+    # True via the structural derivation. The Epic-2 invariant —
+    # "marker present" — is preserved against an Epic-2-baseline flag
+    # namespace by ``test_walking_skeleton_smoke_bundle_thickening_flags_state``
+    # below; this end-to-end test runs against the production module.
+    assert "walking-skeleton-bundle" not in smoke_run.bundle_emitted_markers
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in bundle
 
-    # No Epic-5 retry-history section, no Epic-6 loud-fail-block section.
-    assert "## Loud-fail" not in bundle
+    # Epic-6 loud-fail block IS present (Story 6.1) — sentinel form
+    # because the smoke fixture seeds zero active markers in run-state.
+    assert "## ✓ Loud-Fail Markers — None" in bundle
+    # Epic-5 retry-history section remains out of scope (smoke fixture
+    # has empty retry_history).
     assert "## Retry history" not in bundle
-    assert "## Loud-Fail" not in bundle  # case-insensitive belt-and-suspenders
 
     # Per-AC section renders Story 2.10's exactly-one-entry shape.
     assert "## Per-AC results" in bundle
@@ -843,18 +852,24 @@ def test_walking_skeleton_smoke_bundle_thickening_flags_state(
     ``thickening_flags.is_loud_fail_block_present`` per Story 2.11 AC-5.
 
     Drives the smoke run twice in two separate ``tmp_path`` sandboxes:
-    once with the canonical Epic-2 flag state (returns ``False``; marker
-    emitted) and once with the flag patched to ``True`` (Epic-6 substrate
-    state simulation; marker suppressed). Confirms the structural-condition
-    contract: the marker emission inverts on the flag's return value, NOT
-    on a hardcoded "if Epic == 2" check.
+    once with an Epic-2-baseline flag state (patched ``False``; marker
+    emitted) and once against the production post-6.1 module (the
+    structural derivation returns ``True``; marker suppressed).
+    Confirms the structural-condition contract: the marker emission
+    inverts on the flag's return value, NOT on a hardcoded
+    "if Epic == 2" check.
 
     Per Subtask 2.8: after the assertion the patch is reverted (pytest's
-    ``monkeypatch`` fixture handles teardown automatically).
+    ``monkeypatch`` fixture handles teardown automatically). Story 6.1
+    re-baselines the test by patching to ``False`` for the marker-
+    emitting run (the production default is now ``True``).
     """
     _, _, fixture_path = fixture_data
 
-    # Run 1: canonical Epic-2 flag state — marker emitted.
+    # Run 1: Epic-2-baseline flag state (patched False) — marker emitted.
+    monkeypatch.setattr(
+        thickening_flags, "is_loud_fail_block_present", lambda: False
+    )
     sandbox_a = tmp_path / "sandbox-flag-false"
     sandbox_a.mkdir()
     result_false = _drive_smoke_run(
@@ -869,7 +884,8 @@ def test_walking_skeleton_smoke_bundle_thickening_flags_state(
         in result_false.bundle_text
     )
 
-    # Run 2: patched flag state — marker suppressed.
+    # Run 2: patched flag state True — marker suppressed (mirrors the
+    # post-6.1 production-module behavior).
     monkeypatch.setattr(
         thickening_flags, "is_loud_fail_block_present", lambda: True
     )

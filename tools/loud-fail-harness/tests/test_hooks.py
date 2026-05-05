@@ -421,11 +421,17 @@ def test_stop_creates_parent_directories_idempotently(
     assert result.returncode == 0
 
 
-def test_stop_bundle_content_includes_walking_skeleton_anchor(
+def test_stop_bundle_content_omits_walking_skeleton_marker_at_post_6_1_substrate(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
-    """Story 2.11 AC-9: replace the legacy fragile-prose marker form
-    with the structured form per Story 2.11 AC-4.
+    """Story 6.1 AC-3 / AC-4 — assertion inversion. Post-6.1 the
+    production thickening_flags's ``is_loud_fail_block_present()``
+    returns ``True`` via structural derivation; the structural rule
+    ``if flags.is_loud_fail_block_present(): return ()`` at
+    :func:`_emit_walking_skeleton_marker` fires, so the structured
+    walking-skeleton-bundle marker comment is absent from new runs.
+    The legacy fragile-prose form remains forbidden per Story 2.11
+    AC-4 regardless of era.
     """
     _write_run_state(fixture_repo, story_id="2-7-anchor")
     _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-anchor", run_id="r1")
@@ -433,18 +439,22 @@ def test_stop_bundle_content_includes_walking_skeleton_anchor(
     assert result.returncode == 0
     bundle = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-anchor" / "r1.md"
     body = bundle.read_text(encoding="utf-8")
-    # Structured form per AC-4.
-    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" in body
-    # Legacy placeholder form forbidden.
+    # Marker absent post-6.1 (structural inversion via flag flip).
+    assert "<!-- bmad-automation:marker walking-skeleton-bundle -->" not in body
+    # Legacy placeholder form forbidden regardless of era.
     assert "<!-- walking-skeleton-bundle: marker_class -->" not in body
 
 
 def test_stop_bundle_includes_structured_h2_sections(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
-    """AC-9 new assertion: the bundle's H2 sections appear in the
-    canonical order Walking-Skeleton-Mode → Per-AC-results →
-    Review-findings → Dev (AC-3)."""
+    """AC-9 + Story 6.1 AC-1: the bundle's H2 sections appear in the
+    canonical post-6.1 order Walking-Skeleton-Mode → Loud-Fail-Markers
+    → Per-AC-results → Review-findings → Dev. The loud-fail block H2
+    is the first content section after the title metadata block + the
+    Walking Skeleton header per Story 6.1 AC-1's structural-position
+    contract.
+    """
     _write_run_state(fixture_repo, story_id="2-7-sections")
     _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-sections", run_id="r1")
     result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
@@ -454,25 +464,27 @@ def test_stop_bundle_includes_structured_h2_sections(
     h2_lines = [line for line in body.splitlines() if line.startswith("## ")]
     assert h2_lines == [
         "## ⚠️ Walking Skeleton Mode",
+        "## ✓ Loud-Fail Markers — None",
         "## Per-AC results",
         "## Review findings",
         "## Dev",
     ]
 
 
-def test_stop_bundle_omits_loud_fail_cost_retry_sections(
+def test_stop_bundle_omits_cost_retry_sections_at_post_6_1_substrate(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
-    """AC-9 new assertion: Epic 5 retry-history + Epic 6 loud-fail
-    block + Epic 6 cost breakdown sections MUST NOT appear at Epic 2
-    substrate state (AC-3 explicit do-NOT-include list)."""
+    """Story 6.1 inversion: the loud-fail block IS now present (Story
+    6.1 AC-1); the cost-breakdown + retry-history sections remain
+    out-of-scope (Stories 6.4-6.5 + Epic 5 retry history). This test
+    pins the absence of the still-out-of-scope sections.
+    """
     _write_run_state(fixture_repo, story_id="2-7-omits")
     _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-omits", run_id="r1")
     result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
     assert result.returncode == 0
     bundle = fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-omits" / "r1.md"
     body = bundle.read_text(encoding="utf-8")
-    assert "## Loud-fail" not in body
     assert "## Cost breakdown" not in body
     assert "## Per-specialist cost" not in body
     assert "## Retry history" not in body

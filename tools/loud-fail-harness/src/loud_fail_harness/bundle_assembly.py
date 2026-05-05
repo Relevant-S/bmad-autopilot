@@ -877,6 +877,179 @@ def _render_per_layer_marker(marker_class: str, sub_classification: str) -> str:
     )
 
 
+# --------------------------------------------------------------------------- #
+# Loud-fail block rendering (Story 6.1 — top-of-bundle dedicated block)       #
+# --------------------------------------------------------------------------- #
+
+
+#: The literal "How to enable" placeholder string emitted by
+#: :func:`_render_loud_fail_block` for every active marker entry. Story
+#: 6.2 thickens this slot by interpolating the ``diagnostic_pointer``
+#: text against per-marker context (``{ac_id}`` / ``{specialist}`` /
+#: ``{port}`` / ``{version_range}``) per FR31; Story 6.1 emits the raw
+#: placeholder so the structural slot exists.
+_HOW_TO_ENABLE_PLACEHOLDER: str = (
+    "(actionable pointer interpolation lands at Story 6.2 — see "
+    "marker-taxonomy.yaml entry for the diagnostic_pointer template)"
+)
+
+
+#: Sentinel H2 + body emitted when ``run_state.active_markers`` is
+#: empty. Per AC-3 the block's *presence* is structural — the H2 is
+#: rendered even when no markers are active so downstream tooling can
+#: rely on a deterministic structural anchor.
+_LOUD_FAIL_NONE_SENTINEL: str = (
+    "## ✓ Loud-Fail Markers — None\n\n"
+    "No loud-fail markers are active on this run."
+)
+
+
+def _load_marker_taxonomy_entries(
+    taxonomy_path: pathlib.Path | None = None,
+) -> Mapping[str, Mapping[str, Any]]:
+    """Load the full marker-taxonomy YAML and return a mapping from
+    ``marker_class`` to the entry's ``diagnostic_pointer`` +
+    ``sub_classifications`` fields.
+
+    Sibling to
+    :func:`loud_fail_harness.specialist_dispatch.load_marker_class_registry`
+    (which only carries the marker-class identifier set); THIS helper
+    surfaces the per-entry text fields needed to render the loud-fail
+    block per Story 6.1 AC-1's verbatim shape contract. The on-disk
+    taxonomy file is the single source of truth (Story 1.4); the
+    returned dict is a frozen view that does NOT mutate the file.
+
+    Args:
+        taxonomy_path: Optional explicit path to the taxonomy YAML. If
+            ``None``, resolves via
+            :func:`loud_fail_harness._shared.find_repo_root` at
+            function-call time (Epic 1 retro Action #1; NEVER at
+            module import time).
+
+    Returns:
+        :class:`Mapping` from marker-class identifier string to entry
+        mapping. Each entry mapping contains at minimum the
+        ``diagnostic_pointer`` (str) and ``sub_classifications`` (list)
+        fields.
+    """
+    if taxonomy_path is None:
+        taxonomy_path = find_repo_root() / "schemas" / "marker-taxonomy.yaml"
+    raw = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("markers"), list):
+        raise RuntimeError(
+            f"Marker taxonomy at {taxonomy_path} is malformed: expected a "
+            f"mapping with 'markers' list, got {type(raw).__name__}"
+        )
+    entries: dict[str, Mapping[str, Any]] = {}
+    for entry in raw.get("markers", []):
+        if isinstance(entry, dict) and "marker_class" in entry:
+            entries[str(entry["marker_class"])] = entry
+    return entries
+
+
+def _render_loud_fail_block(
+    active_markers: tuple[str, ...],
+    *,
+    marker_registry: MarkerClassRegistry,
+    taxonomy_entries: Mapping[str, Mapping[str, Any]] | None = None,
+) -> str:
+    """Render the Story 6.1 dedicated top-of-bundle loud-fail block.
+
+    Per the verbatim epic AC at ``epics.md`` lines 2550-2554 + PRD FR32:
+    the bundle's first content section after the title and any era
+    headers is a ``## ⚠️ Loud-Fail Markers`` block listing every active
+    marker for the run. When ``active_markers`` is empty the block
+    renders as the ``## ✓ Loud-Fail Markers — None`` sentinel (AC-3 —
+    the block's *presence* is structural, not its non-empty content).
+
+    Per AC-1's four-element entry shape (H3 header + three bullets):
+    each marker entry is rendered as ``### {marker_class}`` H3 followed
+    by:
+
+        * ``- Sub-classification: <str>`` — rendered as ``none`` if the
+          taxonomy lists ``sub_classifications: []``; placeholder slot
+          for Story 6.2's per-marker interpolation.
+        * ``- Diagnostic pointer: <text>`` — verbatim text from the
+          marker-taxonomy entry's ``diagnostic_pointer`` field; Story
+          6.2 thickens the interpolation, 6.1 emits the raw text.
+        * ``- How to enable: <placeholder>`` — the literal
+          :data:`_HOW_TO_ENABLE_PLACEHOLDER` string; Story 6.2 fills
+          this slot with the actionable pointer per FR31.
+
+    Marker-class identifiers are validated against ``marker_registry``
+    per Story 2.6's pattern; rejection raises :exc:`UnknownMarkerClass`
+    per Pattern 5.
+
+    Args:
+        active_markers: Tuple of marker-class identifiers active on the
+            run, sourced from
+            :class:`loud_fail_harness.run_state.RunState.active_markers`.
+            Order is preserved as emitted; entries are not re-sorted.
+        marker_registry: Runtime
+            :class:`loud_fail_harness.specialist_dispatch.MarkerClassRegistry`
+            used to validate every marker-class identifier; rejection
+            raises :exc:`UnknownMarkerClass` per Pattern 5.
+        taxonomy_entries: Optional pre-loaded mapping from marker-class
+            string to taxonomy entry (per
+            :func:`_load_marker_taxonomy_entries`'s return shape).
+            Defaults to a fresh load via
+            :func:`_load_marker_taxonomy_entries` at call time.
+
+    Returns:
+        The rendered markdown body (no leading or trailing newline
+        beyond the canonical structural shape).
+    """
+    if not active_markers:
+        return _LOUD_FAIL_NONE_SENTINEL
+
+    entries = (
+        taxonomy_entries
+        if taxonomy_entries is not None
+        else _load_marker_taxonomy_entries()
+    )
+
+    parts: list[str] = ["## ⚠️ Loud-Fail Markers", ""]
+    for marker_class in active_markers:
+        validate_marker_emission(marker_registry, marker_class)
+        entry = entries.get(marker_class, {})
+        diagnostic_pointer = " ".join(str(entry.get("diagnostic_pointer", "")).split())
+        sub_classifications = entry.get("sub_classifications") or []
+        sub_class_str = (
+            ", ".join(_format_sub_classification(sc) for sc in sub_classifications)
+            if sub_classifications
+            else "none"
+        )
+        parts.append(f"### {marker_class}")
+        parts.append("")
+        parts.append(f"- Sub-classification: {sub_class_str}")
+        parts.append(f"- Diagnostic pointer: {diagnostic_pointer}")
+        parts.append(f"- How to enable: {_HOW_TO_ENABLE_PLACEHOLDER}")
+        parts.append("")
+    # Drop the trailing blank line so the joined block does not
+    # double-newline against the assembler's section separator.
+    if parts and parts[-1] == "":
+        parts.pop()
+    return "\n".join(parts)
+
+
+def _format_sub_classification(sc: Any) -> str:
+    """Render one ``sub_classifications`` entry as a string.
+
+    Taxonomy entries with kebab-case literal sub-classifications appear
+    as plain strings (e.g. ``"port-bind-failed"``); Story 1.4's
+    structured-condition entries appear as mappings. This helper
+    surfaces a stable string projection so the loud-fail block's
+    sub-classification bullet is deterministic regardless of entry
+    shape.
+    """
+    if isinstance(sc, Mapping):
+        condition = sc.get("condition")
+        if isinstance(condition, str) and condition:
+            return condition
+        return str(dict(sc))
+    return str(sc)
+
+
 def _emit_walking_skeleton_marker(
     *,
     flags: ModuleType,
@@ -1026,6 +1199,9 @@ def assemble_bundle(
 
     # Step 4: Render header + section bodies.
     header_text = _render_walking_skeleton_header(flags)
+    loud_fail_block = _render_loud_fail_block(
+        run_state.active_markers, marker_registry=registry
+    )
     per_ac_body = _render_per_ac_section(
         envelopes["qa"], marker_registry=registry
     )
@@ -1034,7 +1210,11 @@ def assemble_bundle(
     )
     dev_body = _render_dev_section(envelopes["dev"])
 
-    # Step 5: Assemble the markdown body.
+    # Step 5: Assemble the markdown body. The loud-fail block is the
+    # FIRST content section after the title metadata block + the
+    # ``## ⚠️ Walking Skeleton Mode`` header, BEFORE
+    # ``## Per-AC results`` / ``## Review findings`` / ``## Dev`` per
+    # Story 6.1 AC-1's verbatim structural-position contract.
     body_parts: list[str] = [
         f"# PR bundle — story {story_id} (run {run_id})",
         "",
@@ -1045,6 +1225,8 @@ def assemble_bundle(
         "## ⚠️ Walking Skeleton Mode",
         "",
         header_text,
+        "",
+        loud_fail_block,
         "",
         "## Per-AC results",
         "",
