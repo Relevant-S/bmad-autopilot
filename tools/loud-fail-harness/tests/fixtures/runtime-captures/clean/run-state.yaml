@@ -1,0 +1,13 @@
+schema_version: "1.3"
+story_id: "runtime-replay-clean"
+run_id: "run-runtime-replay-clean-001"
+current_state: "done"
+branch_name: "story/runtime-replay-clean"
+dispatched_specialist: null
+last_envelope: null
+retry_history: []
+active_markers:
+  - "LAD-skipped"
+  - "Tier-3-not-configured"
+cost_to_date_by_specialist: {}
+pending_qa_dispatch_payload: null

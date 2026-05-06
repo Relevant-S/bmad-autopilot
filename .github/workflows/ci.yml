@@ -180,6 +180,49 @@ jobs:
         # schemas/orchestrator-event.yaml from disk via find_repo_root.
         run: uv run fr33-fixture-gate
 
+      - name: FR33 runtime reconciliation gate (story 6.8)
+        # FR33's loud-fail-marker-completeness invariant over the *runtime*
+        # reference-project surface (architecture.md line 219; PRD § FR33).
+        # PAIRED-BUT-DISTINCT from the immediately-prior FR33 fixture-driven
+        # gate (story 1.8): both gates compose with reconciler.py (story 1.4)
+        # WITHOUT modification (story 6.8 AC-1 + story 1.8 AC-4 — epics.md
+        # line 905 + line 2783); they operate on different inputs (fixture
+        # gate consumes synthetic-story fixtures from
+        # examples/synthetic-stories/; runtime gate consumes captured
+        # reference-project run logs from
+        # tools/loud-fail-harness/tests/fixtures/runtime-captures/);
+        # their CI-failure diagnostics are STRUCTURALLY DISTINCT per AC-2
+        # (epics.md line 2790: "Fixture reconciliation failed: ..." vs.
+        # "Runtime reconciliation failed: ..."); their exit-code triage is
+        # distinct (runtime gate exit 2 = schema-shape-broken OR
+        # marker-taxonomy-mismatch; runtime gate exit 1 =
+        # runtime-reconciliation-mismatch; clean = exit 0).
+        # Replays each capture directory's events.jsonl (per story 2.12) +
+        # run-state.yaml (per story 2.2) through reconciler.reconcile,
+        # asserting every detected skip-event reconciles to an emitted
+        # marker. Per-capture diagnostics name the missing skip-event class
+        # AND the captured emission_site code surface so debuggers know
+        # which specialist or hook missed the marker emission.
+        # Ordering rationale: this gate runs IMMEDIATELY AFTER the fixture-
+        # driven gate per the canonical FR33 enforcement-pair sequencing —
+        # the fixture gate's reconciler-correctness check runs first;
+        # runtime gate's reference-project-completeness check runs second
+        # against the same reconciler (defense-in-depth, not redundancy).
+        # Operational meaning of a failure: (a) a captured reference-
+        # project run produced a skip-event class that no emitted marker
+        # reconciled (specialist or hook missed an emission), OR (b) the
+        # captured fixture's shape is broken / its active_markers carries
+        # a marker class not in schemas/marker-taxonomy.yaml (capture-side
+        # fix).
+        # No positional arguments — the script defaults to globbing
+        # tests/fixtures/runtime-captures/*/ (each subdirectory must
+        # contain BOTH events.jsonl AND run-state.yaml). Resolves
+        # marker-taxonomy + orchestrator-event schema from disk via
+        # find_repo_root. Contributors extend coverage by adding new
+        # capture directories per
+        # tests/fixtures/runtime-captures/README.md.
+        run: uv run fr33-runtime-gate
+
       - name: Hook-budget gate (story 1.9; FR60 + FR61)
         # FR60 + FR61 + NFR-S4: the ≤3 hooks budget is the hook-sprawl-
         # prevention invariant; the 20-lines-of-bash heuristic is the

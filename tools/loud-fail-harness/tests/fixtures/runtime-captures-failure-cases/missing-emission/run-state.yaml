@@ -1,0 +1,12 @@
+schema_version: "1.3"
+story_id: "runtime-replay-missing-emission"
+run_id: "run-runtime-replay-missing-emission-001"
+current_state: "done"
+branch_name: "story/runtime-replay-missing-emission"
+dispatched_specialist: null
+last_envelope: null
+retry_history: []
+active_markers:
+  - "LAD-skipped"
+cost_to_date_by_specialist: {}
+pending_qa_dispatch_payload: null

@@ -1,0 +1,4 @@
+{"event_class": "state-transition", "event_id": "ev-runtime-clean-1", "timestamp": "2026-04-26T00:00:00Z", "story_id": "runtime-replay-clean", "from_state": "ready-for-dev", "to_state": "in-progress"}
+{"event_class": "specialist-returned", "event_id": "ev-runtime-clean-2", "timestamp": "2026-04-26T00:01:00Z", "story_id": "runtime-replay-clean", "marker_class": "LAD-skipped", "emission_site": "agents/lad-wrapper.md:1"}
+{"event_class": "specialist-returned", "event_id": "ev-runtime-clean-3", "timestamp": "2026-04-26T00:02:00Z", "story_id": "runtime-replay-clean", "marker_class": "Tier-3-not-configured", "emission_site": "tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_tier.py:354"}
+{"event_class": "state-transition", "event_id": "ev-runtime-clean-4", "timestamp": "2026-04-26T00:03:00Z", "story_id": "runtime-replay-clean", "from_state": "qa", "to_state": "done"}

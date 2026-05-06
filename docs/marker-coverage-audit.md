@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 29
+- Emitted: 30
 - Not-applicable: 369
-- Scheduled-by-story: 8
+- Scheduled-by-story: 7
 - Gaps: 0
 
 ## Coverage matrix
@@ -297,7 +297,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | reconciler-mismatch-runtime | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
 | reconciler-mismatch-runtime | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
 | reconciler-mismatch-runtime | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
-| reconciler-mismatch-runtime | reconciliation-gate-runtime | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.8 — FR33 runtime reconciliation gate + reconciler-mismatch-runtime marker emission is forward-scoped to Story 6.8. |
+| reconciler-mismatch-runtime | reconciliation-gate-runtime | emitted | `tools/loud-fail-harness/src/loud_fail_harness/fr33_runtime_gate.py:672` | 2026-05-07 |  |
 | reconciler-mismatch-runtime | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
 | reconciler-mismatch-runtime | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
 | reconciler-mismatch-runtime | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |

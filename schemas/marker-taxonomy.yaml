@@ -302,13 +302,17 @@ markers:
 
   - marker_class: reconciler-mismatch-runtime
     diagnostic_pointer: |
-      FR33 (runtime variant) + Epic 6's runtime gate. Distinct from CI
-      fixture-driven gate failures (which use existing harness diagnostics):
-      runtime mismatch indicates a reference-project run produced a
-      skip-event the marker emission missed; remediation targets the
-      specialist or hook that missed the event, not the harness/synthetic
-      fixture.
-    pointer_context_fields: []
+      FR33 (runtime variant) + Epic 6's runtime gate. Runtime reconciliation
+      failed: reference-project run produced skip-event class
+      `{skip_event_class}` at code surface `{code_surface}` but no
+      emitted marker reconciled. Inspect specialist or hook at
+      `{code_surface}` for missing emission. See `docs/architecture.md`
+      § Runtime gate input contract for the input-capture mechanism.
+      Distinct from fixture-driven gate failures (Story 1.8): runtime
+      mismatch indicates a reference-project run produced a skip-event
+      the marker emission missed; remediation targets the specialist or
+      hook that missed the event, not the harness/synthetic fixture.
+    pointer_context_fields: [code_surface, skip_event_class]
     sub_classifications: []
 
   - marker_class: cost-telemetry-unavailable

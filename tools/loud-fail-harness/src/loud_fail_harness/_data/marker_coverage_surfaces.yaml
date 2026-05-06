@@ -129,11 +129,12 @@ surfaces:
       runtime gate.
   - name: reconciliation-gate-runtime
     category: reconciliation-gate
-    file_paths: []
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/fr33_runtime_gate.py
     description: |-
-      FR33 runtime reconciliation gate (forward-scheduled to Story 6.8). Detects skip-events
-      that the actual reference-project run produced but no marker emission captured. No
-      production source exists at Story 6.3 landing.
+      FR33 runtime reconciliation gate (Story 6.8). Detects skip-events that the actual
+      reference-project run produced but no marker emission captured; complementary to
+      Story 1.8's fixture-driven gate and Story 6.3's static audit.
   - name: specialist-wrapper-dev
     category: specialist-wrapper
     file_paths:
@@ -2041,12 +2042,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: reconciler-mismatch-runtime
     surface_name: reconciliation-gate-runtime
-    verdict: scheduled-by-story
-    discharging_story: "6.8"
-    rationale: |-
-      FR33 runtime reconciliation gate + reconciler-mismatch-runtime marker emission is
-      forward-scoped to Story 6.8.
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/fr33_runtime_gate.py:672
+    audit_date: "2026-05-07"
   - marker_class: reconciler-mismatch-runtime
     surface_name: specialist-wrapper-dev
     verdict: not-applicable
