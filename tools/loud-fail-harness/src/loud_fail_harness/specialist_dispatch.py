@@ -314,7 +314,14 @@ import tempfile
 import uuid
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
-from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    Protocol,
+    runtime_checkable,
+)
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -328,6 +335,14 @@ from loud_fail_harness.orchestrator_run_entry import (
     StoryDocResolution,
 )
 from loud_fail_harness.reconciler import load_marker_taxonomy
+
+if TYPE_CHECKING:
+    from loud_fail_harness.cost_streaming import CostStreamingResult
+    from loud_fail_harness.cost_telemetry import (
+        CollectionResult,
+        OtelPipelineProtocol,
+    )
+    from loud_fail_harness.run_state import RunState
 
 #: Module-level logger. The substrate does NOT use ``print`` (Pattern 5);
 #: ``logging`` is reserved for the dispatch-stub-replaced posture
@@ -1256,6 +1271,174 @@ def make_cost_event(
             event_dict=event_dict,
         )
     return event_dict
+
+
+def record_cost_streaming_at_return_boundary(
+    payload: SpecialistDispatchPayload,
+    *,
+    return_envelope: dict[str, Any],
+    return_timestamp: datetime,
+    otel_pipeline: "OtelPipelineProtocol",
+    cost_delta_usd: float,
+    otel_attributes: Mapping[str, Any],
+    event_id_factory: EventIdFactory,
+    run_state: "RunState",
+    ceiling_usd: float,
+    line_appender: Callable[[str], None],
+) -> tuple["CollectionResult", "CostStreamingResult"]:
+    """Compose Story 6.4's cost-telemetry collect with Story 6.5's
+    in-flight cost streaming + threshold detection at a specialist-return
+    boundary (Story 6.5 / AC-1, AC-2, AC-3).
+
+    Composition flow (the seam-transition boundary helper):
+
+        1. Call :func:`loud_fail_harness.cost_telemetry.collect` to
+           produce the :class:`CollectionResult` carrying the
+           ``cost_event`` + ``aggregation`` +
+           ``marker_classification`` (the latter is non-``None`` on
+           OTel-pipeline failure per Story 6.4's graceful-degrade
+           contract).
+        2. On ``CollectionResult.marker_classification is not None``
+           (cost-telemetry-unavailable from 6.4) the function SKIPS
+           the cost-streaming half — degraded telemetry cannot drive a
+           meaningful threshold check. The aggregation is empty in the
+           degraded case; an empty per-boundary stream line would
+           fabricate a false ``total=$0.00`` signal violating AC-2's
+           "no fabricated zero values" intent inherited from 6.4 AC-3.
+           ``line_appender`` is NOT called; the returned
+           :class:`CostStreamingResult.marker_classifications_to_append`
+           is empty.
+        3. On a green :class:`CollectionResult` the function reads
+           ``run_state.cost_to_date_by_specialist`` (sum across non-
+           ``None`` per-specialist values BEFORE the cost-counter
+           update) for ``previous_running_total_usd``; reads
+           ``run_state.active_markers`` for ``already_emitted_markers``;
+           calls :func:`loud_fail_harness.cost_streaming.stream_cost_at_boundary`
+           which appends the cost-line via ``line_appender``, detects
+           threshold crossings, and (on first-crossings) appends the
+           prominent-warning line(s).
+
+    Pattern 4 batch-write rule (architecture.md lines 977-981): this
+    function does NOT call
+    :func:`loud_fail_harness.run_state.advance_run_state`. The
+    orchestrator caller composes the returned
+    ``CollectionResult.aggregation`` (via
+    :func:`loud_fail_harness.cost_telemetry.update_run_state_cost_counters`)
+    + ``CostStreamingResult.marker_classifications_to_append`` INTO
+    the next-state argument it passes to ``advance_run_state``;
+    there is exactly one atomic write per seam transition.
+
+    Args:
+        payload: The :class:`SpecialistDispatchPayload` originally
+            constructed at dispatch time.
+        return_envelope: The validated envelope dict the specialist
+            returned (passed through to :func:`cost_telemetry.collect`
+            for caller-side correlation).
+        return_timestamp: Timezone-aware UTC datetime at which the
+            specialist returned (used as the cost-event timestamp AND
+            the boundary timestamp the cost-stream line is rendered
+            from).
+        otel_pipeline: The bridge-layer
+            :class:`OtelPipelineProtocol` implementation backing the
+            OTLP cost-event read.
+        cost_delta_usd: Cost incurred during this invocation in USD;
+            forwarded to :func:`cost_telemetry.collect` for the
+            cost-event dict construction AND to
+            :func:`cost_streaming.stream_cost_at_boundary` for the
+            cost-stream-line ``delta=$<x.xx>`` field.
+        otel_attributes: Mapping of OTel-derived attribute keys (per
+            Pattern 3 dotted/mixed-case naming).
+        event_id_factory: Caller-injected event-id factory.
+        run_state: The :class:`RunState` BEFORE the cost-counter
+            update + marker append. Read for
+            ``previous_running_total_usd`` (from
+            ``cost_to_date_by_specialist``) and
+            ``already_emitted_markers`` (from ``active_markers``).
+        ceiling_usd: Per-story cost ceiling (typically resolved from
+            ``_bmad/automation/config.yaml`` via
+            :func:`loud_fail_harness.cost_streaming.resolve_per_story_cost_ceiling_usd`).
+        line_appender: I/O boundary the caller injects per the
+            sensor-not-advisor / caller-injected-factory convention.
+            Called once for the cost-stream line and additionally
+            once or twice for warning line(s) on threshold-crossing
+            boundaries.
+
+    Returns:
+        Tuple of (:class:`CollectionResult`,
+        :class:`CostStreamingResult`). The first is the unchanged
+        return value of :func:`cost_telemetry.collect`; the second
+        is the streaming-half result (empty + no-crossing on the
+        graceful-degrade path; populated otherwise).
+
+    Raises:
+        Never raises on a ceiling crossing per NFR-O8 verbatim — the
+        loop continues; the practitioner decides whether to abort.
+        Underlying exceptions from
+        :func:`cost_telemetry.collect` (e.g.,
+        :exc:`EventConstructionFailed` on schema mismatch; unknown
+        OTel-pipeline exceptions per Pattern 5) propagate per the
+        loud-fail doctrine.
+    """
+    from loud_fail_harness.cost_streaming import (
+        CostStreamingResult,
+        CostThresholdDecision,
+        stream_cost_at_boundary,
+    )
+    from loud_fail_harness.cost_telemetry import collect
+
+    collection_result = collect(
+        payload,
+        otel_pipeline=otel_pipeline,
+        return_envelope=return_envelope,
+        return_timestamp=return_timestamp,
+        cost_delta_usd=cost_delta_usd,
+        otel_attributes=otel_attributes,
+        event_id_factory=event_id_factory,
+    )
+
+    if collection_result.marker_classification is not None:
+        # Graceful-degrade: cost-telemetry-unavailable from Story 6.4.
+        # Skip the streaming half — empty aggregation cannot drive a
+        # meaningful threshold check; emitting total=$0.00 would
+        # fabricate a false zero per AC-2's "no fabricated zero values"
+        # intent inherited from 6.4 AC-3. The cost-telemetry-unavailable
+        # marker is already in the CollectionResult for the orchestrator
+        # to append.
+        return collection_result, CostStreamingResult(
+            running_total_usd=0.0,
+            marker_classifications_to_append=(),
+            threshold_decision=CostThresholdDecision(
+                marker_classification=None,
+                is_first_75pct_crossing=False,
+                is_first_100pct_crossing=False,
+            ),
+        )
+
+    cost_to_date = run_state.cost_to_date_by_specialist
+    previous_running_total_usd = sum(
+        v
+        for v in (
+            cost_to_date.dev,
+            cost_to_date.review_bmad,
+            cost_to_date.qa,
+            cost_to_date.lad,
+        )
+        if v is not None
+    )
+
+    streaming_result = stream_cost_at_boundary(
+        aggregation=collection_result.aggregation,
+        specialist=payload.specialist,
+        retry_attempt=payload.attempt_number,
+        cost_delta_usd=cost_delta_usd,
+        ceiling_usd=ceiling_usd,
+        previous_running_total_usd=previous_running_total_usd,
+        already_emitted_markers=tuple(run_state.active_markers),
+        boundary_timestamp=return_timestamp,
+        line_appender=line_appender,
+    )
+
+    return collection_result, streaming_result
 
 
 class EventConstructionFailed(Exception):

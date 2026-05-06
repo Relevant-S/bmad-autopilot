@@ -1152,12 +1152,11 @@ def _render_loud_fail_block(
             # possibilities.
             sub_class_str = run_specific_sub
         else:
-            sub_classifications = entry.get("sub_classifications") or []
-            sub_class_str = (
-                ", ".join(_format_sub_classification(sc) for sc in sub_classifications)
-                if sub_classifications
-                else "none"
-            )
+            # No sub-classification was emitted for this run (base class only).
+            # Render "none" regardless of what the taxonomy enumerates for
+            # sub_classifications — that field documents possible suffixes, not
+            # which one this run hit (Story 6.5 review patch D1).
+            sub_class_str = "none"
         required_fields = tuple(entry.get("pointer_context_fields") or ())
         marker_context = contexts.get(base_marker_class, {})
         try:

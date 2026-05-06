@@ -14,6 +14,7 @@ modules) and intentionally do NOT inherit from :class:`ContractViolation`.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 
 class ContractViolation(Exception):
@@ -213,4 +214,50 @@ class PromptIdCorrelationMissing(ContractViolation):
             "PromptIdCorrelationMissing: "
             f"story_id={self.story_id!r}; prompt_id={self.prompt_id!r}; "
             f"diagnostic={self.diagnostic!r}"
+        )
+
+
+class PerStoryCostCeilingConfigError(ContractViolation, ValueError):
+    """Raised on malformed ``per_story_cost_ceiling_usd`` config input.
+
+    Story 6.5 (NFR-P1 + NFR-O8 + Pattern 5) — the in-flight cost-streaming
+    substrate at :mod:`loud_fail_harness.cost_streaming` resolves the
+    per-story cost ceiling from ``_bmad/automation/config.yaml`` via
+    :func:`loud_fail_harness.cost_streaming.resolve_per_story_cost_ceiling_usd`.
+    The resolver follows :func:`loud_fail_harness.retry_budget.resolve_retry_budget`'s
+    byte-stable input contract: ``None`` / empty mapping / missing key /
+    ``None`` value all return the NFR-P1 default (``$5.00``); positive
+    int OR positive float returns that value; bool / negative / zero /
+    non-numeric raises this exception. Pattern 5 (loud-fail / named
+    invariants) and NFR-O5 (named-invariant diagnostics) require that
+    the malformed value surface as a contract violation rather than
+    silently coercing or zeroing the ceiling.
+
+    The class inherits BOTH :class:`ContractViolation` (so
+    ``except ContractViolation`` at the orchestrator boundary catches it
+    alongside the other Pattern-5 invariants) AND :class:`ValueError`
+    (so generic ``except ValueError`` in higher-level error handlers and
+    stdlib introspection stay compatible — same posture
+    :class:`loud_fail_harness.retry_budget.RetryBudgetConfigError`
+    documents at ``retry_budget.py:120-151``).
+
+    Attributes:
+        value: The offending value the resolver received under the
+            ``per_story_cost_ceiling_usd`` key (preserved verbatim for
+            the diagnostic so an operator pasting the error into a chat
+            can identify the bad input without reading source).
+        diagnostic: The NFR-O5 named-invariant diagnostic enumerating
+            the offending value, the field name, and a remediation hint
+            pointing at ``_bmad/automation/config.yaml``.
+    """
+
+    def __init__(self, *, value: Any, diagnostic: str) -> None:
+        self.value = value
+        self.diagnostic = diagnostic
+        super().__init__(diagnostic)
+
+    def __str__(self) -> str:
+        return (
+            "PerStoryCostCeilingConfigError: "
+            f"value={self.value!r}; diagnostic={self.diagnostic!r}"
         )

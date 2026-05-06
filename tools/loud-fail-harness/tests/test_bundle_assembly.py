@@ -2187,19 +2187,25 @@ def test_render_loud_fail_block_diagnostic_pointer_byte_matches_taxonomy(
 def test_render_loud_fail_block_sub_classification_renders_taxonomy_values(
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 6.1 AC-1: when the taxonomy entry's ``sub_classifications``
-    is non-empty, the rendered ``Sub-classification:`` bullet surfaces
-    the taxonomy values (placeholder slot for Story 6.2's per-context
-    interpolation).
+    """Story 6.1 AC-1 + Story 6.5 review patch D1: when a base-class marker is
+    emitted WITHOUT a sub-classification suffix, the rendered
+    ``Sub-classification:`` bullet shows ``none`` regardless of what the
+    taxonomy enumerates for ``sub_classifications``. The taxonomy list documents
+    possible suffixes; it does NOT imply all suffixes occurred on this run.
+
+    To render a specific sub-classification, the caller must emit the marker
+    WITH the suffix (e.g. ``env-setup-failed: port-bind-failed``), which causes
+    the ``run_specific_sub`` branch to surface the emitted suffix verbatim.
     """
     rendered = bundle_assembly._render_loud_fail_block(
         ("env-setup-failed",), marker_registry=runtime_marker_registry
     )
     assert "### env-setup-failed" in rendered
-    # taxonomy entry has sub_classifications: [port-bind-failed,
-    # playwright-launch-failed, dev-server-not-ready]
-    assert "port-bind-failed" in rendered
-    assert "playwright-launch-failed" in rendered
+    # Base class emitted — no sub-classification occurred; renders "none".
+    assert "- Sub-classification: none" in rendered
+    # taxonomy values must NOT bleed into the base-class render.
+    assert "port-bind-failed" not in rendered
+    assert "playwright-launch-failed" not in rendered
 
 
 # --------------------------------------------------------------------------- #

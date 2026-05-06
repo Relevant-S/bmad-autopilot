@@ -146,10 +146,12 @@ AC-10 callback factory (≥4):
 from __future__ import annotations
 
 import ast
+import dataclasses
 import inspect
 import json
 import pathlib
 import re
+from typing import Any
 from collections.abc import Callable
 from datetime import datetime, timezone
 from unittest import mock
@@ -284,11 +286,14 @@ def deterministic_event_id_factory() -> Callable[[], str]:
 _INTRA_PACKAGE_IMPORT_ALLOWLIST = frozenset(
     {
         "loud_fail_harness._shared",
+        "loud_fail_harness.cost_streaming",
+        "loud_fail_harness.cost_telemetry",
         "loud_fail_harness.envelope_validator",
         "loud_fail_harness.event_validator",
         "loud_fail_harness.exceptions",
         "loud_fail_harness.orchestrator_run_entry",
         "loud_fail_harness.reconciler",
+        "loud_fail_harness.run_state",
     }
 )
 
@@ -1592,3 +1597,273 @@ def test_make_cost_event_reads_prompt_id_from_payload_directly(
         event_id_factory=deterministic_event_id_factory,
     )
     assert event["prompt_id"] == dispatch_payload.prompt_id
+
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.5 — record_cost_streaming_at_return_boundary tests                  #
+# --------------------------------------------------------------------------- #
+
+
+@dataclasses.dataclass
+class _StubOtelPipeline65:
+    """Test double for :class:`OtelPipelineProtocol` (Story 6.5 tests)."""
+
+    events: tuple[Any, ...] = ()
+    raise_exception: BaseException | None = None
+
+    def read_events(self, *, prompt_id: str) -> Any:
+        _ = prompt_id
+        if self.raise_exception is not None:
+            raise self.raise_exception
+        return self.events
+
+
+def _make_run_state_65(cost_to_date_overrides: dict[str, float] | None = None,
+                       active_markers: tuple[str, ...] = ()) -> Any:
+    """Construct a minimal valid RunState for Story 6.5 composition tests."""
+    from loud_fail_harness.run_state import CostToDateBySpecialist, RunState
+
+    overrides = cost_to_date_overrides or {}
+    return RunState(
+        schema_version="1.3",
+        story_id="6.5",
+        run_id="run-6-5-test-001",
+        current_state="in-progress",
+        branch_name="bmad-automation/story/6.5",
+        dispatched_specialist=None,
+        last_envelope=None,
+        pending_qa_dispatch_payload=None,
+        retry_history=(),
+        active_markers=active_markers,
+        marker_contexts={},
+        cost_to_date_by_specialist=CostToDateBySpecialist(**overrides),
+        last_retry_directive=None,
+    )
+
+
+def test_record_cost_streaming_green_path_appends_one_line_and_returns_empty_markers(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory: Callable[[], str],
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.5 AC-6 (m): green-path composition with mocked
+    OtelPipelineProtocol producing a happy CollectionResult; assert returned
+    CostStreamingResult carries the expected running_total_usd + empty
+    marker_classifications_to_append; line_appender called once with the
+    formatted cost-stream line."""
+    from loud_fail_harness.cost_telemetry import CostEvent
+    from loud_fail_harness.specialist_dispatch import (
+        record_cost_streaming_at_return_boundary,
+    )
+
+    pipeline = _StubOtelPipeline65(
+        events=(
+            CostEvent(
+                event_id="ev-1",
+                timestamp=fixed_timestamp.isoformat(),
+                story_id=dispatch_payload.story_id,
+                prompt_id=dispatch_payload.prompt_id,
+                retry_attempt=0,
+                specialist="dev",
+                cost_delta_usd=1.5,
+            ),
+        ),
+    )
+    run_state = _make_run_state_65()
+    appended: list[str] = []
+
+    collection_result, streaming_result = record_cost_streaming_at_return_boundary(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        otel_pipeline=pipeline,
+        cost_delta_usd=1.5,
+        otel_attributes={},
+        event_id_factory=deterministic_event_id_factory,
+        run_state=run_state,
+        ceiling_usd=5.0,
+        line_appender=appended.append,
+    )
+
+    assert collection_result.marker_classification is None
+    assert streaming_result.running_total_usd == 1.5
+    assert streaming_result.marker_classifications_to_append == ()
+    assert len(appended) == 1
+    assert "[cost]" in appended[0]
+    assert "specialist=dev" in appended[0]
+
+
+def test_record_cost_streaming_graceful_degrade_skips_streaming_half(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory: Callable[[], str],
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.5 AC-6 (n): graceful-degrade composition — OtelPipelineProtocol
+    raises OtelPipelineUnreachable; the returned CollectionResult.marker_classification
+    is non-None (per 6.4); the streaming half is SKIPPED (line_appender NOT
+    called; returned CostStreamingResult.marker_classifications_to_append is empty)."""
+    from loud_fail_harness.exceptions import OtelPipelineUnreachable
+    from loud_fail_harness.specialist_dispatch import (
+        record_cost_streaming_at_return_boundary,
+    )
+
+    pipeline = _StubOtelPipeline65(
+        raise_exception=OtelPipelineUnreachable(
+            prompt_id=dispatch_payload.prompt_id,
+            story_id=dispatch_payload.story_id,
+            diagnostic="OTLP collector unreachable",
+        ),
+    )
+    run_state = _make_run_state_65()
+    appended: list[str] = []
+
+    collection_result, streaming_result = record_cost_streaming_at_return_boundary(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        otel_pipeline=pipeline,
+        cost_delta_usd=1.5,
+        otel_attributes={},
+        event_id_factory=deterministic_event_id_factory,
+        run_state=run_state,
+        ceiling_usd=5.0,
+        line_appender=appended.append,
+    )
+
+    assert collection_result.marker_classification is not None
+    assert collection_result.marker_classification[0].startswith(
+        "cost-telemetry-unavailable"
+    )
+    assert streaming_result.marker_classifications_to_append == ()
+    assert appended == []  # No fabricated zero line per AC-2 intent.
+
+
+def test_record_cost_streaming_75pct_threshold_crossing_appends_two_lines(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory: Callable[[], str],
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.5 AC-6 (o): threshold-crossing composition — happy-path
+    CollectionResult with aggregation summing to >75% of $5 ceiling;
+    line_appender called twice (cost line + 75% warning); returned tuple
+    carries ('cost-near-ceiling', {})."""
+    from loud_fail_harness.cost_telemetry import CostEvent
+    from loud_fail_harness.specialist_dispatch import (
+        record_cost_streaming_at_return_boundary,
+    )
+
+    # previous_running_total: $3.0 (Dev did $3 prior); this boundary adds
+    # $1.0 from review-bmad → running total $4.0 = 80% of $5 ceiling.
+    pipeline = _StubOtelPipeline65(
+        events=(
+            CostEvent(
+                event_id="ev-1",
+                timestamp=fixed_timestamp.isoformat(),
+                story_id=dispatch_payload.story_id,
+                prompt_id=dispatch_payload.prompt_id,
+                retry_attempt=0,
+                specialist="dev",
+                cost_delta_usd=3.0,
+            ),
+            CostEvent(
+                event_id="ev-2",
+                timestamp=fixed_timestamp.isoformat(),
+                story_id=dispatch_payload.story_id,
+                prompt_id=dispatch_payload.prompt_id,
+                retry_attempt=0,
+                specialist="review-bmad",
+                cost_delta_usd=1.0,
+            ),
+        ),
+    )
+    run_state = _make_run_state_65(cost_to_date_overrides={"dev": 3.0})
+    appended: list[str] = []
+
+    _, streaming_result = record_cost_streaming_at_return_boundary(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        otel_pipeline=pipeline,
+        cost_delta_usd=1.0,
+        otel_attributes={},
+        event_id_factory=deterministic_event_id_factory,
+        run_state=run_state,
+        ceiling_usd=5.0,
+        line_appender=appended.append,
+    )
+
+    assert len(appended) == 2
+    assert "[cost]" in appended[0]
+    assert "[⚠️ cost-near-ceiling]" in appended[1]
+    assert streaming_result.marker_classifications_to_append == (
+        ("cost-near-ceiling", {}),
+    )
+
+
+def test_record_cost_streaming_ceiling_crossed_composition(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory: Callable[[], str],
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.5 AC-6 (p): ceiling-crossed composition — happy-path
+    CollectionResult with aggregation summing to >$5 ceiling; line_appender
+    called twice (cost line + ceiling-crossed warning); returned tuple
+    carries ('cost-near-ceiling: ceiling-crossed', {})."""
+    from loud_fail_harness.cost_telemetry import CostEvent
+    from loud_fail_harness.specialist_dispatch import (
+        record_cost_streaming_at_return_boundary,
+    )
+
+    # previous_running_total: $4.0 (dev from prior boundary, 75% already
+    # emitted); this boundary adds $1.5 (review-bmad) → $5.5 = 110% of $5
+    # ceiling. 75% already emitted so only ceiling-crossed warning fires.
+    # OTel events include BOTH the prior dev event ($4.0) AND this boundary's
+    # review-bmad event ($1.5) so the aggregation total matches: $5.5.
+    pipeline = _StubOtelPipeline65(
+        events=(
+            CostEvent(
+                event_id="ev-1",
+                timestamp=fixed_timestamp.isoformat(),
+                story_id=dispatch_payload.story_id,
+                prompt_id=dispatch_payload.prompt_id,
+                retry_attempt=0,
+                specialist="dev",
+                cost_delta_usd=4.0,  # accumulated from previous boundary
+            ),
+            CostEvent(
+                event_id="ev-2",
+                timestamp=fixed_timestamp.isoformat(),
+                story_id=dispatch_payload.story_id,
+                prompt_id=dispatch_payload.prompt_id,
+                retry_attempt=0,
+                specialist="review-bmad",
+                cost_delta_usd=1.5,  # this boundary's delta
+            ),
+        ),
+    )
+    run_state = _make_run_state_65(
+        cost_to_date_overrides={"dev": 4.0},
+        active_markers=("cost-near-ceiling",),
+    )
+    appended: list[str] = []
+
+    _, streaming_result = record_cost_streaming_at_return_boundary(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        otel_pipeline=pipeline,
+        cost_delta_usd=1.5,
+        otel_attributes={},
+        event_id_factory=deterministic_event_id_factory,
+        run_state=run_state,
+        ceiling_usd=5.0,
+        line_appender=appended.append,
+    )
+
+    assert len(appended) == 2
+    assert "[cost]" in appended[0]
+    assert "[⚠️ cost-near-ceiling: ceiling-crossed]" in appended[1]
+    assert streaming_result.marker_classifications_to_append == (
+        ("cost-near-ceiling: ceiling-crossed", {}),
+    )

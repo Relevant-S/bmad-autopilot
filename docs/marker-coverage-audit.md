@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 21
+- Emitted: 22
 - Not-applicable: 369
-- Scheduled-by-story: 16
+- Scheduled-by-story: 15
 - Gaps: 0
 
 ## Coverage matrix
@@ -92,7 +92,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | context-near-limit | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | context-near-limit | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | cost-near-ceiling | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
-| cost-near-ceiling | cost-telemetry-pipeline | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.5 — In-flight cost streaming + 75%-threshold detection + cost-near-ceiling marker emission lands in Story 6.5 (specialist boundary cadence). |
+| cost-near-ceiling | cost-telemetry-pipeline | emitted | `tools/loud-fail-harness/src/loud_fail_harness/cost_streaming.py:282` | 2026-05-06 |  |
 | cost-near-ceiling | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-near-ceiling | hook-stop | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-near-ceiling | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |

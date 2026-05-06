@@ -205,7 +205,7 @@ markers:
       Signal to the practitioner before the budget exhausts; loop continues.
       Remediation: monitor or interrupt before exhaustion.
     pointer_context_fields: []
-    sub_classifications: []
+    sub_classifications: [ceiling-crossed]
 
   - marker_class: smoke-first-abort
     diagnostic_pointer: |

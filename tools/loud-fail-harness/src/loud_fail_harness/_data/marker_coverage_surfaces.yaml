@@ -575,12 +575,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: cost-near-ceiling
     surface_name: cost-telemetry-pipeline
-    verdict: scheduled-by-story
-    discharging_story: "6.5"
-    rationale: |-
-      In-flight cost streaming + 75%-threshold detection + cost-near-ceiling marker emission
-      lands in Story 6.5 (specialist boundary cadence).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/cost_streaming.py:282
+    audit_date: "2026-05-06"
   - marker_class: cost-near-ceiling
     surface_name: hook-session-start
     verdict: not-applicable
