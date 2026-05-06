@@ -120,7 +120,16 @@ import yaml
 from loud_fail_harness import thickening_flags as _default_thickening_flags
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
-from loud_fail_harness.exceptions import MarkerContextMissing
+from loud_fail_harness.cost_telemetry import (
+    CostAggregation,
+    OtelPipelineProtocol,
+    aggregate_costs,
+)
+from loud_fail_harness.exceptions import (
+    MarkerContextMissing,
+    OtelPipelineUnreachable,
+    PromptIdCorrelationMissing,
+)
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.qa_plan_persistence_compromise import (
@@ -892,6 +901,21 @@ _LOUD_FAIL_NONE_SENTINEL: str = (
     "No loud-fail markers are active on this run."
 )
 
+#: Sentinel H2 + body emitted when the cost-breakdown aggregation is
+#: empty AND no ``cost-telemetry-unavailable`` marker is active (Story
+#: 6.4 / AC-3). Mirrors :data:`_LOUD_FAIL_NONE_SENTINEL`'s
+#: presence-is-structural posture: the H2 is rendered even when no
+#: cost-events have accrued so downstream tooling can rely on a
+#: deterministic structural anchor.
+_COST_BREAKDOWN_NONE_SENTINEL: str = (
+    "## 💸 Cost Breakdown — None\n\n"
+    "No cost telemetry events have been recorded for this run."
+)
+
+#: Prefix that identifies a ``cost-telemetry-unavailable`` marker class
+#: with or without sub-classification suffix (Story 6.4 / AC-2).
+_COST_TELEMETRY_UNAVAILABLE_PREFIX: str = "cost-telemetry-unavailable"
+
 
 def _load_marker_taxonomy_entries(
     taxonomy_path: pathlib.Path | None = None,
@@ -1103,18 +1127,39 @@ def _render_loud_fail_block(
 
     parts: list[str] = ["## ⚠️ Loud-Fail Markers", ""]
     for marker_class in active_markers:
-        validate_marker_emission(marker_registry, marker_class)
-        entry = entries.get(marker_class, {})
+        # Pattern 2 (architecture.md line 962): an active marker may carry an
+        # optional ``: <sub_class>`` suffix (e.g.
+        # ``cost-telemetry-unavailable: otel-pipeline-unreachable``). Strip the
+        # suffix before the registry / taxonomy lookup so the base class
+        # validates and the entry is found; the rendered H3 still uses the
+        # full marker string (including the suffix) so the run-specific sub-
+        # classification is visible.
+        if ":" in marker_class:
+            base_marker_class, run_specific_sub = marker_class.split(":", 1)
+            base_marker_class = base_marker_class.strip()
+            run_specific_sub = run_specific_sub.strip()
+        else:
+            base_marker_class = marker_class
+            run_specific_sub = ""
+        validate_marker_emission(marker_registry, base_marker_class)
+        entry = entries.get(base_marker_class, {})
         diagnostic_pointer_raw = str(entry.get("diagnostic_pointer", ""))
         diagnostic_pointer = " ".join(diagnostic_pointer_raw.split())
-        sub_classifications = entry.get("sub_classifications") or []
-        sub_class_str = (
-            ", ".join(_format_sub_classification(sc) for sc in sub_classifications)
-            if sub_classifications
-            else "none"
-        )
+        if run_specific_sub:
+            # Run-specific sub-classification (Pattern 2 suffix) supersedes the
+            # taxonomy's full enumeration for the rendered bullet — the bullet
+            # reflects the SPECIFIC failure mode this run hit, not the set of
+            # possibilities.
+            sub_class_str = run_specific_sub
+        else:
+            sub_classifications = entry.get("sub_classifications") or []
+            sub_class_str = (
+                ", ".join(_format_sub_classification(sc) for sc in sub_classifications)
+                if sub_classifications
+                else "none"
+            )
         required_fields = tuple(entry.get("pointer_context_fields") or ())
-        marker_context = contexts.get(marker_class, {})
+        marker_context = contexts.get(base_marker_class, {})
         try:
             actionable_pointer_raw = _interpolate_actionable_pointer(
                 template=diagnostic_pointer_raw,
@@ -1136,6 +1181,189 @@ def _render_loud_fail_block(
     if parts and parts[-1] == "":
         parts.pop()
     return "\n".join(parts)
+
+
+
+def _render_cost_breakdown(
+    active_markers: tuple[str, ...],
+    marker_contexts: Mapping[str, Mapping[str, str]],
+    cost_aggregation: "CostAggregation",
+    *,
+    marker_registry: MarkerClassRegistry,
+    taxonomy_entries: Mapping[str, Mapping[str, Any]] | None = None,
+) -> str:
+    """Render the Story 6.4 cost-breakdown section.
+
+    Three render branches per AC-3 / AC-2:
+
+        * Degraded — any active marker starts with the
+          ``cost-telemetry-unavailable`` prefix → render
+          ``## ⚠️ Cost Breakdown — Telemetry Unavailable`` + the
+          taxonomy entry's ``diagnostic_pointer`` text rendered verbatim
+          + the ``Sub-classification: <sub>`` line. NO fabricated zeros
+          (AC-3 verbatim).
+        * Empty — no cost-telemetry-unavailable marker active AND
+          ``cost_aggregation.per_specialist_per_retry`` is empty →
+          render the :data:`_COST_BREAKDOWN_NONE_SENTINEL`. Mirrors
+          :func:`_render_loud_fail_block`'s ``— None`` sentinel posture.
+        * Green — render ``## 💸 Cost Breakdown`` + a markdown table
+          with columns ``Specialist | Retry attempt | Cost delta (USD) |
+          Per-specialist running total (USD)``. Rows sorted alphabetically
+          by specialist then numerically by retry_attempt; per-specialist
+          totals row appended after each specialist's run of rows.
+
+    Per AC-3 the section's *presence* is structural — the H2 is
+    rendered in all three branches; the absence-of-content phrasing is
+    the contract for the empty-aggregation case.
+
+    Args:
+        active_markers: Tuple of marker-class identifiers active on the
+            run; ``cost-telemetry-unavailable``-prefixed entries trigger
+            the degraded branch.
+        marker_contexts: Per-marker-class context map; sourced from
+            :attr:`loud_fail_harness.run_state.RunState.marker_contexts`.
+            Reserved for forward-compat — the v1
+            ``cost-telemetry-unavailable`` taxonomy entry takes
+            ``pointer_context_fields: []`` so no interpolation happens
+            at this story's landing.
+        cost_aggregation: Frozen
+            :class:`loud_fail_harness.cost_telemetry.CostAggregation`
+            carrying the per-(specialist × retry_attempt) detail.
+            Empty aggregation triggers the empty branch.
+        marker_registry: Runtime
+            :class:`loud_fail_harness.specialist_dispatch.MarkerClassRegistry`
+            used (forward-compat) to validate marker-class identifiers
+            consumed in the degraded branch.
+        taxonomy_entries: Optional pre-loaded mapping; defaults to a
+            fresh load via :func:`_load_marker_taxonomy_entries` at
+            call time (used only in the degraded branch).
+
+    Returns:
+        The rendered markdown body (no leading or trailing newline
+        beyond the canonical structural shape).
+    """
+    _ = marker_registry  # forward-compat: registry membership of
+    # ``cost-telemetry-unavailable`` is validated at marker emission
+    # time (per Story 6.2 / 6.4); the renderer trusts the active_markers
+    # tuple at this story's landing.
+    _ = marker_contexts  # forward-compat: empty pointer_context_fields
+    # at this story's landing means no interpolation needed.
+
+    degraded_marker = next(
+        (
+            marker
+            for marker in active_markers
+            if marker.split(":", 1)[0].strip() == _COST_TELEMETRY_UNAVAILABLE_PREFIX
+        ),
+        None,
+    )
+    if degraded_marker is not None:
+        entries = (
+            taxonomy_entries
+            if taxonomy_entries is not None
+            else _load_marker_taxonomy_entries()
+        )
+        entry = entries.get(_COST_TELEMETRY_UNAVAILABLE_PREFIX, {})
+        diagnostic_pointer_raw = str(entry.get("diagnostic_pointer", ""))
+        diagnostic_pointer = " ".join(diagnostic_pointer_raw.split())
+        # Sub-classification suffix per Pattern 2 (architecture.md line 962).
+        if ":" in degraded_marker:
+            sub_class = degraded_marker.split(":", 1)[1].strip()
+        else:
+            sub_class = ""
+        body_lines = [
+            "## ⚠️ Cost Breakdown — Telemetry Unavailable",
+            "",
+            diagnostic_pointer,
+            "",
+            f"Sub-classification: {sub_class}" if sub_class else "Sub-classification: none",
+        ]
+        return "\n".join(body_lines)
+
+    per_retry = cost_aggregation.per_specialist_per_retry
+    if not per_retry:
+        return _COST_BREAKDOWN_NONE_SENTINEL
+
+    parts: list[str] = [
+        "## 💸 Cost Breakdown",
+        "",
+        "| Specialist | Retry attempt | Cost delta (USD) | Per-specialist running total (USD) |",
+        "| --- | --- | --- | --- |",
+    ]
+    # Group by specialist (alphabetical), then by retry_attempt (numerical).
+    by_specialist: dict[str, list[tuple[int, float]]] = {}
+    for (specialist, retry_attempt), cost_delta in per_retry.items():
+        by_specialist.setdefault(specialist, []).append((retry_attempt, cost_delta))
+    for specialist in sorted(by_specialist.keys()):
+        running_total = 0.0
+        for retry_attempt, cost_delta in sorted(by_specialist[specialist]):
+            running_total += cost_delta
+            parts.append(
+                f"| {specialist} | {retry_attempt} | "
+                f"{cost_delta:.2f} | {running_total:.2f} |"
+            )
+        parts.append(f"| {specialist} | total | — | {running_total:.2f} |")
+    return "\n".join(parts)
+
+
+def _load_cost_aggregation(
+    story_id: str,
+    otel_pipeline: "OtelPipelineProtocol | None",
+) -> "CostAggregation":
+    """Load the per-run cost aggregation for the bundle's cost-breakdown
+    section (Story 6.4 / AC-3).
+
+    Returns an empty :class:`loud_fail_harness.cost_telemetry.CostAggregation`
+    when:
+
+        * ``otel_pipeline`` is ``None`` (default — backward-compat for
+          existing call sites that don't inject a pipeline; the bundle's
+          cost-breakdown section renders the ``— None`` sentinel).
+        * The pipeline raises
+          :exc:`loud_fail_harness.exceptions.OtelPipelineUnreachable` or
+          :exc:`loud_fail_harness.exceptions.PromptIdCorrelationMissing`
+          (the marker is already in ``run_state.active_markers`` from
+          the per-dispatch boundary; the assembler does NOT re-emit —
+          it consumes the marker).
+
+    Otherwise calls
+    :meth:`loud_fail_harness.cost_telemetry.OtelPipelineProtocol.read_events`
+    with ``prompt_id=story_id`` as the run-scoped filter convention
+    (operator-managed OTel-bridge implementations are expected to
+    interpret the ``prompt_id`` argument as a filter scope for the
+    per-run read; per-dispatch reads use the dispatch's ``prompt_id``
+    directly via :func:`cost_telemetry.collect`).
+
+    Args:
+        story_id: The run's story identifier; used as the run-scoped
+            filter argument to ``otel_pipeline.read_events``. Both
+            bundle-variant call sites (merge-ready :func:`assemble_bundle`
+            and the escalation variant) pass their respective context's
+            ``story_id`` field — the helper does not need a full
+            ``RunState``.
+        otel_pipeline: Optional OTel-pipeline protocol implementation;
+            ``None`` (default) returns empty aggregation.
+
+    .. note::
+        **Known MVP gap** — if the OTel pipeline raises only at assembly
+        time (e.g., a transient outage between the last specialist
+        dispatch and the bundle render) but NOT at the per-dispatch
+        boundary, no ``cost-telemetry-unavailable`` marker is in
+        ``run_state.active_markers`` and the renderer shows the
+        ``— None`` sentinel rather than the degraded variant. In the
+        normal total-outage case both per-dispatch and assembly-time
+        reads fail together, so the marker IS in ``active_markers`` and
+        the degraded variant renders correctly. Upgrading this to emit
+        the marker at assembly time is a post-MVP candidate tracked in
+        ``deferred-work.md`` (D-6.4-CR-1).
+    """
+    if otel_pipeline is None:
+        return CostAggregation()
+    try:
+        events = tuple(otel_pipeline.read_events(prompt_id=story_id))
+    except (OtelPipelineUnreachable, PromptIdCorrelationMissing):
+        return CostAggregation()
+    return aggregate_costs(events)
 
 
 def _format_sub_classification(sc: Any) -> str:
@@ -1229,6 +1457,7 @@ def assemble_bundle(
     thickening_flags: ModuleType | None = None,
     generated_at: datetime | None = None,
     envelope_schema: dict[str, Any] | None = None,
+    otel_pipeline: OtelPipelineProtocol | None = None,
 ) -> AssembleBundleResult:
     """Assemble the walking-skeleton merge-ready PR bundle.
 
@@ -1258,6 +1487,19 @@ def assemble_bundle(
         envelope_schema: Optional pre-loaded envelope schema dict;
             defaults to
             ``<repo-root>/schemas/envelope.schema.yaml``.
+        otel_pipeline: Optional
+            :class:`loud_fail_harness.cost_telemetry.OtelPipelineProtocol`
+            implementation injected by the orchestrator runtime per
+            ADR-006 Combo 3 / B1 (operator-managed OTLP backend).
+            ``None`` (the default) backs the empty-aggregation path so
+            existing call sites pre-Story-6.4 keep their byte-stable
+            output for the zero-cost-events case (the cost-breakdown
+            section renders the ``— None`` sentinel). Per Story 6.4 /
+            AC-2 the pipeline's :exc:`OtelPipelineUnreachable` /
+            :exc:`PromptIdCorrelationMissing` exceptions are caught
+            inside :func:`_load_cost_aggregation` and translated into
+            an empty aggregation; the marker is already in
+            ``run_state.active_markers`` from the per-dispatch boundary.
 
     Returns:
         :class:`AssembleBundleResult`.
@@ -1310,6 +1552,13 @@ def assemble_bundle(
         marker_registry=registry,
         marker_contexts=run_state.marker_contexts,
     )
+    cost_aggregation = _load_cost_aggregation(run_state.story_id, otel_pipeline)
+    cost_breakdown_block = _render_cost_breakdown(
+        run_state.active_markers,
+        run_state.marker_contexts,
+        cost_aggregation,
+        marker_registry=registry,
+    )
     per_ac_body = _render_per_ac_section(
         envelopes["qa"], marker_registry=registry
     )
@@ -1335,6 +1584,8 @@ def assemble_bundle(
         header_text,
         "",
         loud_fail_block,
+        "",
+        cost_breakdown_block,
         "",
         "## Per-AC results",
         "",

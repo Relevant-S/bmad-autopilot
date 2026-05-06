@@ -56,6 +56,14 @@ Story 6.2 update (FR31 actionable-pointer enrichment):
     None` sentinel renders; the `plan-drift-detected` indicator
     surfaces via the inline `bmad-automation:marker plan-drift-detected`
     HTML comment in `## Per-AC results`, not the loud-fail block).
+
+Story 6.4 update (per-specialist × per-retry cost telemetry):
+  - New `## 💸 Cost Breakdown — None` H2 block rendered as the SECOND
+    content section, immediately after the loud-fail block and BEFORE
+    `## Per-AC results` per AC-3's structural-position contract. The
+    plan-drift fixture seeds zero cost-events (no `otel_pipeline`
+    injected at the assembler call site) so the empty-aggregation
+    sentinel renders.
 -->
 # PR bundle — story sample-auto-001 (run run-2026-04-30-001)
 
@@ -70,6 +78,10 @@ All thickening features are present; this bundle is no longer a walking-skeleton
 ## ✓ Loud-Fail Markers — None
 
 No loud-fail markers are active on this run.
+
+## 💸 Cost Breakdown — None
+
+No cost telemetry events have been recorded for this run.
 
 ## Per-AC results
 

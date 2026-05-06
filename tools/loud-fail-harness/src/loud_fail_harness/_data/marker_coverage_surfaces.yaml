@@ -51,10 +51,16 @@ surfaces:
       ready PR bundle from envelope + event log + run-state.
   - name: cost-telemetry-pipeline
     category: cost-telemetry
-    file_paths: []
+    file_paths:
+      - tools/loud-fail-harness/src/loud_fail_harness/cost_telemetry.py
     description: |-
-      Per-specialist × per-retry OTel cost-event pipeline (forward-scheduled to Stories 6.4 +
-      6.5; ADR-006 + NFR-P5). No production source exists at Story 6.3 landing.
+      Per-specialist × per-retry OTel cost-event pipeline (Story 6.4 — ADR-006 Combo 3
+      A3' + B1 + C3; NFR-P5). The `cost_telemetry` substrate library is consumed by the
+      orchestrator at specialist-return boundaries: `collect()` reads OTel events via the
+      `OtelPipelineProtocol` boundary and translates pipeline failures into the
+      `cost-telemetry-unavailable` graceful-degrade marker via
+      `derive_cost_telemetry_unavailable_marker`. Story 6.5 thickens this surface with
+      in-flight cost streaming + 75%-of-ceiling threshold detection.
   - name: hook-session-start
     category: hook
     file_paths:
@@ -655,12 +661,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: cost-telemetry-unavailable
     surface_name: cost-telemetry-pipeline
-    verdict: scheduled-by-story
-    discharging_story: "6.4"
-    rationale: |-
-      Per-specialist × per-retry OTel cost-event pipeline + cost-telemetry-unavailable
-      graceful-degrade marker emission lands in Story 6.4 (ADR-006 + NFR-P5).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/cost_telemetry.py:436
+    audit_date: "2026-05-06"
   - marker_class: cost-telemetry-unavailable
     surface_name: hook-session-start
     verdict: not-applicable
@@ -2970,8 +2973,8 @@ verdicts:
   - marker_class: walking-skeleton-bundle
     surface_name: bundle-assembler
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1176
-    audit_date: "2026-05-05"
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:171
+    audit_date: "2026-05-06"
   - marker_class: walking-skeleton-bundle
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable

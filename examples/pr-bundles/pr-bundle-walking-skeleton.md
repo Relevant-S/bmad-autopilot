@@ -57,6 +57,19 @@ Story 6.2 update (FR31 actionable-pointer enrichment):
     (`Tier-3-not-configured` / `playwright-mcp-unavailable` /
     `specialist-timeout`), the seeded `marker_contexts` field flows
     through to the bullet's interpolated text.
+
+Story 6.4 update (per-specialist × per-retry cost telemetry):
+  - New `## 💸 Cost Breakdown — None` H2 block rendered as the SECOND
+    content section, immediately after the loud-fail block and BEFORE
+    `## Per-AC results` per AC-3's structural-position contract. The
+    walking-skeleton fixture seeds zero cost-events (no `otel_pipeline`
+    injected at the assembler call site) so the empty-aggregation
+    sentinel is rendered. When a fixture seeds a populated
+    `CostAggregation` (per Story 6.4's `pr-bundle-cost-breakdown.md`)
+    OR a `cost-telemetry-unavailable: <sub>` marker (per
+    `pr-bundle-cost-telemetry-unavailable.md`), the corresponding green
+    table OR degraded `## ⚠️ Cost Breakdown — Telemetry Unavailable`
+    H2 renders at the same structural slot.
 -->
 # PR bundle — story sample-auto-001 (run run-2026-04-29-001)
 
@@ -71,6 +84,10 @@ All thickening features are present; this bundle is no longer a walking-skeleton
 ## ✓ Loud-Fail Markers — None
 
 No loud-fail markers are active on this run.
+
+## 💸 Cost Breakdown — None
+
+No cost telemetry events have been recorded for this run.
 
 ## Per-AC results
 

@@ -26,7 +26,7 @@ AC-3 — bundle markdown shape:
     [x] Dev section renders proposed_commit_message verbatim        → test_dev_section_renders_proposed_commit_message_verbatim
     [x] scope_expanded_to empty surfaces                            → test_dev_section_renders_scope_expanded_to_empty_at_epic_2
     [x] bundle does NOT contain loud-fail / cost / retry sections   → test_bundle_does_not_contain_loud_fail_block_section
-                                                                    → test_bundle_does_not_contain_cost_breakdown_section
+                                                                    → test_bundle_cost_breakdown_uses_emoji_format_not_legacy_heading
                                                                     → test_bundle_does_not_contain_retry_history_section
     [x] H2 ordering: walking-skeleton → per-ac → review → dev       → test_h2_section_ordering_is_canonical
 
@@ -766,13 +766,17 @@ def test_bundle_contains_loud_fail_block_section_at_epic_6(
     assert "## ✓ Loud-Fail Markers — None" in body
 
 
-def test_bundle_does_not_contain_cost_breakdown_section(
+def test_bundle_cost_breakdown_uses_emoji_format_not_legacy_heading(
     tmp_path: pathlib.Path,
     canonical_dev_envelope: dict[str, Any],
     canonical_review_envelope: dict[str, Any],
     canonical_qa_envelope: dict[str, Any],
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
+    """Story 6.4 AC-3: bundle uses the new emoji-prefixed cost-breakdown
+    H2 (``## 💸 Cost Breakdown``), not the legacy speculative headings.
+    The ``— None`` sentinel is present when no OTel pipeline is injected.
+    """
     _, bundle_path = _assemble(
         tmp_path=tmp_path,
         canonical_dev_envelope=canonical_dev_envelope,
@@ -781,8 +785,11 @@ def test_bundle_does_not_contain_cost_breakdown_section(
         runtime_marker_registry=runtime_marker_registry,
     )
     body = bundle_path.read_text(encoding="utf-8")
+    # Legacy heading formats must not appear.
     assert "## Cost breakdown" not in body
     assert "## Per-specialist cost" not in body
+    # Post-6.4: the None sentinel IS always present when no pipeline injected.
+    assert "## 💸 Cost Breakdown — None" in body
 
 
 def test_bundle_does_not_contain_retry_history_section(
@@ -819,12 +826,14 @@ def test_h2_section_ordering_is_canonical(
     )
     body = bundle_path.read_text(encoding="utf-8")
     h2_lines = [line for line in body.splitlines() if line.startswith("## ")]
-    # Story 6.1: the loud-fail block is the FIRST content section after
-    # the title metadata block + the Walking Skeleton Mode header,
-    # BEFORE Per-AC results / Review findings / Dev per AC-1.
+    # Story 6.1 + 6.4: the loud-fail block is the FIRST content section
+    # after the title metadata block + the Walking Skeleton Mode header;
+    # the cost-breakdown block (Story 6.4) is the SECOND, immediately
+    # before Per-AC results / Review findings / Dev per AC-3.
     assert h2_lines == [
         "## ⚠️ Walking Skeleton Mode",
         "## ✓ Loud-Fail Markers — None",
+        "## 💸 Cost Breakdown — None",
         "## Per-AC results",
         "## Review findings",
         "## Dev",
@@ -2328,3 +2337,203 @@ def test_interpolate_actionable_pointer_orphan_placeholder_maps_to_named_invaria
         )
     assert exc_info.value.missing_field == "orphan_field"
     assert exc_info.value.marker_class == ""  # late-bound by _render_loud_fail_block
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.4 — _render_cost_breakdown tests                                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_render_cost_breakdown_green_renders_table_alphabetical_then_numeric(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.4 AC-3 (k): green CostAggregation → ## 💸 Cost Breakdown H2 +
+    per-(specialist × retry_attempt) markdown table sorted alphabetically by
+    specialist then numerically by retry_attempt."""
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    aggregation = CostAggregation(
+        per_specialist_totals={"dev": 0.90, "review_bmad": 0.50},
+        per_specialist_per_retry={
+            ("dev", 1): 0.50,
+            ("review-bmad", 1): 0.30,
+            ("dev", 2): 0.40,
+            ("review-bmad", 2): 0.20,
+        },
+    )
+    rendered = _render_cost_breakdown(
+        active_markers=(),
+        marker_contexts={},
+        cost_aggregation=aggregation,
+        marker_registry=runtime_marker_registry,
+    )
+    assert rendered.startswith("## 💸 Cost Breakdown")
+    assert "## 💸 Cost Breakdown — None" not in rendered  # not the empty sentinel
+    # Header columns
+    assert (
+        "| Specialist | Retry attempt | Cost delta (USD) | "
+        "Per-specialist running total (USD) |" in rendered
+    )
+    # Sort order: dev (alphabetical) before review-bmad; within each specialist,
+    # numerical sort on retry_attempt.
+    dev_idx_1 = rendered.index("| dev | 1 |")
+    dev_idx_2 = rendered.index("| dev | 2 |")
+    review_idx_1 = rendered.index("| review-bmad | 1 |")
+    review_idx_2 = rendered.index("| review-bmad | 2 |")
+    assert dev_idx_1 < dev_idx_2 < review_idx_1 < review_idx_2
+    # Per-specialist totals row appears after each specialist's run.
+    assert "| dev | total | — |" in rendered
+    assert "| review-bmad | total | — |" in rendered
+
+
+def test_render_cost_breakdown_empty_aggregation_returns_none_sentinel(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.4 AC-3 (l): empty aggregation + no degraded marker → the
+    ``## 💸 Cost Breakdown — None`` sentinel (mirrors Story 6.1's loud-fail
+    None-sentinel posture)."""
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    rendered = _render_cost_breakdown(
+        active_markers=(),
+        marker_contexts={},
+        cost_aggregation=CostAggregation(),
+        marker_registry=runtime_marker_registry,
+    )
+    assert rendered == (
+        "## 💸 Cost Breakdown — None\n\n"
+        "No cost telemetry events have been recorded for this run."
+    )
+
+
+def test_render_cost_breakdown_degraded_otel_pipeline_unreachable(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.4 AC-2 + AC-3 (m): cost-telemetry-unavailable: otel-pipeline-
+    unreachable active marker → degraded ## ⚠️ Cost Breakdown — Telemetry
+    Unavailable H2 + diagnostic_pointer text + sub-classification line.
+
+    NO fabricated zeros, NO silently-omitted section per AC-3 verbatim."""
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    rendered = _render_cost_breakdown(
+        active_markers=("cost-telemetry-unavailable: otel-pipeline-unreachable",),
+        marker_contexts={},
+        cost_aggregation=CostAggregation(),
+        marker_registry=runtime_marker_registry,
+    )
+    assert rendered.startswith("## ⚠️ Cost Breakdown — Telemetry Unavailable")
+    assert "Sub-classification: otel-pipeline-unreachable" in rendered
+    # No fabricated zero rows.
+    assert "| dev |" not in rendered
+    assert "| 0 " not in rendered
+    # Diagnostic pointer text (verbatim from marker-taxonomy.yaml:304-309).
+    assert "ADR-006" in rendered
+    assert "NFR-P5" in rendered
+
+
+def test_render_cost_breakdown_degraded_prompt_id_correlation_missing(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.4 AC-2 + AC-3 (n): cost-telemetry-unavailable: prompt-id-
+    correlation-missing analogue."""
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    rendered = _render_cost_breakdown(
+        active_markers=("cost-telemetry-unavailable: prompt-id-correlation-missing",),
+        marker_contexts={},
+        cost_aggregation=CostAggregation(),
+        marker_registry=runtime_marker_registry,
+    )
+    assert rendered.startswith("## ⚠️ Cost Breakdown — Telemetry Unavailable")
+    assert "Sub-classification: prompt-id-correlation-missing" in rendered
+
+
+def test_render_cost_breakdown_deterministic_byte_stable(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.4 AC-3 (o): deterministic ordering — same CostAggregation always
+    yields byte-identical output (regression-fixture discipline per Story 6.1)."""
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    aggregation = CostAggregation(
+        per_specialist_totals={"dev": 0.90, "qa": 0.10, "review_bmad": 0.30},
+        per_specialist_per_retry={
+            ("review-bmad", 2): 0.10,
+            ("dev", 1): 0.50,
+            ("qa", 1): 0.10,
+            ("dev", 2): 0.40,
+            ("review-bmad", 1): 0.20,
+        },
+    )
+    r1 = _render_cost_breakdown(
+        active_markers=(),
+        marker_contexts={},
+        cost_aggregation=aggregation,
+        marker_registry=runtime_marker_registry,
+    )
+    r2 = _render_cost_breakdown(
+        active_markers=(),
+        marker_contexts={},
+        cost_aggregation=aggregation,
+        marker_registry=runtime_marker_registry,
+    )
+    assert r1 == r2
+    # Alphabetical ordering: dev → qa → review-bmad.
+    assert r1.index("| dev | 1 |") < r1.index("| qa | 1 |") < r1.index("| review-bmad | 1 |")
+
+
+def test_load_cost_aggregation_returns_empty_when_pipeline_is_none() -> None:
+    """Story 6.4 AC-3: _load_cost_aggregation(_, None) returns empty
+    CostAggregation (the default backward-compat path)."""
+    from loud_fail_harness.bundle_assembly import _load_cost_aggregation
+
+    aggregation = _load_cost_aggregation("6.4", None)
+    assert dict(aggregation.per_specialist_totals) == {}
+    assert dict(aggregation.per_specialist_per_retry) == {}
+
+
+def test_load_cost_aggregation_returns_empty_on_otel_pipeline_unreachable() -> None:
+    """Story 6.4 AC-3: _load_cost_aggregation catches OtelPipelineUnreachable
+    and returns empty CostAggregation (the marker is already in
+    run_state.active_markers from the per-dispatch boundary)."""
+    from loud_fail_harness.bundle_assembly import _load_cost_aggregation
+    from loud_fail_harness.exceptions import OtelPipelineUnreachable
+
+    class _FailingPipeline:
+        def read_events(self, *, prompt_id: str):
+            raise OtelPipelineUnreachable(
+                prompt_id=prompt_id, story_id="6.4", diagnostic="down"
+            )
+
+    aggregation = _load_cost_aggregation("6.4", _FailingPipeline())
+    assert dict(aggregation.per_specialist_per_retry) == {}
+
+
+def test_assemble_bundle_renders_cost_breakdown_at_correct_position(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.4 AC-3: ## 💸 Cost Breakdown — None H2 appears IMMEDIATELY after
+    the ## ⚠️/✓ Loud-Fail Markers block AND BEFORE ## Per-AC results."""
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    h2_lines = [line for line in body.splitlines() if line.startswith("## ")]
+    cost_idx = h2_lines.index("## 💸 Cost Breakdown — None")
+    loud_fail_idx = h2_lines.index("## ✓ Loud-Fail Markers — None")
+    per_ac_idx = h2_lines.index("## Per-AC results")
+    assert loud_fail_idx < cost_idx < per_ac_idx

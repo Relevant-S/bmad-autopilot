@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 20
+- Emitted: 21
 - Not-applicable: 369
-- Scheduled-by-story: 17
+- Scheduled-by-story: 16
 - Gaps: 0
 
 ## Coverage matrix
@@ -106,7 +106,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | cost-near-ceiling | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-near-ceiling | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-telemetry-unavailable | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
-| cost-telemetry-unavailable | cost-telemetry-pipeline | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.4 — Per-specialist × per-retry OTel cost-event pipeline + cost-telemetry-unavailable graceful-degrade marker emission lands in Story 6.4 (ADR-006 + NFR-P5). |
+| cost-telemetry-unavailable | cost-telemetry-pipeline | emitted | `tools/loud-fail-harness/src/loud_fail_harness/cost_telemetry.py:436` | 2026-05-06 |  |
 | cost-telemetry-unavailable | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-telemetry-unavailable | hook-stop | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-telemetry-unavailable | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
@@ -427,7 +427,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | undocumented-section-write | specialist-wrapper-dev | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300` | 2026-05-05 |  |
 | undocumented-section-write | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300` | 2026-05-05 |  |
 | undocumented-section-write | specialist-wrapper-review-bmad | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300` | 2026-05-05 |  |
-| walking-skeleton-bundle | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1176` | 2026-05-05 |  |
+| walking-skeleton-bundle | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:171` | 2026-05-06 |  |
 | walking-skeleton-bundle | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | walking-skeleton-bundle | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | walking-skeleton-bundle | hook-stop | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |

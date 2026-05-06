@@ -178,6 +178,7 @@ from loud_fail_harness.specialist_dispatch import (
     default_event_id_factory,
     default_prompt_body_renderer,
     load_marker_class_registry,
+    make_cost_event,
     make_specialist_dispatched_event,
     make_specialist_returned_event,
     make_task_tool_dispatch_callback,
@@ -1461,3 +1462,133 @@ def test_make_task_tool_dispatch_callback_accepts_caller_overridden_timeout(
         timeout_seconds=60,
     )
     assert callable(callback)
+
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.4 — make_cost_event tests                                           #
+# --------------------------------------------------------------------------- #
+
+
+def test_make_cost_event_canonical_shape(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory,
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.4 AC-1: ``make_cost_event`` returns the documented canonical shape
+    mirroring ``make_specialist_returned_event``'s posture for the ``cost-event``
+    branch at ``schemas/orchestrator-event.yaml`` lines 375-416."""
+    event = make_cost_event(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        cost_delta_usd=0.42,
+        otel_attributes={
+            "prompt.id": "otel-prompt-id-abc",
+            "claude_code.cost.usage": 0.42,
+            "claude_code.token.usage": {"input": 1000, "output": 250},
+            "query_source": "user",
+        },
+        event_id_factory=deterministic_event_id_factory,
+    )
+    assert event["event_class"] == "cost-event"
+    assert event["timestamp"] == fixed_timestamp.isoformat()
+    assert event["story_id"] == dispatch_payload.story_id
+    assert event["prompt_id"] == dispatch_payload.prompt_id
+    assert event["specialist"] == dispatch_payload.specialist
+    assert event["retry_attempt"] == dispatch_payload.attempt_number
+    assert event["cost_delta_usd"] == 0.42
+
+
+def test_make_cost_event_validates_against_schema(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory,
+    fixed_timestamp: datetime,
+    live_event_schema_path: pathlib.Path,
+) -> None:
+    """Story 6.4 AC-1: the constructed cost-event passes the schema validator."""
+    from loud_fail_harness.event_validator import validate_event
+
+    event = make_cost_event(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        cost_delta_usd=1.25,
+        otel_attributes={},
+        event_id_factory=deterministic_event_id_factory,
+    )
+    schema = load_schema(live_event_schema_path)
+    errors = validate_event(event, schema)
+    assert errors == []
+
+
+def test_make_cost_event_passes_through_otel_attributes_verbatim(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory,
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.4 AC-1 + Pattern 3: OTel-derived attribute keys preserve their
+    dotted/mixed-case naming verbatim per architecture.md line 971."""
+    event = make_cost_event(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        cost_delta_usd=0.10,
+        otel_attributes={
+            "prompt.id": "otel-id-xyz",
+            "claude_code.cost.usage": 0.10,
+            "claude_code.token.usage": {"input": 500, "output": 100},
+            "query_source": "session",
+            "ignored_extra_key": "should be filtered",
+        },
+        event_id_factory=deterministic_event_id_factory,
+    )
+    # Pattern 3 OTel pass-through keys preserved verbatim.
+    assert event["prompt.id"] == "otel-id-xyz"
+    assert event["claude_code.cost.usage"] == 0.10
+    assert event["claude_code.token.usage"] == {"input": 500, "output": 100}
+    assert event["query_source"] == "session"
+    # Unknown OTel attribute keys are filtered out (the schema's
+    # additionalProperties: false at line 383 would reject smuggling).
+    assert "ignored_extra_key" not in event
+
+
+def test_make_cost_event_invalid_payload_raises_event_construction_failed(
+    dispatch_payload: SpecialistDispatchPayload,
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.4 AC-1: defensive ``validate_event`` pass raises
+    :exc:`EventConstructionFailed` on schema mismatch (synthetic invalid input
+    via empty event_id violating the ``minLength: 1`` constraint)."""
+    def bad_factory() -> str:
+        return ""
+
+    with pytest.raises(EventConstructionFailed) as exc_info:
+        make_cost_event(
+            dispatch_payload,
+            return_envelope={"status": "pass", "rationale": "ok"},
+            return_timestamp=fixed_timestamp,
+            cost_delta_usd=0.50,
+            otel_attributes={},
+            event_id_factory=bad_factory,
+        )
+    assert exc_info.value.event_class_name == "cost-event"
+
+
+def test_make_cost_event_reads_prompt_id_from_payload_directly(
+    dispatch_payload: SpecialistDispatchPayload,
+    deterministic_event_id_factory,
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 6.4 AC-1 + ADR-006 Combo 3 / A3': ``make_cost_event`` reads
+    ``payload.prompt_id`` directly without re-derivation per the single-source-
+    of-truth rule at ``specialist_dispatch._derive_prompt_id``."""
+    event = make_cost_event(
+        dispatch_payload,
+        return_envelope={"status": "pass", "rationale": "ok"},
+        return_timestamp=fixed_timestamp,
+        cost_delta_usd=0.0,
+        otel_attributes={},
+        event_id_factory=deterministic_event_id_factory,
+    )
+    assert event["prompt_id"] == dispatch_payload.prompt_id

@@ -138,12 +138,15 @@ from loud_fail_harness.bundle_assembly import (
     WALKING_SKELETON_MARKER,
     _atomic_write_bundle,
     _emit_walking_skeleton_marker,
+    _load_cost_aggregation,
+    _render_cost_breakdown,
     _render_finding_bullet,
     _render_loud_fail_block,
     _render_marker,
     _render_walking_skeleton_header,
     _THICKENING_SENTENCES,
 )
+from loud_fail_harness.cost_telemetry import OtelPipelineProtocol
 from loud_fail_harness.retry_budget_exhaustion import (
     ExhaustionContext,
     ExhaustionTrigger,
@@ -746,6 +749,7 @@ def _render_bundle_body(
     payload: Mapping[str, Any],
     emitted_markers: tuple[str, ...],
     marker_registry: MarkerClassRegistry,
+    otel_pipeline: OtelPipelineProtocol | None = None,
 ) -> str:
     """Render the full markdown body for an Epic-5-domain escalation
     bundle (retry-budget-exhausted OR scope-assertion-violation).
@@ -766,6 +770,21 @@ def _render_bundle_body(
         marker_registry=marker_registry,
         marker_contexts=context.marker_contexts,
     )
+    # Story 6.4: cost-breakdown section is rendered at the SAME
+    # structural position as merge-ready bundles (after the loud-fail
+    # block, before the variant-specific next H2 — here ``## Escalation
+    # rationale``). Single-rendering-core invariant per Story 5.8 AC-4 /
+    # Story 6.1 AC-1. :func:`_load_cost_aggregation` reads only
+    # ``story_id`` for the per-run filter convention.
+    cost_breakdown_aggregation = _load_cost_aggregation(
+        context.story_id, otel_pipeline
+    )
+    cost_breakdown_block = _render_cost_breakdown(
+        context.active_markers,
+        context.marker_contexts,
+        cost_breakdown_aggregation,
+        marker_registry=marker_registry,
+    )
 
     sections: list[str] = [
         f"# Escalation bundle — story {context.story_id} (run {context.run_id})",
@@ -779,6 +798,8 @@ def _render_bundle_body(
         header_text,
         "",
         loud_fail_block,
+        "",
+        cost_breakdown_block,
         "",
         "## Escalation rationale",
         "",
@@ -845,6 +866,7 @@ def assemble_escalation_bundle(
     marker_registry: MarkerClassRegistry | None = None,
     thickening_flags: ModuleType | None = None,
     generated_at: datetime | None = None,
+    otel_pipeline: OtelPipelineProtocol | None = None,
 ) -> AssembleEscalationBundleResult:
     """Assemble the escalation-variant PR bundle for an Epic-5-domain
     trigger.
@@ -882,6 +904,13 @@ def assemble_escalation_bundle(
         generated_at: Optional UTC timezone-aware timestamp rendered in
             the bundle's metadata block; defaults to
             ``datetime.now(timezone.utc)``.
+        otel_pipeline: Optional
+            :class:`loud_fail_harness.cost_telemetry.OtelPipelineProtocol`
+            implementation; ``None`` (default) backs the empty
+            cost-aggregation path so existing call sites remain
+            backward-compatible. Mirrors
+            :func:`bundle_assembly.assemble_bundle`'s ``otel_pipeline``
+            parameter for the single-rendering-core invariant.
 
     Returns:
         :class:`AssembleEscalationBundleResult` carrying the bundle path,
@@ -953,6 +982,7 @@ def assemble_escalation_bundle(
         payload=payload,
         emitted_markers=emitted_markers,
         marker_registry=registry,
+        otel_pipeline=otel_pipeline,
     )
 
     # Step 5: Atomic write at the deterministic per-run path.

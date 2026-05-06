@@ -312,7 +312,7 @@ import os
 import pathlib
 import tempfile
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
 from typing import Any, ClassVar, Literal, Protocol, runtime_checkable
 
@@ -1145,6 +1145,113 @@ def make_specialist_returned_event(
     if errors:
         raise EventConstructionFailed(
             event_class="specialist-returned",
+            errors=tuple(str(err.message) for err in errors),
+            event_dict=event_dict,
+        )
+    return event_dict
+
+
+
+def make_cost_event(
+    payload: SpecialistDispatchPayload,
+    *,
+    return_envelope: dict[str, Any],
+    return_timestamp: datetime,
+    cost_delta_usd: float,
+    otel_attributes: Mapping[str, Any],
+    event_id_factory: EventIdFactory,
+) -> dict[str, Any]:
+    """Construct a schema-valid ``cost-event`` event payload (Story 6.4 / AC-1).
+
+    Composes :func:`loud_fail_harness.event_validator.validate_event`
+    exclusively for the defensive validation pass before return.
+    Raises :exc:`EventConstructionFailed` if the constructed event
+    does not validate against the live schema (firing means the
+    substrate has a bug, not the caller).
+
+    The function mirrors :func:`make_specialist_dispatched_event` /
+    :func:`make_specialist_returned_event` byte-for-byte in shape per
+    the dispatch-event-grouping convention. The four OTel pass-through
+    attribute keys (``prompt.id``, ``claude_code.cost.usage``,
+    ``claude_code.token.usage``, ``query_source``) are passed through
+    from the caller-supplied ``otel_attributes`` mapping unchanged per
+    Pattern 3 — the OTel-derived attributes preserve their dotted/mixed-
+    case naming verbatim while the orchestrator-internal ``prompt_id``
+    coexists as a distinct snake_case named field per the schema's
+    documented dual-name boundary at
+    ``schemas/orchestrator-event.yaml`` lines 376-381.
+
+    Per ADR-006 Combo 3 / A3' the orchestrator-internal ``prompt_id``
+    is read directly from ``payload.prompt_id`` — :func:`_derive_prompt_id`
+    at module lines 1015-1033 is the single source of truth for the
+    correlation key; ``make_cost_event`` does NOT re-derive it.
+
+    Args:
+        payload: The :class:`SpecialistDispatchPayload` originally
+            constructed at dispatch time.
+        return_envelope: The validated envelope dict the specialist
+            returned (preserved for caller-side correlation; not
+            consumed in the cost-event dict shape per the schema).
+        return_timestamp: Timezone-aware UTC datetime at which the
+            cost-event is recorded (typically the dispatch's return
+            timestamp from :func:`make_specialist_returned_event`).
+        cost_delta_usd: Cost incurred during this invocation in USD;
+            must be ``>= 0`` per the schema's ``minimum: 0`` constraint.
+        otel_attributes: Mapping of OTel-derived attribute keys (with
+            their original dotted/mixed-case naming) to their values.
+            Caller (orchestrator runtime) reads these from the OTel
+            telemetry source and passes them through unchanged per
+            Pattern 3. Keys present in the mapping flow through to the
+            event dict verbatim; absent keys are omitted (the schema
+            does not require any of the four OTel pass-through keys).
+        event_id_factory: Caller-injected event-id factory (sensor-
+            not-advisor — the substrate doesn't pick the id strategy).
+
+    Returns:
+        Schema-valid dict conforming to
+        ``schemas/orchestrator-event.yaml``'s ``cost-event`` branch
+        (lines 375-416). Required fields: ``event_class``, ``event_id``,
+        ``timestamp``, ``story_id``, ``prompt_id``, ``retry_attempt``,
+        ``specialist``, ``cost_delta_usd``. Optional OTel pass-through
+        attribute keys are included iff present in ``otel_attributes``.
+
+    Raises:
+        EventConstructionFailed: The constructed dict does not validate
+            against the schema. Pattern 5 named-invariant diagnostic;
+            firing indicates a substrate bug (a malformed
+            ``cost_delta_usd`` magnitude or a typo in the OTel attribute
+            key set), NOT a caller error.
+    """
+    _ = return_envelope  # preserved on signature for caller-side correlation
+    event_dict: dict[str, Any] = {
+        "event_class": "cost-event",
+        "event_id": event_id_factory(),
+        "timestamp": return_timestamp.isoformat(),
+        "story_id": payload.story_id,
+        "prompt_id": payload.prompt_id,
+        "retry_attempt": payload.attempt_number,
+        "specialist": payload.specialist,
+        "cost_delta_usd": cost_delta_usd,
+    }
+    # Pattern 3 OTel pass-through — keys preserve their dotted/mixed-case
+    # naming verbatim. Only the four documented attribute keys are admitted;
+    # other entries in ``otel_attributes`` are silently ignored (the schema
+    # forbids ``additionalProperties`` so smuggling unknown keys would fail
+    # validation loudly anyway).
+    for otel_key in (
+        "prompt.id",
+        "claude_code.cost.usage",
+        "claude_code.token.usage",
+        "query_source",
+    ):
+        if otel_key in otel_attributes:
+            event_dict[otel_key] = otel_attributes[otel_key]
+
+    schema = _load_event_schema()
+    errors = validate_event(event_dict, schema)
+    if errors:
+        raise EventConstructionFailed(
+            event_class="cost-event",
             errors=tuple(str(err.message) for err in errors),
             event_dict=event_dict,
         )

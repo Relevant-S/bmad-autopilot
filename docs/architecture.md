@@ -1021,6 +1021,21 @@ Reference: FR66 + BMAD story template convention.
 - Writes to undocumented sections fail contract validation per FR66 / NFR-S5 and emit `undocumented-section-write` marker.
 - Specialists own their respective sections (per ADR-005's multi-writer finding); the orchestrator never writes story-doc sections directly.
 
+### Cost telemetry MVP semantics — boundary-driven cadence (Story 6.4 resolution)
+
+Reference: NFR-O8 (PRD line 987) + NFR-P5 (PRD line 938) + ADR-006 Combo 3 (A3' + B1 + C3) + Story 2.6 / NFR-P2 specialist-timeout.
+
+Story 6.4 lands the per-specialist × per-retry cost-telemetry collection substrate at `tools/loud-fail-harness/src/loud_fail_harness/cost_telemetry.py`. The MVP cadence is **boundary-driven**: cost-events are recorded at each specialist-return boundary (`make_specialist_returned_event` / `cost_telemetry.collect`), not in-flight intra-specialist.
+
+The choice is recorded with rationale:
+
+- **NFR-O8's "at each specialist completion" framing aligns with boundary-driven** (PRD line 987 verbatim — the NFR is satisfied by per-boundary collection without requiring intra-specialist sampling).
+- **In-flight intra-specialist sampling depends on Claude Code primitives whose cost-event cadence isn't pinned at MVP** (ADR-006 Consequence 5 — host-Bridge classification: OTel metric and attribute names like `claude_code.cost.usage`, `prompt.id` are Claude-Code-specific identifiers; the cadence at which the host emits them is not yet stable enough for the substrate to depend on).
+- **Specialist-timeout (Story 2.6 / NFR-P2 = 15 minutes) bounds the gap between boundaries** (PRD line 935 — the worst-case latency between cost-event observations is one specialist-timeout window, which is acceptable at MVP for the merge-ready bundle's cost-breakdown render and Story 6.5's 75%-of-ceiling threshold check).
+- **Phase 2 thickening to in-flight intra-specialist sampling is named as a forward-looking enhancement (FR-P2 candidate) revisited when Claude Code's cost-event cadence stabilizes** (PRD lines 124-128 — FR-P2 is the post-MVP requirements axis for in-flight observability thickening; Story 6.4's boundary-driven design is the MVP floor, not the ceiling).
+
+The OTel-pipeline boundary itself is decoupled via the `OtelPipelineProtocol` (`typing.Protocol`) at the substrate type-level per ADR-006 Consequence 5 — the harness substrate stays free of `opentelemetry-api` as a hard dependency; the orchestrator skill at runtime instantiates a concrete protocol implementation against the operator-managed OTLP backend. Pipeline failures translate to the `cost-telemetry-unavailable` marker emission via two named sub-classifications (`otel-pipeline-unreachable`, `prompt-id-correlation-missing`) per Pattern 5's loud-fail / named-invariant discipline; the loop continues; cost-telemetry failure is graceful-degrade, not a halt condition.
+
 ### Project Organization (Partial)
 
 Standard step-05 categories on project organization (test location, component grouping, file structure) apply only partially:

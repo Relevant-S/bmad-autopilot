@@ -125,3 +125,92 @@ class MarkerCoverageAuditFailure(ContractViolation):
             f"invalid_verdicts={self.invalid_verdicts!r}; "
             f"unresolved_code_paths={self.unresolved_code_paths!r}"
         )
+
+
+class OtelPipelineUnreachable(ContractViolation):
+    """Raised when the OTel pipeline read fails because the backend is unreachable.
+
+    Story 6.4 (NFR-P5 + NFR-O8 + ADR-006 Combo 3 — A3' + B1 + C3) — the
+    cost-telemetry boundary at :func:`loud_fail_harness.cost_telemetry.collect`
+    queries the operator-managed OTLP backend via
+    :class:`loud_fail_harness.cost_telemetry.OtelPipelineProtocol` to retrieve
+    the per-dispatch ``cost-event`` records. When the backend is unreachable
+    (collector down, OTLP endpoint refusing connections, read times out), the
+    protocol implementation raises this exception. Pattern 5 (loud-fail /
+    named invariants) and NFR-O5 (named-invariant diagnostics) require that
+    the failure surface as a contract violation rather than silently zeroing
+    cost telemetry.
+
+    The exception is caught at the per-dispatch boundary by
+    :func:`loud_fail_harness.cost_telemetry.derive_cost_telemetry_unavailable_marker`
+    and translated into a ``cost-telemetry-unavailable: otel-pipeline-unreachable``
+    marker emission per the marker-taxonomy.yaml v1 sub-classification —
+    the marker, not the exception, is the user-visible loud-fail signal.
+    The loop continues; cost-telemetry failure is graceful-degrade per AC-2.
+
+    Attributes:
+        prompt_id: The orchestrator-internal correlation key for the dispatch
+            whose cost-event read failed (per ADR-006 Combo 3 / A3').
+        story_id: The story whose run the dispatch belongs to.
+        diagnostic: The underlying failure-mode diagnostic (e.g., ``"OTLP
+            collector at localhost:4317 refused connection"``); preserved
+            verbatim so NFR-O5 named-invariant context survives.
+    """
+
+    def __init__(self, *, prompt_id: str, story_id: str, diagnostic: str) -> None:
+        self.prompt_id = prompt_id
+        self.story_id = story_id
+        self.diagnostic = diagnostic
+        super().__init__()
+
+    def __str__(self) -> str:
+        return (
+            "OtelPipelineUnreachable: "
+            f"story_id={self.story_id!r}; prompt_id={self.prompt_id!r}; "
+            f"diagnostic={self.diagnostic!r}"
+        )
+
+
+class PromptIdCorrelationMissing(ContractViolation):
+    """Raised when the OTel pipeline returns events without a matching ``prompt_id``.
+
+    Story 6.4 (NFR-P5 + ADR-006 Combo 3 — A3') — the orchestrator records
+    ``(prompt_id, retry_attempt, specialist)`` per dispatch and queries the
+    OTel backend filtered by ``prompt_id`` between specialist completions.
+    When the backend returns events whose ``prompt.id`` attribute is missing
+    or does not match the orchestrator's correlation key for the
+    just-completed dispatch, the protocol implementation raises this
+    exception. Pattern 5 (loud-fail / named invariants) and NFR-O5
+    (named-invariant diagnostics) require that the correlation gap surface
+    as a contract violation rather than silently aggregating mismatched
+    cost data.
+
+    The exception is caught at the per-dispatch boundary by
+    :func:`loud_fail_harness.cost_telemetry.derive_cost_telemetry_unavailable_marker`
+    and translated into a ``cost-telemetry-unavailable:
+    prompt-id-correlation-missing`` marker emission per the
+    marker-taxonomy.yaml v1 sub-classification. The loop continues; the
+    bundle's cost-breakdown section renders the marker rather than
+    fabricating zeros (AC-2).
+
+    Attributes:
+        prompt_id: The orchestrator-internal correlation key the dispatch
+            recorded; what the backend was queried by.
+        story_id: The story whose run the dispatch belongs to.
+        diagnostic: The underlying failure-mode diagnostic (e.g., ``"OTel
+            backend returned 3 events; 0 carried prompt.id matching
+            'dispatch-uuid-123'"``); preserved verbatim for NFR-O5.
+    """
+
+    def __init__(self, *, prompt_id: str, story_id: str, diagnostic: str) -> None:
+        self.prompt_id = prompt_id
+        self.story_id = story_id
+        self.diagnostic = diagnostic
+        super().__init__()
+
+    def __str__(self) -> str:
+        return (
+            "PromptIdCorrelationMissing: "
+            f"story_id={self.story_id!r}; prompt_id={self.prompt_id!r}; "
+            f"diagnostic={self.diagnostic!r}"
+        )

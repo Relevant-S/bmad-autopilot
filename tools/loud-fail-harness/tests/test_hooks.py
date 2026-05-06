@@ -465,6 +465,7 @@ def test_stop_bundle_includes_structured_h2_sections(
     assert h2_lines == [
         "## ⚠️ Walking Skeleton Mode",
         "## ✓ Loud-Fail Markers — None",
+        "## 💸 Cost Breakdown — None",
         "## Per-AC results",
         "## Review findings",
         "## Dev",
@@ -475,9 +476,11 @@ def test_stop_bundle_omits_cost_retry_sections_at_post_6_1_substrate(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
     """Story 6.1 inversion: the loud-fail block IS now present (Story
-    6.1 AC-1); the cost-breakdown + retry-history sections remain
-    out-of-scope (Stories 6.4-6.5 + Epic 5 retry history). This test
-    pins the absence of the still-out-of-scope sections.
+    6.1 AC-1). Story 6.4 lands the cost-breakdown section as
+    ``## 💸 Cost Breakdown`` (or ``— None`` sentinel / degraded variant
+    per the active markers). The legacy speculative section names
+    (``## Cost breakdown`` / ``## Per-specialist cost``) and the
+    retry-history section (Story 6.x territory) remain out-of-scope.
     """
     _write_run_state(fixture_repo, story_id="2-7-omits")
     _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-omits", run_id="r1")
