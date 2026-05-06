@@ -264,7 +264,7 @@ import os
 import signal
 import time
 from datetime import datetime, timezone
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -282,6 +282,9 @@ from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
 )
+
+if TYPE_CHECKING:
+    from loud_fail_harness.run_state import RunState
 
 #: The marker-class string identifier emitted on mid-run Playwright
 #: MCP unavailability (Story 1.4 enumeration; ``schemas/marker-
@@ -1267,6 +1270,66 @@ def surface_playwright_mcp_unavailable(
     )
 
 
+def record_playwright_mcp_unavailable_in_run_state(
+    *,
+    run_state: RunState,
+    project_type: str,
+    version_range: str,
+    marker_registry: MarkerClassRegistry | None = None,
+) -> RunState:
+    """Compose a ``playwright-mcp-unavailable`` marker into RunState.
+
+    Story 6.7 D-6.2-1 discharge: the orchestrator-side helper that
+    populates ``run_state.active_markers`` AND ``run_state.marker_contexts``
+    so Story 6.2's ``_interpolate_actionable_pointer`` renders the
+    ``{project_type}`` + ``{version_range}`` placeholders verbatim
+    from the taxonomy's ``pointer_context_fields: [project_type,
+    version_range]`` declaration at ``schemas/marker-taxonomy.yaml``.
+
+    Sensor-not-advisor: the orchestrator-skill caller decides WHEN to
+    invoke (typically after consuming a
+    :class:`PlaywrightMcpUnavailableEmission` from
+    :func:`surface_playwright_mcp_unavailable` AND resolving the
+    canonical ``project_type`` + ``version_range`` from
+    ``schemas/dependencies.yaml`` per FR21); this helper just records.
+
+    Pattern 4 batch-write: this helper does NOT call
+    :func:`loud_fail_harness.run_state.advance_run_state`. The caller
+    composes the returned :class:`RunState` INTO the next-state
+    argument it passes to ``advance_run_state``; one atomic write per
+    seam transition.
+
+    Composes :func:`loud_fail_harness.marker_wiring.record_marker_with_context`
+    via lazy import.
+
+    Args:
+        run_state: The :class:`RunState` BEFORE the marker append.
+        project_type: One of the canonical project-type identifiers
+            (``"web"`` / ``"api"`` per Story 4.4 / 4.5). Populates
+            ``marker_contexts["playwright-mcp-unavailable"]
+            = {"project_type": ..., "version_range": ...}``.
+        version_range: The required Playwright MCP version range from
+            ``schemas/dependencies.yaml`` per FR21 (e.g.,
+            ``">=0.1.0,<0.2"``).
+        marker_registry: Optional :class:`MarkerClassRegistry` for
+            pre-emission validation per Pattern 5.
+
+    Returns:
+        A new :class:`RunState` carrying the
+        ``playwright-mcp-unavailable`` marker entry +
+        ``marker_contexts["playwright-mcp-unavailable"]`` populated;
+        or the input run-state unchanged on de-dup.
+    """
+    from loud_fail_harness.marker_wiring import record_marker_with_context
+
+    return record_marker_with_context(
+        run_state=run_state,
+        marker_class=PLAYWRIGHT_MCP_UNAVAILABLE_MARKER,
+        context={"project_type": project_type, "version_range": version_range},
+        marker_registry=marker_registry,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Internal redaction helper                                                   #
 # --------------------------------------------------------------------------- #
@@ -1430,4 +1493,5 @@ __all__ = [
     "NoOpEvidenceCapturer",
     "verify_ac",
     "surface_playwright_mcp_unavailable",
+    "record_playwright_mcp_unavailable_in_run_state",
 ]

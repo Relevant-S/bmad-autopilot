@@ -45,7 +45,7 @@ In-place-thickening linkage (Epic 3 retro Insight #1):
 
 from __future__ import annotations
 
-from typing import Final, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -53,6 +53,9 @@ from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
 )
+
+if TYPE_CHECKING:
+    from loud_fail_harness.run_state import RunState
 
 # --------------------------------------------------------------------------- #
 # Symbolic constants                                                          #
@@ -453,6 +456,58 @@ def evaluate_semantic_verification(
         )
 
 
+def record_tier_3_not_configured_in_run_state(
+    *,
+    run_state: RunState,
+    ac_id: str,
+    marker_registry: MarkerClassRegistry | None = None,
+) -> RunState:
+    """Compose a ``Tier-3-not-configured`` marker into RunState.
+
+    Story 6.7 D-6.2-1 discharge: the orchestrator-side helper that
+    populates ``run_state.active_markers`` AND ``run_state.marker_contexts``
+    so Story 6.2's ``_interpolate_actionable_pointer`` renders the
+    ``{ac_id}`` placeholder verbatim from the taxonomy's
+    ``pointer_context_fields: [ac_id]`` declaration.
+
+    Sensor-not-advisor: the orchestrator-skill caller decides WHEN to
+    invoke (typically after consuming a
+    :class:`Tier3NotConfiguredEmission` from
+    :func:`surface_tier_3_not_configured`); this helper just records.
+
+    Pattern 4 batch-write: this helper does NOT call
+    :func:`loud_fail_harness.run_state.advance_run_state`. The caller
+    composes the returned :class:`RunState` INTO the next-state
+    argument it passes to ``advance_run_state``; one atomic write per
+    seam transition.
+
+    Composes :func:`loud_fail_harness.marker_wiring.record_marker_with_context`
+    via lazy import (avoids the marker_wiring → specialist_dispatch →
+    qa_evidence_tier potential indirect cycle at module load time).
+
+    Args:
+        run_state: The :class:`RunState` BEFORE the marker append.
+        ac_id: The AC identifier whose semantic-verification tier was
+            required by the plan but isn't configured. Populates
+            ``marker_contexts["Tier-3-not-configured"] = {"ac_id": <value>}``.
+        marker_registry: Optional :class:`MarkerClassRegistry` for
+            pre-emission validation per Pattern 5.
+
+    Returns:
+        A new :class:`RunState` carrying the ``Tier-3-not-configured``
+        marker entry + ``marker_contexts["Tier-3-not-configured"]``
+        populated; or the input run-state unchanged on de-dup.
+    """
+    from loud_fail_harness.marker_wiring import record_marker_with_context
+
+    return record_marker_with_context(
+        run_state=run_state,
+        marker_class=TIER_3_NOT_CONFIGURED_MARKER,
+        context={"ac_id": ac_id},
+        marker_registry=marker_registry,
+    )
+
+
 __all__ = (
     "EvidenceRef",
     "EvidenceTier",
@@ -464,5 +519,6 @@ __all__ = (
     "Tier3NotConfiguredEmission",
     "Tier3NotConfiguredEmissionRecord",
     "evaluate_semantic_verification",
+    "record_tier_3_not_configured_in_run_state",
     "surface_tier_3_not_configured",
 )

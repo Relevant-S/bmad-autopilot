@@ -135,6 +135,7 @@ from loud_fail_harness.exceptions import (
     OtelPipelineUnreachable,
     PromptIdCorrelationMissing,
 )
+from loud_fail_harness.marker_wiring import compute_alphabetical_marker_order
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.qa_plan_persistence_compromise import (
@@ -1156,11 +1157,31 @@ def _render_loud_fail_block(
     per Story 2.6's pattern; rejection raises :exc:`UnknownMarkerClass`
     per Pattern 5.
 
+    Story 6.7 AC-4 — Order-stable rendering: the rendered loud-fail
+    block iterates ``active_markers`` in alphabetical order by
+    ``(base_class, sub_classification)`` via
+    :func:`loud_fail_harness.marker_wiring.compute_alphabetical_marker_order`.
+    The persistent ``run_state.active_markers`` tuple is UNCHANGED —
+    on-disk persistence stays in emission order per Story 1.4's
+    marker-permanence rule; only the rendered iteration order is
+    normalized so the loud-fail block is byte-stable across runs
+    regardless of which marker fired first.
+
+    Story 6.7 marker rendering surface: the three orchestrator-side
+    marker classes ``specialist-timeout``, ``hook-failed``, and
+    ``context-near-limit`` (recorded via
+    :mod:`loud_fail_harness.marker_wiring`) flow through this rendering
+    path with full Story 6.2 actionable-pointer enrichment — the
+    ``{specialist}`` / ``{timeout_seconds}`` / ``{hook_name}``
+    placeholders interpolate against the ``marker_contexts`` mapping
+    populated by the recorders.
+
     Args:
         active_markers: Tuple of marker-class identifiers active on the
             run, sourced from
             :class:`loud_fail_harness.run_state.RunState.active_markers`.
-            Order is preserved as emitted; entries are not re-sorted.
+            Persistent emission order is preserved on the input tuple;
+            the rendered iteration is alphabetical (Story 6.7 AC-4).
         marker_registry: Runtime
             :class:`loud_fail_harness.specialist_dispatch.MarkerClassRegistry`
             used to validate every marker-class identifier; rejection
@@ -1201,7 +1222,13 @@ def _render_loud_fail_block(
     )
 
     parts: list[str] = ["## ⚠️ Loud-Fail Markers", ""]
-    for marker_class in active_markers:
+    # Story 6.7 AC-4: order-stable rendering — alphabetical by base
+    # class then sub-classification. The persistent
+    # ``run_state.active_markers`` tuple is UNCHANGED (on-disk
+    # persistence stays in emission order per Story 1.4's
+    # marker-permanence rule); only the rendered iteration order is
+    # normalized for stable display.
+    for marker_class in compute_alphabetical_marker_order(active_markers):
         # Pattern 2 (architecture.md line 962): an active marker may carry an
         # optional ``: <sub_class>`` suffix (e.g.
         # ``cost-telemetry-unavailable: otel-pipeline-unreachable``). Strip the

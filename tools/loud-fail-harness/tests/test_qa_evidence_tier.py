@@ -115,6 +115,7 @@ def test_module_all_exports() -> None:
         "Tier3NotConfiguredEmission",
         "Tier3NotConfiguredEmissionRecord",
         "evaluate_semantic_verification",
+        "record_tier_3_not_configured_in_run_state",
         "surface_tier_3_not_configured",
     }
     assert set(qa_evidence_tier.__all__) == expected
@@ -487,3 +488,34 @@ def test_qa_evidence_tier_module_has_lf_line_endings() -> None:
     assert b"\r" not in raw, (
         "qa_evidence_tier.py contains CR characters; expected pure LF endings"
     )
+
+
+
+def test_record_tier_3_not_configured_in_run_state_populates_marker_contexts() -> None:
+    """AC-5 — D-6.2-1 deferred-work discharge: calling
+    record_tier_3_not_configured_in_run_state with a RunState and ac_id
+    produces a new RunState with the Tier-3-not-configured marker in
+    active_markers and marker_contexts["Tier-3-not-configured"] == {"ac_id": <value>}."""
+    from loud_fail_harness.qa_evidence_tier import record_tier_3_not_configured_in_run_state
+    from loud_fail_harness.run_state import CostToDateBySpecialist, RunState
+
+    rs = RunState(
+        schema_version="1.1",
+        story_id="6-7-test",
+        run_id="run-6-7-001",
+        current_state="in-progress",
+        branch_name="bmad-automation/story/6-7-test",
+        dispatched_specialist=None,
+        last_envelope=None,
+        pending_qa_dispatch_payload=None,
+        retry_history=(),
+        active_markers=(),
+        cost_to_date_by_specialist=CostToDateBySpecialist(),
+    )
+    result = record_tier_3_not_configured_in_run_state(
+        run_state=rs,
+        ac_id="AC-5",
+    )
+    assert result is not rs
+    assert TIER_3_NOT_CONFIGURED_MARKER in result.active_markers
+    assert result.marker_contexts.get(TIER_3_NOT_CONFIGURED_MARKER) == {"ac_id": "AC-5"}

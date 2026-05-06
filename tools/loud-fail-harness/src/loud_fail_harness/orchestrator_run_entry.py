@@ -471,7 +471,7 @@ import logging
 import pathlib
 import re
 from collections.abc import Callable
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -1200,6 +1200,69 @@ def default_dispatch_callback(
 
 
 # --------------------------------------------------------------------------- #
+# Story 6.7 — hook-result composition helper (AC-2)                           #
+# --------------------------------------------------------------------------- #
+
+
+def handle_hook_exit_code(
+    *,
+    exit_code: int,
+    hook_name: str,
+    run_state: RunState,
+) -> RunState:
+    """Compose a hook-result into an updated RunState on non-zero exit.
+
+    Story 6.7 AC-2 composition seam: when the orchestrator's hook-result
+    handler reads a non-zero exit code from one of the three hook
+    scripts (``subagent-stop`` / ``stop`` / ``session-start``), it
+    invokes this helper to produce an updated :class:`RunState` carrying
+    a ``hook-failed: <hook_name>`` marker. The caller composes the
+    returned :class:`RunState` INTO the next-state argument it passes
+    to :func:`loud_fail_harness.run_state.advance_run_state` per
+    Pattern 4's batch-write rule (this helper does NOT call
+    ``advance_run_state``; one atomic write per seam transition).
+
+    Pure function (no I/O). The lazy import of
+    :func:`loud_fail_harness.marker_wiring.record_hook_failure_marker`
+    avoids the circular import that would otherwise arise from the cycle:
+    ``orchestrator_run_entry`` → ``marker_wiring`` (lazy) →
+    ``specialist_dispatch`` (top-level) → ``orchestrator_run_entry``
+    (top-level). The lazy import in THIS module breaks the cycle by
+    deferring the ``marker_wiring`` import until call time.
+
+    Marker-permanence rule (Story 1.4): a second non-zero exit for the
+    SAME ``hook_name`` returns the input run-state unchanged via the
+    recorder's per-hook-name de-dup; the FIRST emission wins.
+
+    Happy-path (zero exit): the helper returns the input run-state
+    unchanged — no marker is appended, no allocation occurs. Callers
+    can invoke this helper for every hook return without checking
+    ``exit_code`` upstream.
+
+    Args:
+        exit_code: The hook script's exit code as reported by the
+            shell (``0`` for success; any non-zero per NFR-R6 for
+            failure).
+        hook_name: Canonical hook-name suffix (one of
+            :data:`loud_fail_harness.marker_wiring.HOOK_NAMES`:
+            ``"subagent-stop"``, ``"stop"``, ``"session-start"``).
+        run_state: The :class:`RunState` BEFORE the marker append.
+
+    Returns:
+        A new :class:`RunState` carrying the
+        ``hook-failed: <hook_name>`` marker entry; or the input
+        run-state unchanged on zero-exit / de-dup.
+    """
+    if exit_code == 0:
+        return run_state
+    from loud_fail_harness.marker_wiring import HookName, record_hook_failure_marker
+
+    return record_hook_failure_marker(
+        run_state=run_state, hook_name=cast(HookName, hook_name)
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Public entry-sequence helper                                                #
 # --------------------------------------------------------------------------- #
 
@@ -1446,5 +1509,6 @@ __all__ = [
     "default_dispatch_callback",
     "default_sprint_status_resolver",
     "default_story_doc_resolver",
+    "handle_hook_exit_code",
     "run_story_loop_entry",
 ]

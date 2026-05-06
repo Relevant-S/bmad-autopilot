@@ -148,12 +148,17 @@ markers:
 
   - marker_class: context-near-limit
     diagnostic_pointer: |
-      A specialist's working context is approaching the model's context
-      budget. Signals to the orchestrator that retry should be `fix-only`
-      rather than `from-scratch`. NOT a terminal failure — a degradation
+      Specialist {specialist}'s working context is approaching the model's
+      context budget. Signals to the orchestrator that retry should be
+      `fix-only` rather than `from-scratch`. Remediation options: split
+      the AC, reduce input scope; see `docs/architecture.md` §
+      Context-budget management. NOT a terminal failure — a degradation
       signal.
-    pointer_context_fields: []
-    sub_classifications: []
+    pointer_context_fields: [specialist]
+    sub_classifications:
+      - dev
+      - qa
+      - review-bmad
 
   - marker_class: evidence-truncated
     diagnostic_pointer: |
@@ -169,13 +174,19 @@ markers:
       A hook's exit code is non-zero. Distinct from `bundle-assembly-failed`
       (assembler-logic remediation) and `scope-assertion-violation` (Dev-diff-
       vs-scope remediation): `hook-failed` remediates against the bash
-      script's environment. See `sub_classifications` for the specific
-      failure mode (`non-zero-exit`, `timeout`, `missing-binary`).
+      script's environment. See `sub_classifications` for the canonical
+      hook-name suffix (`session-start`, `stop`, `subagent-stop`) emitted
+      at runtime per Story 6.7's wiring; the failure-mode suffixes
+      (`non-zero-exit`, `timeout`, `missing-binary`) document underlying
+      causes a future Phase 2 thickening MAY emit as compound suffixes.
     pointer_context_fields: []
     sub_classifications:
-      - non-zero-exit
-      - timeout
       - missing-binary
+      - non-zero-exit
+      - session-start
+      - stop
+      - subagent-stop
+      - timeout
 
   - marker_class: undocumented-section-write
     diagnostic_pointer: |

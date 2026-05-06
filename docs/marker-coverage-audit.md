@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 22
+- Emitted: 29
 - Not-applicable: 369
-- Scheduled-by-story: 15
+- Scheduled-by-story: 8
 - Gaps: 0
 
 ## Coverage matrix
@@ -56,7 +56,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | Tier-3-not-configured | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | Tier-3-not-configured | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | Tier-3-not-configured | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
-| Tier-3-not-configured | orchestrator-run-state-helper | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side run_state.marker_contexts append for the {ac_id} field is gated by Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1). |
+| Tier-3-not-configured | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_tier.py:459` | 2026-05-06 |  |
 | Tier-3-not-configured | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | Tier-3-not-configured | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | Tier-3-not-configured | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
@@ -77,12 +77,12 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | bundle-assembly-failed | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
 | bundle-assembly-failed | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
 | bundle-assembly-failed | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
-| context-near-limit | bundle-assembler | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — context-near-limit marker rendering in PR bundle's loud-fail block lands in Story 6.7. |
+| context-near-limit | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1171` | 2026-05-06 |  |
 | context-near-limit | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | context-near-limit | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | context-near-limit | hook-stop | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | context-near-limit | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
-| context-near-limit | orchestrator-dispatch-wrapper | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — context-near-limit degradation signal emission lands in Story 6.7 (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle). |
+| context-near-limit | orchestrator-dispatch-wrapper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py:1553` | 2026-05-06 |  |
 | context-near-limit | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | context-near-limit | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | context-near-limit | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
@@ -189,7 +189,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | heuristic-skipped | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | heuristic-skipped | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_exploratory_heuristics.py:242` | 2026-05-05 |  |
 | heuristic-skipped | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
-| hook-failed | bundle-assembler | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — hook-failed marker rendering in PR bundle's loud-fail block lands in Story 6.7 (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle). |
+| hook-failed | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1171` | 2026-05-06 |  |
 | hook-failed | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent- stop is the only hook with current failure paths; stop is exec-only and session-start is a Story 2.7 stub). |
 | hook-failed | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent- stop is the only hook with current failure paths; stop is exec-only and session-start is a Story 2.7 stub). |
 | hook-failed | hook-stop | not-applicable | `n/a` | 2026-05-05 | Hook script has no failure path that emits hook-failed at Story 6.3 landing (subagent- stop is the only hook with current failure paths; stop is exec-only and session-start is a Story 2.7 stub). |
@@ -280,7 +280,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | playwright-mcp-unavailable | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | playwright-mcp-unavailable | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | playwright-mcp-unavailable | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
-| playwright-mcp-unavailable | orchestrator-run-state-helper | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side run_state.marker_contexts append for {project_type} + {version_range} is gated by Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1). |
+| playwright-mcp-unavailable | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/playwright_driver.py:1273` | 2026-05-06 |  |
 | playwright-mcp-unavailable | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | playwright-mcp-unavailable | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | playwright-mcp-unavailable | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
@@ -371,14 +371,14 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | smoke-first-abort | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | smoke-first-abort | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py:433` | 2026-05-05 |  |
 | smoke-first-abort | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
-| specialist-timeout | bundle-assembler | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — specialist-timeout marker rendering in PR bundle's loud-fail block lands in Story 6.7 (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle). |
+| specialist-timeout | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1171` | 2026-05-06 |  |
 | specialist-timeout | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | hook-stop | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | orchestrator-dispatch-wrapper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py:963` | 2026-05-05 |  |
 | specialist-timeout | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
-| specialist-timeout | orchestrator-run-state-helper | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.7 — Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side run_state.marker_contexts append for {specialist} + {timeout_seconds} is gated by Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1). |
+| specialist-timeout | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/marker_wiring.py:261` | 2026-05-06 |  |
 | specialist-timeout | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |

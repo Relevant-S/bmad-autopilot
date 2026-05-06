@@ -1139,7 +1139,12 @@ def test_evaluate_envelope_accessible_from_module() -> None:
 
 
 def test_module_all_exports() -> None:
-    """``__all__`` matches the AC-2 18-name public surface enumeration."""
+    """``__all__`` matches the AC-2 19-name public surface enumeration.
+
+    Story 6.7 added :func:`handle_hook_exit_code` to Story 2.5's
+    eighteen-name baseline (NFR-R6 hook-result composition seam per
+    Story 6.7 AC-2 hook-failed wiring).
+    """
     expected = {
         "AcceptanceCriterion",
         "DispatchCallback",
@@ -1158,6 +1163,7 @@ def test_module_all_exports() -> None:
         "default_dispatch_callback",
         "default_sprint_status_resolver",
         "default_story_doc_resolver",
+        "handle_hook_exit_code",
         "run_story_loop_entry",
     }
     assert set(ore_module.__all__) == expected
@@ -1277,3 +1283,45 @@ def test_default_sprint_status_resolver_raises_mismatch_when_missing(
     )
     with pytest.raises(SprintStatusMismatch):
         default_sprint_status_resolver("9-9", tmp_path)
+
+
+
+# --------------------------------------------------------------------------- #
+# handle_hook_exit_code behavioral tests (Story 6.7 AC-2)                     #
+# --------------------------------------------------------------------------- #
+
+
+def test_handle_hook_exit_code_zero_exit_returns_input_run_state_unchanged() -> None:
+    """AC-2 — hook-failed marker emission wired at orchestrator's
+    hook-result handler seam: exit_code=0 returns the input RunState
+    unchanged (same object identity, no allocation)."""
+    from loud_fail_harness.orchestrator_run_entry import handle_hook_exit_code
+
+    rs = _make_run_state()
+    result = handle_hook_exit_code(exit_code=0, hook_name="subagent-stop", run_state=rs)
+    assert result is rs
+
+
+def test_handle_hook_exit_code_nonzero_exit_records_hook_failed_marker() -> None:
+    """AC-2 — hook-failed marker emission wired at orchestrator's
+    hook-result handler seam: exit_code=1 produces a new RunState
+    carrying ``hook-failed: subagent-stop`` in active_markers."""
+    from loud_fail_harness.orchestrator_run_entry import handle_hook_exit_code
+
+    rs = _make_run_state()
+    result = handle_hook_exit_code(exit_code=1, hook_name="subagent-stop", run_state=rs)
+    assert result is not rs
+    assert "hook-failed: subagent-stop" in result.active_markers
+
+
+def test_handle_hook_exit_code_idempotent_second_call_same_hook() -> None:
+    """AC-2 — hook-failed marker emission wired at orchestrator's
+    hook-result handler seam: two non-zero calls for the same hook_name
+    produce exactly one marker entry (de-dup via marker-permanence rule)."""
+    from loud_fail_harness.orchestrator_run_entry import handle_hook_exit_code
+
+    rs = _make_run_state()
+    rs1 = handle_hook_exit_code(exit_code=1, hook_name="stop", run_state=rs)
+    rs2 = handle_hook_exit_code(exit_code=1, hook_name="stop", run_state=rs1)
+    count = sum(1 for m in rs2.active_markers if m == "hook-failed: stop")
+    assert count == 1

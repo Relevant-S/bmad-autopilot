@@ -320,6 +320,7 @@ from typing import (
     ClassVar,
     Literal,
     Protocol,
+    cast,
     runtime_checkable,
 )
 
@@ -1486,6 +1487,140 @@ class EventConstructionFailed(Exception):
 
 
 # --------------------------------------------------------------------------- #
+# Story 6.7 — specialist-timeout dispatch-boundary composition helper         #
+# --------------------------------------------------------------------------- #
+
+
+def handle_specialist_timeout_at_dispatch_boundary(
+    *,
+    exception: SpecialistTimeoutExceeded,
+    run_state: "RunState",
+    marker_recorder: Callable[..., "RunState"] | None = None,
+) -> "RunState":
+    """Compose a caught :exc:`SpecialistTimeoutExceeded` into an updated RunState.
+
+    Story 6.7 AC-1 composition seam: when the LLM-runtime dispatch
+    wrapper (or test-injection layer) catches a
+    :exc:`SpecialistTimeoutExceeded`, it invokes this helper to produce
+    an updated :class:`RunState` carrying the
+    ``specialist-timeout: <sub_cause>`` marker + populated
+    ``marker_contexts`` per Story 6.2's actionable-pointer
+    enrichment. The caller composes the returned
+    :class:`RunState` INTO the next-state argument it passes to
+    :func:`loud_fail_harness.run_state.advance_run_state` per Pattern
+    4's batch-write rule (this helper does NOT call ``advance_run_state``;
+    one atomic write per seam transition mirrors
+    :func:`record_cost_streaming_at_return_boundary`'s discipline).
+
+    Pure function (no I/O). The lazy import of
+    :func:`loud_fail_harness.marker_wiring.record_specialist_timeout_marker`
+    avoids the circular import that would otherwise arise from
+    ``marker_wiring.py`` importing :class:`MarkerClassRegistry` /
+    :func:`validate_marker_emission` from this module.
+
+    Marker-permanence rule (Story 1.4): a second call for the same
+    ``(specialist, sub_cause)`` returns the input run-state unchanged
+    via the recorder's de-dup; the FIRST emission wins.
+
+    Args:
+        exception: The caught :exc:`SpecialistTimeoutExceeded` instance
+            (carries ``specialist`` + ``timeout_seconds``; ``sub_cause``
+            is read from the class-level ClassVar).
+        run_state: The :class:`RunState` BEFORE the marker append.
+        marker_recorder: Optional override for
+            :func:`record_specialist_timeout_marker`; defaults to the
+            canonical helper. Test-injection seam.
+
+    Returns:
+        A new :class:`RunState` carrying the
+        ``specialist-timeout: <sub_cause>`` marker entry +
+        ``marker_contexts["specialist-timeout"]`` populated with
+        ``{"specialist", "timeout_seconds"}``; or the input run-state
+        unchanged on de-dup.
+    """
+    from loud_fail_harness.marker_wiring import (
+        record_specialist_timeout_marker as _default_recorder,
+    )
+
+    from loud_fail_harness.marker_wiring import SpecialistName
+
+    recorder = marker_recorder if marker_recorder is not None else _default_recorder
+    return recorder(
+        run_state=run_state,
+        specialist=cast(SpecialistName, exception.specialist),
+        timeout_seconds=exception.timeout_seconds,
+        sub_cause=type(exception).sub_cause,
+    )
+
+
+def handle_context_near_limit_at_dispatch_boundary(
+    *,
+    is_near_limit: bool,
+    specialist: str,
+    run_state: "RunState",
+    marker_recorder: Callable[..., "RunState"] | None = None,
+) -> "RunState":
+    """Compose a context-near-limit signal into an updated RunState.
+
+    Story 6.7 AC-3 composition seam: when the LLM-runtime dispatch
+    wrapper's caller-supplied ``is_context_near_limit`` callable
+    returns ``True`` on a returned envelope per NFR-P4, it invokes
+    this helper to produce an updated :class:`RunState` carrying the
+    ``context-near-limit: <specialist>`` marker + populated
+    ``marker_contexts["context-near-limit"]`` per Story 6.2's
+    actionable-pointer enrichment. The caller composes the returned
+    :class:`RunState` INTO the next-state argument it passes to
+    :func:`loud_fail_harness.run_state.advance_run_state` per
+    Pattern 4's batch-write rule.
+
+    The substrate is **sensor-not-advisor about the signal source**:
+    the LLM-runtime caller decides whether the signal source is
+    (a) an explicit envelope field, (b) a runtime token-count
+    estimate, (c) a Claude Code primitive callback, or (d) some
+    other future signal — and supplies the boolean here. Phase 2
+    thickening (e.g., a canonical envelope field; an automated probe)
+    is a forward-looking FR-P2 candidate.
+
+    Pure function (no I/O). Lazy import of
+    :func:`loud_fail_harness.marker_wiring.record_context_near_limit_marker`
+    avoids the circular import.
+
+    Marker-permanence rule (Story 1.4): a second invocation with
+    ``is_near_limit=True`` for the SAME ``specialist`` returns the
+    input run-state unchanged via the recorder's per-specialist
+    de-dup; the FIRST emission wins. ``is_near_limit=False`` always
+    returns the input run-state unchanged (no allocation).
+
+    Args:
+        is_near_limit: The boundary signal. ``False`` means the
+            specialist's context is comfortably below the limit; the
+            helper returns the input run-state unchanged.
+        specialist: Canonical kebab-case specialist identifier (one of
+            :data:`loud_fail_harness.marker_wiring.SPECIALIST_NAMES`).
+        run_state: The :class:`RunState` BEFORE the marker append.
+        marker_recorder: Optional override for
+            :func:`record_context_near_limit_marker`; defaults to the
+            canonical helper. Test-injection seam.
+
+    Returns:
+        A new :class:`RunState` carrying the
+        ``context-near-limit: <specialist>`` marker entry +
+        ``marker_contexts["context-near-limit"]`` populated with
+        ``{"specialist": <name>}``; or the input run-state unchanged
+        on ``False`` signal / de-dup.
+    """
+    if not is_near_limit:
+        return run_state
+    from loud_fail_harness.marker_wiring import (
+        SpecialistName,
+        record_context_near_limit_marker as _default_recorder,
+    )
+
+    recorder = marker_recorder if marker_recorder is not None else _default_recorder
+    return recorder(run_state=run_state, specialist=cast(SpecialistName, specialist))
+
+
+# --------------------------------------------------------------------------- #
 # Task-tool dispatch callback Protocol + factory (AC-10)                      #
 # --------------------------------------------------------------------------- #
 
@@ -1673,6 +1808,8 @@ __all__ = [
     "validate_return_envelope",
     "EnvelopeValidationFailed",
     "SpecialistTimeoutExceeded",
+    "handle_context_near_limit_at_dispatch_boundary",
+    "handle_specialist_timeout_at_dispatch_boundary",
     "make_specialist_dispatched_event",
     "make_specialist_returned_event",
     "default_event_id_factory",

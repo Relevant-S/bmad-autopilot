@@ -2151,13 +2151,21 @@ def test_render_loud_fail_block_one_marker_renders_h2_plus_h3_with_four_element_
     assert "is not configured for AC-2" in how_line
 
 
-def test_render_loud_fail_block_multiple_markers_render_in_provided_order(
+def test_render_loud_fail_block_multiple_markers_render_in_alphabetical_order(
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 6.1 AC-1 + AC-6 (c): multiple active markers → one entry
-    per marker, in the order provided (NOT re-sorted alphabetically).
+    """Story 6.7 AC-4: multiple active markers render in alphabetical
+    order by ``(base_class, sub_classification)`` per
+    :func:`compute_alphabetical_marker_order`. The persistent
+    ``run_state.active_markers`` tuple is unchanged on the input; only
+    the rendered iteration order is normalized for stable display.
+    Pre-Story-6.7 the renderer iterated emission order; Story 6.7 adds
+    render-time alphabetical normalization.
     """
-    markers = ("Tier-3-not-configured", "plan-drift-detected")
+    # Input deliberately in non-alphabetical (uppercase 'T' < lowercase
+    # 'p' would already place Tier-3 first; reverse so the alphabetical
+    # contract is verifiable).
+    markers = ("plan-drift-detected", "Tier-3-not-configured")
     rendered = bundle_assembly._render_loud_fail_block(
         markers,
         marker_registry=runtime_marker_registry,
@@ -2165,9 +2173,9 @@ def test_render_loud_fail_block_multiple_markers_render_in_provided_order(
     )
     tier3_idx = rendered.index("### Tier-3-not-configured")
     plan_drift_idx = rendered.index("### plan-drift-detected")
+    # ASCII alphabetical: 'T' (0x54) < 'p' (0x70), so Tier-3 first.
     assert tier3_idx < plan_drift_idx, (
-        "marker entries must render in active_markers tuple order; "
-        "alphabetical re-sorting would put plan-drift-detected first"
+        "marker entries must render in alphabetical order per Story 6.7 AC-4"
     )
 
 
@@ -2879,3 +2887,128 @@ def test_assemble_bundle_both_sources_dangling_alphabetical_order(
     assert qa_idx < retry_idx
     # Bundle assembled successfully despite dangling refs (visibility-not-enforcement).
     assert result.bundle_path.exists()
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.7 — alphabetical render-time ordering + three target marker classes #
+# --------------------------------------------------------------------------- #
+
+
+def test_render_loud_fail_block_story_67_three_marker_classes_alphabetical(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.7 AC-4: input ``("specialist-timeout: timeout-exceeded",
+    "context-near-limit: dev", "hook-failed: subagent-stop")``
+    (non-alphabetical input order) renders in alphabetical output
+    order: ``context-near-limit`` FIRST → ``hook-failed`` SECOND →
+    ``specialist-timeout`` THIRD."""
+    rendered = bundle_assembly._render_loud_fail_block(
+        (
+            "specialist-timeout: timeout-exceeded",
+            "context-near-limit: dev",
+            "hook-failed: subagent-stop",
+        ),
+        marker_registry=runtime_marker_registry,
+        marker_contexts={
+            "specialist-timeout": {"specialist": "dev", "timeout_seconds": "900"},
+            "context-near-limit": {"specialist": "dev"},
+        },
+    )
+    cnl_idx = rendered.index("### context-near-limit: dev")
+    hf_idx = rendered.index("### hook-failed: subagent-stop")
+    st_idx = rendered.index("### specialist-timeout: timeout-exceeded")
+    assert cnl_idx < hf_idx < st_idx
+
+
+def test_render_loud_fail_block_story_67_actionable_pointer_interpolation(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.7 AC-3: rendering ``context-near-limit: dev`` with
+    ``marker_contexts["context-near-limit"] = {"specialist": "dev"}``
+    interpolates the ``{specialist}`` placeholder in the actionable
+    pointer per Story 6.2's contract; the rendered text contains the
+    run-specific ``Specialist dev`` substring."""
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("context-near-limit: dev",),
+        marker_registry=runtime_marker_registry,
+        marker_contexts={"context-near-limit": {"specialist": "dev"}},
+    )
+    how_line = next(
+        line for line in rendered.splitlines() if line.startswith("- How to enable:")
+    )
+    assert "Specialist dev" in how_line
+    assert "{specialist}" not in how_line
+
+
+def test_render_loud_fail_block_story_67_specialist_timeout_interpolation(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.7 AC-1: rendering ``specialist-timeout: timeout-exceeded``
+    with ``marker_contexts["specialist-timeout"] = {"specialist": "qa",
+    "timeout_seconds": "900"}`` interpolates BOTH placeholders per the
+    taxonomy's ``pointer_context_fields: [specialist, timeout_seconds]``
+    declaration."""
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("specialist-timeout: timeout-exceeded",),
+        marker_registry=runtime_marker_registry,
+        marker_contexts={
+            "specialist-timeout": {"specialist": "qa", "timeout_seconds": "900"}
+        },
+    )
+    how_line = next(
+        line for line in rendered.splitlines() if line.startswith("- How to enable:")
+    )
+    assert "Specialist qa" in how_line
+    assert "(900s)" in how_line
+
+
+def test_render_loud_fail_block_story_67_multiple_hook_sub_classifications(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.7 AC-4: multiple sub-classifications of the SAME
+    ``hook-failed`` base class render in alphabetical sub-class order
+    (``session-start`` → ``stop`` → ``subagent-stop``)."""
+    rendered = bundle_assembly._render_loud_fail_block(
+        (
+            "hook-failed: subagent-stop",
+            "hook-failed: stop",
+            "hook-failed: session-start",
+        ),
+        marker_registry=runtime_marker_registry,
+    )
+    ses_idx = rendered.index("### hook-failed: session-start")
+    stop_idx = rendered.index("### hook-failed: stop")
+    sub_idx = rendered.index("### hook-failed: subagent-stop")
+    assert ses_idx < stop_idx < sub_idx
+
+
+def test_render_loud_fail_block_story_67_cross_story_alphabetical(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.7 AC-4: mixed Story 6.5 / 6.6 / 6.7 markers render in
+    alphabetical order across base classes uniformly:
+    ``context-near-limit`` → ``cost-near-ceiling`` →
+    ``dangling-evidence-ref`` → ``hook-failed`` →
+    ``specialist-timeout``."""
+    rendered = bundle_assembly._render_loud_fail_block(
+        (
+            "specialist-timeout: timeout-exceeded",
+            "dangling-evidence-ref: qa-evidence",
+            "cost-near-ceiling: ceiling-crossed",
+            "context-near-limit: dev",
+            "hook-failed: subagent-stop",
+        ),
+        marker_registry=runtime_marker_registry,
+        marker_contexts={
+            "specialist-timeout": {"specialist": "dev", "timeout_seconds": "900"},
+            "context-near-limit": {"specialist": "dev"},
+        },
+    )
+    indices = [
+        rendered.index("### context-near-limit: dev"),
+        rendered.index("### cost-near-ceiling: ceiling-crossed"),
+        rendered.index("### dangling-evidence-ref: qa-evidence"),
+        rendered.index("### hook-failed: subagent-stop"),
+        rendered.index("### specialist-timeout: timeout-exceeded"),
+    ]
+    assert indices == sorted(indices)

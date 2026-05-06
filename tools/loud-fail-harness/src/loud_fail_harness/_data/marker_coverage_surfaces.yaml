@@ -316,13 +316,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: Tier-3-not-configured
     surface_name: orchestrator-run-state-helper
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side
-      run_state.marker_contexts append for the {ac_id} field is gated by Story 6.7's
-      specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_tier.py:459
+    audit_date: "2026-05-06"
   - marker_class: Tier-3-not-configured
     surface_name: orchestrator-state-machine
     verdict: not-applicable
@@ -470,11 +466,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: context-near-limit
     surface_name: bundle-assembler
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      context-near-limit marker rendering in PR bundle's loud-fail block lands in Story 6.7.
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1171
+    audit_date: "2026-05-06"
   - marker_class: context-near-limit
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -505,12 +499,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: context-near-limit
     surface_name: orchestrator-dispatch-wrapper
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      context-near-limit degradation signal emission lands in Story 6.7 (specialist-timeout
-      / hook-failed / context-near-limit fully wired into PR bundle).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/specialist_dispatch.py:1553
+    audit_date: "2026-05-06"
   - marker_class: context-near-limit
     surface_name: orchestrator-lifecycle-transitions
     verdict: not-applicable
@@ -1254,12 +1245,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: hook-failed
     surface_name: bundle-assembler
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      hook-failed marker rendering in PR bundle's loud-fail block lands in Story 6.7
-      (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1171
+    audit_date: "2026-05-06"
   - marker_class: hook-failed
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -1933,13 +1921,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: playwright-mcp-unavailable
     surface_name: orchestrator-run-state-helper
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side
-      run_state.marker_contexts append for {project_type} + {version_range} is gated by
-      Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/playwright_driver.py:1273
+    audit_date: "2026-05-06"
   - marker_class: playwright-mcp-unavailable
     surface_name: orchestrator-state-machine
     verdict: not-applicable
@@ -2583,12 +2567,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: specialist-timeout
     surface_name: bundle-assembler
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      specialist-timeout marker rendering in PR bundle's loud-fail block lands in Story 6.7
-      (specialist-timeout / hook-failed / context-near-limit fully wired into PR bundle).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:1171
+    audit_date: "2026-05-06"
   - marker_class: specialist-timeout
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -2631,13 +2612,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: specialist-timeout
     surface_name: orchestrator-run-state-helper
-    verdict: scheduled-by-story
-    discharging_story: "6.7"
-    rationale: |-
-      Story 6.2 landed the diagnostic_pointer template + emission helper; orchestrator-side
-      run_state.marker_contexts append for {specialist} + {timeout_seconds} is gated by
-      Story 6.7's specialist-timeout / hook-failed / context-near-limit wiring (D-6.2-1).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/marker_wiring.py:261
+    audit_date: "2026-05-06"
   - marker_class: specialist-timeout
     surface_name: orchestrator-state-machine
     verdict: not-applicable

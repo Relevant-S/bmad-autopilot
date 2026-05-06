@@ -291,6 +291,7 @@ _INTRA_PACKAGE_IMPORT_ALLOWLIST = frozenset(
         "loud_fail_harness.envelope_validator",
         "loud_fail_harness.event_validator",
         "loud_fail_harness.exceptions",
+        "loud_fail_harness.marker_wiring",
         "loud_fail_harness.orchestrator_run_entry",
         "loud_fail_harness.reconciler",
         "loud_fail_harness.run_state",
@@ -395,6 +396,8 @@ _DOCUMENTED_EXPORTS = [
     "validate_return_envelope",
     "EnvelopeValidationFailed",
     "SpecialistTimeoutExceeded",
+    "handle_context_near_limit_at_dispatch_boundary",
+    "handle_specialist_timeout_at_dispatch_boundary",
     "make_specialist_dispatched_event",
     "make_specialist_returned_event",
     "default_event_id_factory",
@@ -405,13 +408,18 @@ _DOCUMENTED_EXPORTS = [
 
 @pytest.mark.parametrize("export_name", _DOCUMENTED_EXPORTS)
 def test_all_enumerates_documented_exports(export_name: str) -> None:
-    """AC-1: ``__all__`` enumerates the 17 documented exports."""
+    """AC-1: ``__all__`` enumerates the 19 documented exports (Story 6.7
+    extends Story 2.6's seventeen with
+    ``handle_specialist_timeout_at_dispatch_boundary`` and
+    ``handle_context_near_limit_at_dispatch_boundary``)."""
     assert export_name in specialist_dispatch.__all__
     assert hasattr(specialist_dispatch, export_name)
 
 
-def test_all_enumerates_exactly_seventeen_names() -> None:
-    """AC-1: the ``__all__`` set is exactly the 17 documented names (no drift)."""
+def test_all_enumerates_exactly_nineteen_names() -> None:
+    """AC-1: the ``__all__`` set is exactly the 19 documented names (no
+    drift). Story 6.7 added two dispatch-boundary composition helpers
+    to Story 2.6's seventeen-name baseline."""
     assert set(specialist_dispatch.__all__) == set(_DOCUMENTED_EXPORTS)
 
 
@@ -1867,3 +1875,106 @@ def test_record_cost_streaming_ceiling_crossed_composition(
     assert streaming_result.marker_classifications_to_append == (
         ("cost-near-ceiling: ceiling-crossed", {}),
     )
+
+
+
+# --------------------------------------------------------------------------- #
+# handle_specialist_timeout_at_dispatch_boundary behavioral tests (Story 6.7) #
+# --------------------------------------------------------------------------- #
+
+
+def test_handle_specialist_timeout_caught_exception_records_marker() -> None:
+    """AC-1 — specialist-timeout marker emission wired at dispatch boundary:
+    caught SpecialistTimeoutExceeded produces a new RunState carrying
+    ``specialist-timeout: timeout-exceeded`` in active_markers with
+    correct marker_contexts."""
+    from loud_fail_harness.specialist_dispatch import (
+        handle_specialist_timeout_at_dispatch_boundary,
+    )
+
+    exc = SpecialistTimeoutExceeded(
+        timeout_seconds=900,
+        specialist="dev",
+        story_id="6-7-test",
+        attempt_number=1,
+    )
+    rs = _make_run_state_65()
+    result = handle_specialist_timeout_at_dispatch_boundary(
+        exception=exc,
+        run_state=rs,
+    )
+    assert result is not rs
+    assert "specialist-timeout: timeout-exceeded" in result.active_markers
+    assert result.marker_contexts.get("specialist-timeout") == {
+        "specialist": "dev",
+        "timeout_seconds": "900",
+    }
+
+
+def test_handle_specialist_timeout_marker_recorder_injection_seam() -> None:
+    """AC-1 — specialist-timeout dispatch boundary: passing a custom
+    marker_recorder calls the custom recorder instead of the default."""
+    from loud_fail_harness.specialist_dispatch import (
+        handle_specialist_timeout_at_dispatch_boundary,
+    )
+
+    exc = SpecialistTimeoutExceeded(
+        timeout_seconds=900,
+        specialist="qa",
+        story_id="6-7-test",
+        attempt_number=1,
+    )
+    rs = _make_run_state_65()
+    recorder_calls: list[dict] = []
+
+    def _custom_recorder(**kwargs):  # type: ignore[no-untyped-def]
+        recorder_calls.append(kwargs)
+        return rs
+
+    result = handle_specialist_timeout_at_dispatch_boundary(
+        exception=exc,
+        run_state=rs,
+        marker_recorder=_custom_recorder,
+    )
+    assert len(recorder_calls) == 1
+    assert recorder_calls[0]["specialist"] == "qa"
+    assert result is rs
+
+
+# --------------------------------------------------------------------------- #
+# handle_context_near_limit_at_dispatch_boundary behavioral tests (Story 6.7) #
+# --------------------------------------------------------------------------- #
+
+
+def test_handle_context_near_limit_false_signal_returns_unchanged() -> None:
+    """AC-3 — context-near-limit dispatch boundary: is_near_limit=False
+    returns the input RunState unchanged (no marker, no allocation)."""
+    from loud_fail_harness.specialist_dispatch import (
+        handle_context_near_limit_at_dispatch_boundary,
+    )
+
+    rs = _make_run_state_65()
+    result = handle_context_near_limit_at_dispatch_boundary(
+        is_near_limit=False,
+        specialist="dev",
+        run_state=rs,
+    )
+    assert result is rs
+
+
+def test_handle_context_near_limit_true_signal_records_marker() -> None:
+    """AC-3 — context-near-limit dispatch boundary: is_near_limit=True
+    produces a new RunState carrying ``context-near-limit: dev`` in
+    active_markers."""
+    from loud_fail_harness.specialist_dispatch import (
+        handle_context_near_limit_at_dispatch_boundary,
+    )
+
+    rs = _make_run_state_65()
+    result = handle_context_near_limit_at_dispatch_boundary(
+        is_near_limit=True,
+        specialist="dev",
+        run_state=rs,
+    )
+    assert result is not rs
+    assert "context-near-limit: dev" in result.active_markers
