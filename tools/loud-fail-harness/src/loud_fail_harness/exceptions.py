@@ -261,3 +261,49 @@ class PerStoryCostCeilingConfigError(ContractViolation, ValueError):
             "PerStoryCostCeilingConfigError: "
             f"value={self.value!r}; diagnostic={self.diagnostic!r}"
         )
+
+
+
+class EvidenceLinkabilityInvariantError(ContractViolation, ValueError):
+    """Raised when a ``DanglingEvidenceRef`` is constructed with a source-vs-fields combination that violates the canonical invariant.
+
+    Story 6.6 (NFR-O7 + NFR-O5 + Pattern 5) — the bundle-render-time
+    evidence-trace linkability validator at
+    :mod:`loud_fail_harness.evidence_linkability` constructs frozen
+    :class:`DanglingEvidenceRef` instances per dangling reference. The
+    dataclass enforces a source-vs-fields invariant in ``__post_init__``:
+
+    * ``source == "qa-evidence"`` REQUIRES ``ac_id`` non-``None`` AND
+      ``round_id`` is ``None`` AND ``retry_attempt`` is ``None`` (the
+      QA envelope's per-AC ``ac_results.evidence_refs`` shape — Story
+      4.7 / 4.8 contract).
+    * ``source == "retry-history"`` REQUIRES ``round_id`` non-``None``
+      AND ``retry_attempt`` non-``None`` AND ``ac_id`` is ``None`` (the
+      Story 5.5 ``RetryAttemptRef`` shape — round-scoped, AC-agnostic).
+
+    Violations of either branch raise this exception with an NFR-O5
+    named-invariant diagnostic (the violated invariant is named
+    ``source-vs-fields-mismatch``) per Pattern 5's
+    contract-violation-as-loud-fail doctrine. The same dual-inheritance
+    posture as :class:`PerStoryCostCeilingConfigError` (Story 6.5) and
+    :class:`loud_fail_harness.retry_budget.RetryBudgetConfigError` is
+    preserved so generic ``except ContractViolation`` AND ``except
+    ValueError`` handlers both catch it.
+
+    Attributes:
+        diagnostic: The NFR-O5 named-invariant diagnostic enumerating
+            the offending field combination and naming the violated
+            invariant (``source-vs-fields-mismatch``) so an operator
+            reading the diagnostic can identify which branch failed
+            without reading source.
+    """
+
+    def __init__(self, *, diagnostic: str) -> None:
+        self.diagnostic = diagnostic
+        super().__init__(diagnostic)
+
+    def __str__(self) -> str:
+        return (
+            "EvidenceLinkabilityInvariantError: "
+            f"diagnostic={self.diagnostic!r}"
+        )

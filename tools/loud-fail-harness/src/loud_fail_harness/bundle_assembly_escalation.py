@@ -139,6 +139,7 @@ from loud_fail_harness.bundle_assembly import (
     _atomic_write_bundle,
     _emit_walking_skeleton_marker,
     _load_cost_aggregation,
+    _merge_evidence_linkability_markers,
     _render_cost_breakdown,
     _render_finding_bullet,
     _render_loud_fail_block,
@@ -147,6 +148,11 @@ from loud_fail_harness.bundle_assembly import (
     _THICKENING_SENTENCES,
 )
 from loud_fail_harness.cost_telemetry import OtelPipelineProtocol
+from loud_fail_harness.evidence_linkability import (
+    DanglingEvidenceRef,
+    format_dangling_inline_marker,
+    validate_evidence_linkability_at_render,
+)
 from loud_fail_harness.retry_budget_exhaustion import (
     ExhaustionContext,
     ExhaustionTrigger,
@@ -513,7 +519,11 @@ def _render_outstanding_findings(context: ExhaustionContext) -> str:
     return "\n".join(_render_finding_bullet(f) for f in findings)
 
 
-def _render_retry_history(context: ExhaustionContext) -> str:
+def _render_retry_history(
+    context: ExhaustionContext,
+    *,
+    retry_history_dangling: tuple[DanglingEvidenceRef, ...] = (),
+) -> str:
     """Render the ``## Retry history`` section body from
     ``context.retry_history`` (``tuple[RetryAttempt, ...]``).
 
@@ -522,19 +532,45 @@ def _render_retry_history(context: ExhaustionContext) -> str:
     MUST be present (not OMITTED) even when ``retry_history`` is empty
     — render the sentinel ``- (no retry rounds recorded)`` per the
     existing placeholder behavior.
+
+    Story 6.6 thickening (AC-1): when ``retry_history_dangling`` is a
+    non-empty tuple of :class:`DanglingEvidenceRef` (the retry-history
+    partition from
+    :func:`loud_fail_harness.evidence_linkability.validate_evidence_linkability_at_render`),
+    each retry-round summary line whose ``(round_id, path)`` matches a
+    :class:`DanglingEvidenceRef` in the tuple gets an inline
+    ``— ⚠️ dangling-evidence-ref: retry-history — Remediation: regenerate
+    the evidence OR fix the reference (path=...)`` suffix appended to
+    the existing summary. Default empty preserves byte-stable behavior
+    for callers without dangling refs.
     """
     if not context.retry_history:
         return "- (no retry rounds recorded)"
 
+    dangling_index: dict[tuple[str, str], DanglingEvidenceRef] = {
+        (ref.round_id, ref.path): ref
+        for ref in retry_history_dangling
+        if ref.round_id is not None
+    }
     lines: list[str] = []
     for attempt in context.retry_history:
         round_id = attempt.round_id if attempt.round_id is not None else "(unset)"
         path = attempt.path if attempt.path is not None else "(unset)"
-        lines.append(
+        line = (
             f"- attempt={attempt.retry_attempt}, "
             f"reason={attempt.retry_reason!r}, "
             f"round_id={round_id}, path={path}"
         )
+        if attempt.round_id is not None and attempt.path is not None:
+            dangling_ref = dangling_index.get(
+                (attempt.round_id, attempt.path)
+            )
+            if dangling_ref is not None:
+                line = (
+                    f"{line} — "
+                    f"{format_dangling_inline_marker(ref=dangling_ref)}"
+                )
+        lines.append(line)
         if attempt.path is not None:
             lines.append(f"  - [Round {attempt.retry_attempt} artifacts]({path})")
     return "\n".join(lines)
@@ -750,12 +786,23 @@ def _render_bundle_body(
     emitted_markers: tuple[str, ...],
     marker_registry: MarkerClassRegistry,
     otel_pipeline: OtelPipelineProtocol | None = None,
+    active_markers: tuple[str, ...] | None = None,
+    retry_history_dangling: tuple[DanglingEvidenceRef, ...] = (),
 ) -> str:
     """Render the full markdown body for an Epic-5-domain escalation
     bundle (retry-budget-exhausted OR scope-assertion-violation).
 
     The six AC-2 sections are rendered in fixed order; the trailing
     machine-readable block carries the validated payload.
+
+    Story 6.6 thickening: ``active_markers`` (when non-None) supersedes
+    ``context.active_markers`` for the loud-fail-block + cost-breakdown
+    rendering. The caller passes the merged tuple from
+    :func:`_merge_evidence_linkability_markers` so the bundle-render-
+    time dangling-evidence markers surface in the loud-fail block.
+    ``retry_history_dangling`` is threaded into
+    :func:`_render_retry_history` for inline indicators at the
+    matching round-id × path bullets.
     """
     # Story 6.1: the loud-fail block is the FIRST content section after
     # the title metadata block + the ``## ⚠️ Walking Skeleton Mode``
@@ -765,8 +812,11 @@ def _render_bundle_body(
     # (single source of truth per Story 5.8 AC-4); content differs but
     # position + shape are byte-identical for any given ``active_markers``
     # set per AC-5.
+    resolved_active_markers = (
+        active_markers if active_markers is not None else context.active_markers
+    )
     loud_fail_block = _render_loud_fail_block(
-        context.active_markers,
+        resolved_active_markers,
         marker_registry=marker_registry,
         marker_contexts=context.marker_contexts,
     )
@@ -780,7 +830,7 @@ def _render_bundle_body(
         context.story_id, otel_pipeline
     )
     cost_breakdown_block = _render_cost_breakdown(
-        context.active_markers,
+        resolved_active_markers,
         context.marker_contexts,
         cost_breakdown_aggregation,
         marker_registry=marker_registry,
@@ -811,7 +861,9 @@ def _render_bundle_body(
         "",
         "## Retry history",
         "",
-        _render_retry_history(context),
+        _render_retry_history(
+            context, retry_history_dangling=retry_history_dangling
+        ),
         "",
         "## Deferred-work pointer",
         "",
@@ -888,6 +940,9 @@ def assemble_escalation_bundle(
             the trigger discriminator + the full diagnostic payload.
         repo_root: Repository root the deterministic on-disk output path
             is anchored to. Caller-supplied per Epic 1 retro Action #1.
+            Story 6.6: ALSO used to resolve
+            ``context.retry_history[].path`` for bundle-render-time
+            evidence-trace linkability validation.
         schemas_root: Optional override for the directory under which
             ``schemas/escalation-bundles/{bundle_class}.yaml`` is
             resolved. Defaults to the actual repo root via
@@ -971,7 +1026,24 @@ def assemble_escalation_bundle(
         flags=flags, marker_registry=registry
     )
 
-    # Step 4: Render header + bundle body.
+    # Step 4: Story 6.6 — bundle-render-time evidence-trace linkability
+    # validation. The escalation-bundle path inspects ONLY the
+    # retry-history side (the ExhaustionContext does not carry per-AC
+    # ``evidence_refs`` — that surface lives on the merge-ready
+    # bundle's QA envelope). The merged active_markers tuple feeds the
+    # loud-fail-block rendering; retry_history_dangling threads into
+    # _render_retry_history for inline indicators.
+    evidence_linkability_result = validate_evidence_linkability_at_render(
+        ac_results=(),
+        retry_history=tuple(context.retry_history),
+        repo_root=repo_root,
+    )
+    merged_active_markers = _merge_evidence_linkability_markers(
+        context.active_markers,
+        evidence_linkability_result.marker_classifications_to_append,
+    )
+
+    # Step 5: Render header + bundle body.
     header_text = _render_walking_skeleton_header(flags)
     body = _render_bundle_body(
         context=context,
@@ -983,9 +1055,11 @@ def assemble_escalation_bundle(
         emitted_markers=emitted_markers,
         marker_registry=registry,
         otel_pipeline=otel_pipeline,
+        active_markers=merged_active_markers,
+        retry_history_dangling=evidence_linkability_result.retry_history_dangling,
     )
 
-    # Step 5: Atomic write at the deterministic per-run path.
+    # Step 6: Atomic write at the deterministic per-run path.
     bundle_path = compute_escalation_bundle_path(
         repo_root=repo_root,
         story_id=context.story_id,

@@ -184,6 +184,11 @@ def _assemble_merge_ready(
     )
     _seed_log(logs_root, specialist="qa", return_envelope=canonical_qa_envelope)
     bundle_root = tmp_path / "pr-bundles"
+    # Story 6.6: seed the canonical QA evidence file under tmp_path so
+    # the bundle-render-time evidence-trace linkability validation
+    # resolves cleanly. Tests that exercise the dangling-evidence path
+    # delete this file before assembly.
+    _seed_canonical_qa_evidence_file(tmp_path)
     return assemble_bundle(
         story_id=_STORY_ID,
         run_id=_RUN_ID,
@@ -192,7 +197,27 @@ def _assemble_merge_ready(
         bundle_root=bundle_root,
         marker_registry=runtime_marker_registry,
         generated_at=_GENERATED_AT,
+        repo_root=tmp_path,
     )
+
+
+def _seed_canonical_qa_evidence_file(repo_root: pathlib.Path) -> pathlib.Path:
+    """Seed the canonical QA fixture's evidence_ref file so Story 6.6's
+    bundle-render-time evidence-trace linkability validation resolves
+    cleanly for the regression-test path. The path mirrors the canonical
+    QA envelope's ``_bmad-output/qa-evidence/sample-001/run-2026-04-29-001/ac1-http-200.log``.
+    """
+    evidence_path = (
+        repo_root
+        / "_bmad-output"
+        / "qa-evidence"
+        / "sample-001"
+        / "run-2026-04-29-001"
+        / "ac1-http-200.log"
+    )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text("HTTP/1.1 200 OK\n", encoding="utf-8")
+    return evidence_path
 
 
 def _build_exhaustion_context(

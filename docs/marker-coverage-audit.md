@@ -119,7 +119,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | cost-telemetry-unavailable | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-telemetry-unavailable | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
 | cost-telemetry-unavailable | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Cost-telemetry-pipeline-scoped marker; this surface has no cost-telemetry code path. |
-| dangling-evidence-ref | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/retry_history.py:690` | 2026-05-05 |  |
+| dangling-evidence-ref | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/evidence_linkability.py:534` | 2026-05-06 |  |
 | dangling-evidence-ref | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | dangling-evidence-ref | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | dangling-evidence-ref | hook-stop | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |

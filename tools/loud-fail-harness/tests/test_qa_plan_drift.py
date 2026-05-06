@@ -615,6 +615,29 @@ def _canonical_review_envelope(repo_root: pathlib.Path) -> dict[str, Any]:
     )
 
 
+def _seed_canonical_qa_evidence_files(repo_root: pathlib.Path) -> None:
+    """Seed BOTH canonical evidence_ref files used by this module's
+    fixtures so Story 6.6's bundle-render-time evidence-trace
+    linkability validation resolves cleanly:
+
+    * ``_bmad-output/qa-evidence/sample-001/run-2026-04-29-001/ac1-http-200.log``
+      (qa-pass-ac1-tier1.yaml — no-drift fixture).
+    * ``_bmad-output/qa-evidence/sample-001/run-2026-04-30-001/ac1-http-200.log``
+      (qa-pass-with-plan-drift.yaml — drifted fixture).
+    """
+    for run_dir in ("run-2026-04-29-001", "run-2026-04-30-001"):
+        evidence_path = (
+            repo_root
+            / "_bmad-output"
+            / "qa-evidence"
+            / "sample-001"
+            / run_dir
+            / "ac1-http-200.log"
+        )
+        evidence_path.parent.mkdir(parents=True, exist_ok=True)
+        evidence_path.write_text("HTTP/1.1 200 OK\n", encoding="utf-8")
+
+
 def _qa_with_plan_drift_envelope(repo_root: pathlib.Path) -> dict[str, Any]:
     return yaml.safe_load(
         (
@@ -667,6 +690,10 @@ def _assemble_drifted_bundle(
         return_envelope=_qa_with_plan_drift_envelope(repo_root),
     )
     bundle_root = tmp_path / "pr-bundles"
+    # Story 6.6: seed canonical evidence files under tmp_path so the
+    # bundle-render-time evidence-trace linkability validation resolves
+    # cleanly. Pass repo_root=tmp_path to anchor validation there.
+    _seed_canonical_qa_evidence_files(tmp_path)
     result = assemble_bundle(
         story_id=_CANONICAL_STORY_ID,
         run_id=_CANONICAL_RUN_ID,
@@ -675,6 +702,7 @@ def _assemble_drifted_bundle(
         bundle_root=bundle_root,
         marker_registry=runtime_marker_registry,
         generated_at=_CANONICAL_GENERATED_AT,
+        repo_root=tmp_path,
     )
     return result.bundle_path
 
@@ -712,6 +740,10 @@ def _assemble_no_drift_bundle(
         return_envelope=_qa_without_plan_drift_envelope(repo_root),
     )
     bundle_root = tmp_path / "pr-bundles"
+    # Story 6.6: seed canonical evidence files under tmp_path so the
+    # bundle-render-time evidence-trace linkability validation resolves
+    # cleanly. Pass repo_root=tmp_path to anchor validation there.
+    _seed_canonical_qa_evidence_files(tmp_path)
     result = assemble_bundle(
         story_id=_CANONICAL_STORY_ID,
         run_id=_CANONICAL_RUN_ID,
@@ -720,6 +752,7 @@ def _assemble_no_drift_bundle(
         bundle_root=bundle_root,
         marker_registry=runtime_marker_registry,
         generated_at=_CANONICAL_GENERATED_AT,
+        repo_root=tmp_path,
     )
     return result.bundle_path
 

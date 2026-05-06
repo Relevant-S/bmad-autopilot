@@ -290,6 +290,12 @@ def _assemble(
         qa=canonical_qa_envelope,
     )
     bundle_root = tmp_path / "pr-bundles"
+    # Story 6.6: seed the canonical QA fixture's evidence_ref file under
+    # tmp_path so the bundle-render-time evidence-trace linkability
+    # validation resolves cleanly. Per-test overrides land in their own
+    # fixture-seed step. The path mirrors the canonical fixture's
+    # `_bmad-output/qa-evidence/sample-001/run-2026-04-29-001/ac1-http-200.log`.
+    _seed_canonical_qa_evidence_file(tmp_path)
     result = assemble_bundle(
         story_id=story_id,
         run_id=run_id,
@@ -300,8 +306,32 @@ def _assemble(
         thickening_flags=flags,
         generated_at=generated_at
         or datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc),
+        repo_root=tmp_path,
     )
     return result, result.bundle_path
+
+
+def _seed_canonical_qa_evidence_file(repo_root: pathlib.Path) -> pathlib.Path:
+    """Seed the canonical QA fixture's evidence_ref file so Story 6.6's
+    bundle-render-time evidence-trace linkability validation resolves
+    cleanly for the regression test path.
+
+    The path mirrors the canonical fixture's
+    ``_bmad-output/qa-evidence/sample-001/run-2026-04-29-001/ac1-http-200.log``.
+    Tests that exercise the dangling-evidence path skip this seeding
+    OR delete the file before assembly.
+    """
+    evidence_path = (
+        repo_root
+        / "_bmad-output"
+        / "qa-evidence"
+        / "sample-001"
+        / "run-2026-04-29-001"
+        / "ac1-http-200.log"
+    )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text("HTTP/1.1 200 OK\n", encoding="utf-8")
+    return evidence_path
 
 
 # --------------------------------------------------------------------------- #
@@ -1346,6 +1376,10 @@ def test_bundle_assembly_unaffected_by_runtime_duration_ms_addition(
         }
         log_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
+    # Story 6.6: seed the canonical evidence file under run_root so the
+    # bundle-render-time evidence-trace linkability validation resolves
+    # cleanly for this byte-identity regression test.
+    _seed_canonical_qa_evidence_file(run_root)
     with_field_bundle = assemble_bundle(
         story_id="sample-auto-001",
         run_id="run-2026-04-29-001",
@@ -1354,6 +1388,7 @@ def test_bundle_assembly_unaffected_by_runtime_duration_ms_addition(
         bundle_root=bundle_root,
         marker_registry=runtime_marker_registry,
         generated_at=datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc),
+        repo_root=run_root,
     ).bundle_path
     with_field_body = with_field_bundle.read_text(encoding="utf-8")
 
@@ -2543,3 +2578,304 @@ def test_assemble_bundle_renders_cost_breakdown_at_correct_position(
     loud_fail_idx = h2_lines.index("## ✓ Loud-Fail Markers — None")
     per_ac_idx = h2_lines.index("## Per-AC results")
     assert loud_fail_idx < cost_idx < per_ac_idx
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.6 — bundle-render-time evidence-trace linkability                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_render_per_ac_section_with_default_empty_dangling_byte_identical(
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.6 AC-1 (g): default empty qa_evidence_dangling tuple
+    preserves byte-stable behavior — clean-resolution bullets are
+    byte-identical to pre-6.6 output (regression guard)."""
+    from loud_fail_harness.bundle_assembly import _render_per_ac_section
+
+    baseline = _render_per_ac_section(
+        canonical_qa_envelope, marker_registry=runtime_marker_registry
+    )
+    with_default = _render_per_ac_section(
+        canonical_qa_envelope,
+        marker_registry=runtime_marker_registry,
+        qa_evidence_dangling=(),
+    )
+    assert baseline == with_default
+
+
+def test_render_per_ac_section_with_dangling_appends_inline_indicator(
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.6 AC-1 (h): _render_per_ac_section with one dangling
+    ref appends the inline ⚠️ dangling-evidence-ref: qa-evidence
+    suffix at the matching evidence bullet."""
+    from loud_fail_harness.bundle_assembly import _render_per_ac_section
+    from loud_fail_harness.evidence_linkability import DanglingEvidenceRef
+
+    # qa-pass-ac1-tier1.yaml's evidence_refs[0].path is
+    # _bmad-output/qa-evidence/sample-001/run-2026-04-29-001/ac1-http-200.log
+    dangling = (
+        DanglingEvidenceRef(
+            source="qa-evidence",
+            path="_bmad-output/qa-evidence/sample-001/run-2026-04-29-001/ac1-http-200.log",
+            ac_id="AC-1",
+            round_id=None,
+            retry_attempt=None,
+        ),
+    )
+    rendered = _render_per_ac_section(
+        canonical_qa_envelope,
+        marker_registry=runtime_marker_registry,
+        qa_evidence_dangling=dangling,
+    )
+    assert "⚠️ dangling-evidence-ref: qa-evidence" in rendered
+    assert "regenerate the evidence OR fix the reference" in rendered
+
+
+def test_merge_evidence_linkability_markers_empty_inputs() -> None:
+    """Story 6.6 AC-2 (i): empty existing + empty appended → empty."""
+    from loud_fail_harness.bundle_assembly import _merge_evidence_linkability_markers
+
+    assert _merge_evidence_linkability_markers((), ()) == ()
+
+
+def test_merge_evidence_linkability_markers_appends_in_order() -> None:
+    """Story 6.6 AC-2 (i): existing markers preserved + new markers
+    appended at the end in input order."""
+    from loud_fail_harness.bundle_assembly import _merge_evidence_linkability_markers
+
+    existing = ("walking-skeleton-bundle",)
+    appended = (
+        "dangling-evidence-ref: qa-evidence",
+        "dangling-evidence-ref: retry-history",
+    )
+    result = _merge_evidence_linkability_markers(existing, appended)
+    assert result == (
+        "walking-skeleton-bundle",
+        "dangling-evidence-ref: qa-evidence",
+        "dangling-evidence-ref: retry-history",
+    )
+
+
+def test_merge_evidence_linkability_markers_dedupes_existing() -> None:
+    """Story 6.6 AC-2 (i): de-duplication when existing tuple already
+    contains a `dangling-evidence-ref: qa-evidence` entry — the
+    existing entry is preserved at its original position; the new
+    entry is dropped per Story 1.4's marker-permanence rule."""
+    from loud_fail_harness.bundle_assembly import _merge_evidence_linkability_markers
+
+    existing = (
+        "walking-skeleton-bundle",
+        "dangling-evidence-ref: qa-evidence",  # already emitted previously
+    )
+    appended = ("dangling-evidence-ref: qa-evidence",)
+    result = _merge_evidence_linkability_markers(existing, appended)
+    assert result == existing  # unchanged — no duplication
+
+
+def test_assemble_bundle_clean_refs_renders_loud_fail_none_sentinel(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.6 AC-1 (j): assemble_bundle end-to-end with all-clean
+    refs renders the Loud-Fail Markers — None sentinel (regression —
+    byte-stable post-6.5 output for the canonical fixture seeded with
+    matching evidence)."""
+    _, bundle_path = _assemble(
+        tmp_path=tmp_path,
+        canonical_dev_envelope=canonical_dev_envelope,
+        canonical_review_envelope=canonical_review_envelope,
+        canonical_qa_envelope=canonical_qa_envelope,
+        runtime_marker_registry=runtime_marker_registry,
+    )
+    body = bundle_path.read_text(encoding="utf-8")
+    assert "## ✓ Loud-Fail Markers — None" in body
+    assert "dangling-evidence-ref" not in body
+
+
+def test_assemble_bundle_dangling_qa_evidence_renders_marker_in_loud_fail_block(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.6 AC-1 + AC-2 (k): assemble_bundle with one dangling
+    QA evidence ref → loud-fail block renders the marker; per-AC body
+    renders the inline indicator."""
+    rs_path = _write_run_state_yaml(
+        tmp_path / "_bmad" / "automation" / "run-state.yaml"
+    )
+    logs_root = tmp_path / "qa-evidence"
+    _seed_three_logs(
+        logs_root,
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        dev=canonical_dev_envelope,
+        review=canonical_review_envelope,
+        qa=canonical_qa_envelope,
+    )
+    bundle_root = tmp_path / "pr-bundles"
+    # Do NOT seed the canonical evidence file → the QA envelope's
+    # evidence_refs[0].path will dangle.
+    result = assemble_bundle(
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        run_state_path=rs_path,
+        logs_root=logs_root,
+        bundle_root=bundle_root,
+        marker_registry=runtime_marker_registry,
+        generated_at=datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc),
+        repo_root=tmp_path,
+    )
+    body = result.bundle_path.read_text(encoding="utf-8")
+    # Loud-fail block carries the marker.
+    assert "## ⚠️ Loud-Fail Markers" in body
+    assert "### dangling-evidence-ref: qa-evidence" in body
+    # Inline indicator at the per-AC bullet.
+    assert "⚠️ dangling-evidence-ref: qa-evidence" in body
+    # AssembleBundleResult.emitted_markers is unchanged — dangling-
+    # evidence flows via active_markers, not the result tuple.
+    assert "dangling-evidence-ref" not in result.emitted_markers
+
+
+def test_assemble_bundle_dangling_retry_history_renders_marker(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.6 AC-1 + AC-2 (l): assemble_bundle with one dangling
+    retry-history ref → loud-fail block renders the marker."""
+    rs_path = tmp_path / "_bmad" / "automation" / "run-state.yaml"
+    rs_path.parent.mkdir(parents=True, exist_ok=True)
+    rs_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "1.1",
+                "story_id": "sample-auto-001",
+                "run_id": "run-2026-04-29-001",
+                "current_state": "done",
+                "branch_name": "bmad-automation/story/sample-auto-001",
+                "dispatched_specialist": None,
+                "last_envelope": None,
+                "pending_qa_dispatch_payload": None,
+                "retry_history": [
+                    {
+                        "retry_attempt": 1,
+                        "retry_reason": "dangling round",
+                        "round_id": "round-01",
+                        "path": "_bmad-output/retry-history/sample/round-01.yaml",
+                    }
+                ],
+                "active_markers": [],
+                "cost_to_date_by_specialist": {},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    logs_root = tmp_path / "qa-evidence"
+    _seed_three_logs(
+        logs_root,
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        dev=canonical_dev_envelope,
+        review=canonical_review_envelope,
+        qa=canonical_qa_envelope,
+    )
+    bundle_root = tmp_path / "pr-bundles"
+    # Seed the canonical QA evidence so QA-side resolves; only retry-
+    # history dangles for this test.
+    _seed_canonical_qa_evidence_file(tmp_path)
+    result = assemble_bundle(
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        run_state_path=rs_path,
+        logs_root=logs_root,
+        bundle_root=bundle_root,
+        marker_registry=runtime_marker_registry,
+        generated_at=datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc),
+        repo_root=tmp_path,
+    )
+    body = result.bundle_path.read_text(encoding="utf-8")
+    assert "### dangling-evidence-ref: retry-history" in body
+    # AC-3: only retry-history (qa-evidence is clean) → no qa-evidence marker.
+    assert "### dangling-evidence-ref: qa-evidence" not in body
+
+
+def test_assemble_bundle_both_sources_dangling_alphabetical_order(
+    tmp_path: pathlib.Path,
+    canonical_dev_envelope: dict[str, Any],
+    canonical_review_envelope: dict[str, Any],
+    canonical_qa_envelope: dict[str, Any],
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 6.6 AC-3 (m): both QA-evidence AND retry-history dangling
+    → loud-fail block contains BOTH ### dangling-evidence-ref entries
+    in alphabetical order; both inline indicators render at their
+    respective locations; bundle assembles successfully (visibility-
+    not-enforcement)."""
+    rs_path = tmp_path / "_bmad" / "automation" / "run-state.yaml"
+    rs_path.parent.mkdir(parents=True, exist_ok=True)
+    rs_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "1.1",
+                "story_id": "sample-auto-001",
+                "run_id": "run-2026-04-29-001",
+                "current_state": "done",
+                "branch_name": "bmad-automation/story/sample-auto-001",
+                "dispatched_specialist": None,
+                "last_envelope": None,
+                "pending_qa_dispatch_payload": None,
+                "retry_history": [
+                    {
+                        "retry_attempt": 1,
+                        "retry_reason": "dangling round",
+                        "round_id": "round-01",
+                        "path": "_bmad-output/retry-history/sample/round-01.yaml",
+                    }
+                ],
+                "active_markers": [],
+                "cost_to_date_by_specialist": {},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    logs_root = tmp_path / "qa-evidence"
+    _seed_three_logs(
+        logs_root,
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        dev=canonical_dev_envelope,
+        review=canonical_review_envelope,
+        qa=canonical_qa_envelope,
+    )
+    bundle_root = tmp_path / "pr-bundles"
+    # Do NOT seed any evidence files → BOTH sources dangle.
+    result = assemble_bundle(
+        story_id="sample-auto-001",
+        run_id="run-2026-04-29-001",
+        run_state_path=rs_path,
+        logs_root=logs_root,
+        bundle_root=bundle_root,
+        marker_registry=runtime_marker_registry,
+        generated_at=datetime(2026, 4, 29, 12, 0, 0, tzinfo=timezone.utc),
+        repo_root=tmp_path,
+    )
+    body = result.bundle_path.read_text(encoding="utf-8")
+    qa_idx = body.index("### dangling-evidence-ref: qa-evidence")
+    retry_idx = body.index("### dangling-evidence-ref: retry-history")
+    # Alphabetical order: qa-evidence first.
+    assert qa_idx < retry_idx
+    # Bundle assembled successfully despite dangling refs (visibility-not-enforcement).
+    assert result.bundle_path.exists()

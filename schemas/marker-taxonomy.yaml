@@ -224,7 +224,7 @@ markers:
       is about evidence-file disappearance for a known story; orphan-run-
       state is about run-state for a deleted story-doc.
     pointer_context_fields: []
-    sub_classifications: []
+    sub_classifications: [qa-evidence, retry-history]
 
   # ---- Cross-epic-named marker classes (12) ---------------------------------
   # Diagnostic_pointer text for these 12 markers is mandated verbatim by AC-2

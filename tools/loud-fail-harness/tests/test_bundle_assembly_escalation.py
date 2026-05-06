@@ -1020,3 +1020,102 @@ def test_assemble_escalation_bundle_result_dataclass_shape() -> None:
         "bundle_class",
         "payload",
     }
+
+
+# --------------------------------------------------------------------------- #
+# Story 6.6 — bundle-render-time evidence-trace linkability (escalation)      #
+# --------------------------------------------------------------------------- #
+
+
+def test_escalation_bundle_dangling_retry_history_renders_loud_fail_marker(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 6.6 AC-2 mirror: assemble_escalation_bundle with one
+    dangling retry-history ref → loud-fail block renders the
+    `### dangling-evidence-ref: retry-history` marker."""
+    context = _make_budget_context(
+        retry_history=(
+            RetryAttempt(
+                retry_attempt=1,
+                retry_reason="dangling round",
+                round_id="round-01",
+                path="_bmad-output/retry-history/5-8-foo/round-01.yaml",
+            ),
+        ),
+        last_envelope={"findings": []},
+    )
+    # Do NOT seed the retry-round artifact under tmp_path → it dangles.
+    result = assemble_escalation_bundle(
+        context,
+        repo_root=tmp_path,
+        schemas_root=SCHEMAS_ROOT,
+        thickening_flags=_make_thickening_flags_stub(),
+        generated_at=_FIXED_GENERATED_AT,
+    )
+    body = _read_bundle(result.bundle_path)
+    assert "### dangling-evidence-ref: retry-history" in body
+
+
+def test_escalation_bundle_dangling_retry_history_inline_indicator(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 6.6 AC-1 mirror: escalation bundle's `## Retry history`
+    section renders the inline `⚠️ dangling-evidence-ref: retry-history`
+    indicator at the matching round's bullet line."""
+    context = _make_budget_context(
+        retry_history=(
+            RetryAttempt(
+                retry_attempt=1,
+                retry_reason="dangling round",
+                round_id="round-01",
+                path="_bmad-output/retry-history/5-8-foo/round-01.yaml",
+            ),
+        ),
+        last_envelope={"findings": []},
+    )
+    result = assemble_escalation_bundle(
+        context,
+        repo_root=tmp_path,
+        schemas_root=SCHEMAS_ROOT,
+        thickening_flags=_make_thickening_flags_stub(),
+        generated_at=_FIXED_GENERATED_AT,
+    )
+    body = _read_bundle(result.bundle_path)
+    # Inline indicator surfaces next to the dangling round's bullet.
+    assert "⚠️ dangling-evidence-ref: retry-history" in body
+
+
+def test_escalation_bundle_clean_retry_history_no_dangling_marker(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 6.6 AC-1 mirror: escalation bundle with seeded retry-
+    history artifact renders cleanly — no dangling-evidence-ref
+    marker; pre-existing escalation fixtures byte-match."""
+    rel_path = "_bmad-output/retry-history/5-8-foo/round-01.yaml"
+    artifact_path = tmp_path / rel_path
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    # Write a minimal valid RetryRoundArtifacts YAML (the helper does
+    # not validate it — it only checks .exists()).
+    artifact_path.write_text("dummy: ok\n", encoding="utf-8")
+
+    context = _make_budget_context(
+        retry_history=(
+            RetryAttempt(
+                retry_attempt=1,
+                retry_reason="clean round",
+                round_id="round-01",
+                path=rel_path,
+            ),
+        ),
+        last_envelope={"findings": []},
+    )
+    result = assemble_escalation_bundle(
+        context,
+        repo_root=tmp_path,
+        schemas_root=SCHEMAS_ROOT,
+        thickening_flags=_make_thickening_flags_stub(),
+        generated_at=_FIXED_GENERATED_AT,
+    )
+    body = _read_bundle(result.bundle_path)
+    assert "### dangling-evidence-ref:" not in body
+    assert "⚠️ dangling-evidence-ref" not in body

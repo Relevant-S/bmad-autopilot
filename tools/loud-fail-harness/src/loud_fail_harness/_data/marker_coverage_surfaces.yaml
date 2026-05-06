@@ -736,8 +736,8 @@ verdicts:
   - marker_class: dangling-evidence-ref
     surface_name: bundle-assembler
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/retry_history.py:690
-    audit_date: "2026-05-05"
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/evidence_linkability.py:534
+    audit_date: "2026-05-06"
   - marker_class: dangling-evidence-ref
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable

@@ -195,8 +195,26 @@ def _seed_canonical_dispatch_logs(
     `_bmad-output/qa-evidence/{story-id}/{run-id}/logs/{specialist}-1.log`
     path using the canonical envelope corpus. Story 2.11's bundle
     assembler reads the `return_envelope` field from each log.
+
+    Story 6.6: also seed the canonical QA fixture's evidence_ref file
+    under ``repo`` (the assembler-side `find_repo_root()` call from
+    inside the hook script resolves to ``repo``) so the bundle-render-
+    time evidence-trace linkability validation resolves cleanly.
     """
     from loud_fail_harness._shared import find_repo_root
+
+    # Seed the canonical QA evidence file at the path
+    # qa-pass-ac1-tier1.yaml carries verbatim.
+    evidence_path = (
+        repo
+        / "_bmad-output"
+        / "qa-evidence"
+        / "sample-001"
+        / "run-2026-04-29-001"
+        / "ac1-http-200.log"
+    )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text("HTTP/1.1 200 OK\n", encoding="utf-8")
 
     envelopes_dir = find_repo_root() / "examples" / "envelopes"
     envelopes = {

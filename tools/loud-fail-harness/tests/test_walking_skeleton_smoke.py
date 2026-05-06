@@ -583,6 +583,17 @@ def _drive_smoke_run(
         event_log_appender=appender,
     )
 
+    # Story 6.6 (NFR-O7): seed the canned QA envelope's evidence_ref
+    # file under tmp_path so the bundle-render-time evidence-trace
+    # linkability validation resolves cleanly. The canned envelope's
+    # rationale asserts "AC-1 verified mechanically: target file exists
+    # at the run's working-directory root" — the smoke fixture is
+    # expressing that contract; writing the artifact here makes the
+    # narrative consistent with disk reality.
+    (tmp_path / "walking-skeleton-output.txt").write_text(
+        "walking-skeleton-loop-completed\n", encoding="utf-8"
+    )
+
     # Phase 10: assemble bundle from the persisted dispatch logs + run-state.
     bundle_result = assemble_bundle(
         story_id=_STORY_ID,
@@ -592,6 +603,7 @@ def _drive_smoke_run(
         bundle_root=bundle_root,
         marker_registry=load_marker_class_registry(),
         envelope_schema=envelope_schema,
+        repo_root=tmp_path,
     )
     bundle_text = bundle_result.bundle_path.read_text(encoding="utf-8")
 

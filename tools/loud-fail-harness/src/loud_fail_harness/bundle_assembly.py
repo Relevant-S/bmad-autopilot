@@ -125,6 +125,11 @@ from loud_fail_harness.cost_telemetry import (
     OtelPipelineProtocol,
     aggregate_costs,
 )
+from loud_fail_harness.evidence_linkability import (
+    DanglingEvidenceRef,
+    format_dangling_inline_marker,
+    validate_evidence_linkability_at_render,
+)
 from loud_fail_harness.exceptions import (
     MarkerContextMissing,
     OtelPipelineUnreachable,
@@ -422,6 +427,7 @@ def _render_per_ac_section(
     qa_envelope: dict[str, Any],
     *,
     marker_registry: MarkerClassRegistry,
+    qa_evidence_dangling: tuple[DanglingEvidenceRef, ...] = (),
 ) -> str:
     """Render the ``## Per-AC results`` section from QA's envelope's
     ``ac_results`` array (FR55), followed by the optional Story-4.2
@@ -452,7 +458,23 @@ def _render_per_ac_section(
     AFTER ``### Plan drift detected``. AC-driven findings are NOT
     rendered by this section (Story 4.13 may add an AC-driven-findings
     render section as part of wrapper-thickening completion).
+
+    Story 6.6 thickening (AC-1): when ``qa_evidence_dangling`` is a
+    non-empty tuple of :class:`DanglingEvidenceRef` (the qa-evidence
+    partition from
+    :func:`loud_fail_harness.evidence_linkability.validate_evidence_linkability_at_render`),
+    each evidence-bullet whose ``(ac_id, path)`` matches an entry in
+    the tuple gets an inline ``— ⚠️ dangling-evidence-ref: qa-evidence
+    — Remediation: regenerate the evidence OR fix the reference``
+    suffix appended to the existing backtick-path bullet. Default
+    empty preserves byte-stable behavior for callers that don't
+    validate.
     """
+    dangling_index: dict[tuple[str, str], DanglingEvidenceRef] = {
+        (ref.ac_id, ref.path): ref
+        for ref in qa_evidence_dangling
+        if ref.ac_id is not None
+    }
     entries = qa_envelope.get("ac_results") or []
     if not entries:
         ac_results_body = "_(no ac_results in QA envelope)_"
@@ -482,12 +504,24 @@ def _render_per_ac_section(
                 # pre-Story-4.8 bundle visual surface. Story 4.13 owns the
                 # tier-aware render upgrade per the FR16-FR25 thickening
                 # surface. Pre-Story-4.8 string items still
-                # render correctly via the str(ref) fallback.
-                block_lines.extend(
-                    f"- `{ref['path']}`" if isinstance(ref, dict) and "path" in ref
-                    else f"- `{ref}`"
-                    for ref in evidence_refs
-                )
+                # render correctly via the str(ref) fallback. Story 6.6
+                # appends an inline dangling-evidence-ref indicator when the
+                # (ac_id, path) tuple matches a qa_evidence_dangling entry.
+                for ref in evidence_refs:
+                    if isinstance(ref, dict) and "path" in ref:
+                        path_str = ref["path"]
+                    else:
+                        path_str = str(ref)
+                    bullet = f"- `{path_str}`"
+                    dangling_ref = dangling_index.get(
+                        (ac_id, path_str)
+                    )
+                    if dangling_ref is not None:
+                        bullet = (
+                            f"{bullet} — "
+                            f"{format_dangling_inline_marker(ref=dangling_ref)}"
+                        )
+                    block_lines.append(bullet)
             else:
                 block_lines.append("- _(none)_")
             block_lines.append("")
@@ -1044,6 +1078,47 @@ def _interpolate_actionable_pointer(
         ) from exc
 
 
+def _merge_evidence_linkability_markers(
+    existing: tuple[str, ...],
+    appended: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Merge bundle-render-time dangling-evidence markers into the
+    persistent ``run_state.active_markers`` tuple per Story 6.6.
+
+    Concatenates ``existing`` and ``appended`` in order — existing
+    markers first, dangling-evidence markers appended at the end — and
+    de-duplicates against existing entries by full marker-string
+    equality so that if the orchestrator-side path already emitted a
+    ``dangling-evidence-ref: <sub>`` marker (e.g. from a prior
+    Story 5.5 CLI-hook run that persisted the marker into run-state),
+    the assembler-side computation does NOT re-append the same
+    identifier. The existing entry is preserved at its original
+    position per Story 1.4's marker-permanence rule; the new entry
+    is dropped.
+
+    The merge is in-memory only; the assembler does NOT write the
+    derived markers back to ``run_state.yaml``. Pattern 4's batch-
+    write rule is preserved — bundle-render-time validation is a
+    UI-only augmentation, not a persistent state mutation.
+
+    Args:
+        existing: The persistent ``run_state.active_markers`` tuple.
+        appended: The
+            :attr:`EvidenceLinkabilityResult.marker_classifications_to_append`
+            tuple — at most two entries (qa-evidence and
+            retry-history sub-classifications) in alphabetical order.
+
+    Returns:
+        Merged tuple in input order; appended entries already present
+        in ``existing`` are dropped.
+    """
+    if not appended:
+        return existing
+    existing_set = set(existing)
+    deduped = tuple(m for m in appended if m not in existing_set)
+    return existing + deduped
+
+
 def _render_loud_fail_block(
     active_markers: tuple[str, ...],
     *,
@@ -1457,6 +1532,7 @@ def assemble_bundle(
     generated_at: datetime | None = None,
     envelope_schema: dict[str, Any] | None = None,
     otel_pipeline: OtelPipelineProtocol | None = None,
+    repo_root: pathlib.Path | None = None,
 ) -> AssembleBundleResult:
     """Assemble the walking-skeleton merge-ready PR bundle.
 
@@ -1465,8 +1541,8 @@ def assemble_bundle(
     keyword-only injection points that default to the canonical
     runtime values; both enable test-time substitution per Story 2.6's
     :func:`make_task_tool_dispatch_callback` precedent. ``generated_at``
-    + ``envelope_schema`` are additional injection points for
-    deterministic-fixture tests.
+    + ``envelope_schema`` + ``repo_root`` are additional injection
+    points for deterministic-fixture tests.
 
     Args:
         story_id: BMAD story key.
@@ -1499,6 +1575,16 @@ def assemble_bundle(
             inside :func:`_load_cost_aggregation` and translated into
             an empty aggregation; the marker is already in
             ``run_state.active_markers`` from the per-dispatch boundary.
+        repo_root: Optional repository root used by Story 6.6's
+            bundle-render-time evidence-trace linkability validation
+            (:func:`loud_fail_harness.evidence_linkability.validate_evidence_linkability_at_render`)
+            to resolve ``evidence_refs[].path`` and
+            ``retry_history[].path`` strings against on-disk
+            artifacts. Defaults to :func:`find_repo_root`. Tests
+            override this to seed/control on-disk evidence-resolution
+            without polluting the surrounding workspace — same
+            test-injection posture ``envelope_schema`` /
+            ``otel_pipeline`` already document.
 
     Returns:
         :class:`AssembleBundleResult`.
@@ -1511,6 +1597,20 @@ def assemble_bundle(
         envelope_schema
         if envelope_schema is not None
         else load_schema(find_repo_root() / "schemas" / "envelope.schema.yaml")
+    )
+    # Story 6.6: the evidence-trace linkability validation resolves
+    # ``ac_results[].evidence_refs[].path`` and
+    # ``retry_history[].path`` strings against this root. Default to
+    # the process's current working directory (``Path.cwd()``) — NOT
+    # :func:`find_repo_root`. Rationale: production hooks invoke the
+    # assembler from the user's project root (where evidence files
+    # actually live), not from the harness install location;
+    # cwd-rooting matches the hook's existing pattern of consuming
+    # ``_bmad/automation/run-state.yaml`` and
+    # ``_bmad-output/qa-evidence/`` as cwd-relative paths. Tests
+    # override via the keyword arg.
+    resolved_repo_root = (
+        repo_root if repo_root is not None else pathlib.Path.cwd()
     )
     rendered_at = (
         generated_at if generated_at is not None else datetime.now(timezone.utc)
@@ -1546,20 +1646,41 @@ def assemble_bundle(
 
     # Step 4: Render header + section bodies.
     header_text = _render_walking_skeleton_header(flags)
-    loud_fail_block = _render_loud_fail_block(
+
+    # Story 6.6 (NFR-O7): bundle-render-time evidence-trace
+    # linkability validation. Walks every ``ac_results[].evidence_refs[].path``
+    # AND every thickened ``run_state.retry_history[].path`` against
+    # the on-disk artifact; surfaces dangling refs as
+    # ``dangling-evidence-ref: <sub>`` markers in the loud-fail block
+    # AND as inline indicators at their reference locations. The
+    # bundle assembles successfully on dangling — visibility-not-
+    # enforcement per the loud-fail doctrine.
+    evidence_linkability_result = validate_evidence_linkability_at_render(
+        ac_results=envelopes["qa"].get("ac_results") or [],
+        retry_history=tuple(run_state.retry_history),
+        repo_root=resolved_repo_root,
+    )
+    merged_active_markers = _merge_evidence_linkability_markers(
         run_state.active_markers,
+        evidence_linkability_result.marker_classifications_to_append,
+    )
+
+    loud_fail_block = _render_loud_fail_block(
+        merged_active_markers,
         marker_registry=registry,
         marker_contexts=run_state.marker_contexts,
     )
     cost_aggregation = _load_cost_aggregation(run_state.story_id, otel_pipeline)
     cost_breakdown_block = _render_cost_breakdown(
-        run_state.active_markers,
+        merged_active_markers,
         run_state.marker_contexts,
         cost_aggregation,
         marker_registry=registry,
     )
     per_ac_body = _render_per_ac_section(
-        envelopes["qa"], marker_registry=registry
+        envelopes["qa"],
+        marker_registry=registry,
+        qa_evidence_dangling=evidence_linkability_result.qa_evidence_dangling,
     )
     review_body = _render_review_findings_section(
         envelopes["review-bmad"], marker_registry=registry
@@ -1637,6 +1758,11 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-state-path", required=True, type=pathlib.Path)
     parser.add_argument("--logs-root", required=True, type=pathlib.Path)
     parser.add_argument("--bundle-root", required=True, type=pathlib.Path)
+    # Story 6.6: optional override for the repository root used by
+    # bundle-render-time evidence-trace linkability validation. Hooks
+    # pass the project's cwd so evidence_refs[].path resolves against
+    # the user's project, not the harness install location.
+    parser.add_argument("--repo-root", required=False, type=pathlib.Path, default=None)
     return parser
 
 
@@ -1650,6 +1776,7 @@ def main(argv: list[str] | None = None) -> int:
             run_state_path=args.run_state_path,
             logs_root=args.logs_root,
             bundle_root=args.bundle_root,
+            repo_root=args.repo_root,
         )
     except (
         SpecialistDispatchLogNotFound,

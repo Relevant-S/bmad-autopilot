@@ -441,6 +441,7 @@ def test_r_ceiling_crossed_on_fourth_boundary_bundle_surfaces_both(
     )
     _seed_log(logs_root, specialist="qa", return_envelope=canonical_qa_envelope)
     bundle_root = tmp_path / "pr-bundles"
+    _seed_canonical_qa_evidence_file(tmp_path)
     result = assemble_bundle(
         story_id=_STORY_ID,
         run_id=_RUN_ID,
@@ -450,6 +451,7 @@ def test_r_ceiling_crossed_on_fourth_boundary_bundle_surfaces_both(
         marker_registry=runtime_marker_registry,
         generated_at=_GENERATED_AT,
         otel_pipeline=None,
+        repo_root=tmp_path,
     )
     body = result.bundle_path.read_text(encoding="utf-8")
 
@@ -556,6 +558,7 @@ def test_t_no_auto_halt_loop_runs_to_completion_after_ceiling_crossed(
     )
     _seed_log(logs_root, specialist="qa", return_envelope=canonical_qa_envelope)
     bundle_root = tmp_path / "pr-bundles"
+    _seed_canonical_qa_evidence_file(tmp_path)
     result = assemble_bundle(
         story_id=_STORY_ID,
         run_id=_RUN_ID,
@@ -565,6 +568,7 @@ def test_t_no_auto_halt_loop_runs_to_completion_after_ceiling_crossed(
         marker_registry=runtime_marker_registry,
         generated_at=_GENERATED_AT,
         otel_pipeline=None,
+        repo_root=tmp_path,
     )
     assert result.bundle_path.exists()
     assert any("no auto-halt per NFR-O8" in line for line in appended)
@@ -836,6 +840,10 @@ def _assemble_fixture_bundle(
         logs_root, specialist="qa", return_envelope=canonical_qa_envelope
     )
     bundle_root = tmp_path / "pr-bundles"
+    # Story 6.6: seed canonical evidence file under tmp_path so the
+    # bundle-render-time evidence-trace linkability validation resolves
+    # cleanly.
+    _seed_canonical_qa_evidence_file(tmp_path)
     result = assemble_bundle(
         story_id=_FIXTURE_STORY_ID,
         run_id=_FIXTURE_RUN_ID,
@@ -845,8 +853,27 @@ def _assemble_fixture_bundle(
         marker_registry=runtime_marker_registry,
         generated_at=_GENERATED_AT,
         otel_pipeline=pipeline,
+        repo_root=tmp_path,
     )
     return result.bundle_path
+
+
+def _seed_canonical_qa_evidence_file(repo_root: pathlib.Path) -> pathlib.Path:
+    """Seed the canonical QA fixture's evidence_ref file so Story 6.6's
+    bundle-render-time evidence-trace linkability validation resolves
+    cleanly. Path mirrors qa-pass-ac1-tier1.yaml's evidence_refs entry.
+    """
+    evidence_path = (
+        repo_root
+        / "_bmad-output"
+        / "qa-evidence"
+        / "sample-001"
+        / "run-2026-04-29-001"
+        / "ac1-http-200.log"
+    )
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text("HTTP/1.1 200 OK\n", encoding="utf-8")
+    return evidence_path
 
 
 def test_canonical_cost_near_ceiling_bundle_fixture_matches_assembler_output(
