@@ -9,7 +9,10 @@
     {
       "name": "bmad-automation",
       "description": "BMAD Agent Development Automator — closes the seam between BMAD's planning and implementation phases via native Claude Code subagents (Orchestrator + Dev + Review + QA).",
-      "source": ".",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/Relevant-S/bmad-autopilot.git"
+      },
       "version": "0.1.0",
       "category": "development",
       "tags": [
