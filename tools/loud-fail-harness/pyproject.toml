@@ -11,6 +11,11 @@ dependencies = [
     "pydantic>=2.13.3,<3",
     "jsonschema>=4.26.0,<5",
     "pyyaml>=6,<7",
+    # Story 7.2 (AC-4) — round-trip-safe YAML for `_bmad/automation/config.yaml`
+    # writes by `loud_fail_harness.install_path.record_install_method`. The
+    # config carries hand-edited customizations that survive across re-installs
+    # (FR42); plain PyYAML loses comments + key order on round-trip.
+    "ruamel.yaml>=0.18,<1",
 ]
 
 [project.scripts]

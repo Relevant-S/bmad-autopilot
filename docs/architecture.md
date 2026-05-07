@@ -1157,7 +1157,8 @@ What `/plugin install bmad-automation` (or git-clone-symlink) lands in a user's 
 
 ```
 bmad-automation/                          # Plugin distribution unit
-├── plugin.json                           # Claude Code plugin manifest (or equivalent)
+├── .claude-plugin/                       # Reconciled by Story 7.2 per Claude Code's `.claude-plugin/` convention; see docs/extension-audit.md per-convention table for the rationale.
+│   └── plugin.json                       # Claude Code plugin manifest (`.claude-plugin/plugin.json` per official docs at https://code.claude.com/docs/en/plugins-reference).
 ├── skills/
 │   └── bmad-automation/
 │       ├── SKILL.md

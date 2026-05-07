@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "bmad-automation",
+  "version": "0.1.0",
+  "description": "BMAD Agent Development Automator — closes the seam between BMAD's planning and implementation phases via native Claude Code subagents (Orchestrator + Dev + Review + QA).",
+  "author": {
+    "name": "BMAD Agent Development Automator contributors"
+  },
+  "homepage": "https://github.com/bmad-code-org/bmad-automation",
+  "repository": "https://github.com/bmad-code-org/bmad-automation",
+  "license": "MIT"
+}
