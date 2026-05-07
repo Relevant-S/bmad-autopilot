@@ -296,9 +296,20 @@ markers:
       the Stop hook script (bash, environment); `bundle-assembly-failed`
       remediates against the assembler logic (envelope shape, finding
       rendering, taxonomy mismatch). Practitioner needs to know which surface
-      to inspect.
-    pointer_context_fields: []
-    sub_classifications: []
+      to inspect. Step: `{failed_step}`. Story: `{story_id}`. Run: `{run_id}`.
+      Exception: `{exception_type}`. See
+      `_bmad-output/pr-bundles/{story_id}/{run_id}.assembly-failure.log` for
+      full traceback. Distinct from `hook-failed: stop` per remediation-shape:
+      hook-failed remediates the Stop hook script (bash, environment,
+      invocation contract); bundle-assembly-failed remediates the assembler
+      logic (rendering, schema, taxonomy).
+    pointer_context_fields: [exception_type, failed_step, run_id, story_id]
+    sub_classifications:
+      - envelope-mismatch
+      - finding-render-crash
+      - internal-exception
+      - missing-finding-fields
+      - taxonomy-unresolved
 
   - marker_class: reconciler-mismatch-runtime
     diagnostic_pointer: |

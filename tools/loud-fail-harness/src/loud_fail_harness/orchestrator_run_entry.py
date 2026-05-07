@@ -1222,13 +1222,40 @@ def handle_hook_exit_code(
     Pattern 4's batch-write rule (this helper does NOT call
     ``advance_run_state``; one atomic write per seam transition).
 
+    Story 6.9 AC-3 cross-failure-matrix conditional:
+        When ``hook_name == "stop"`` AND
+        ``exit_code == BUNDLE_ASSEMBLY_FAILED_EXIT_CODE`` (=2), the
+        helper returns the input run-state UNCHANGED — no
+        ``hook-failed: stop`` marker is appended. This exit code is
+        emitted exclusively by ``bundle_assembly.main``'s outer
+        try/except after :func:`surface_assembly_failure` has already
+        recorded ``bundle-assembly-failed: <step>`` (Channel 3); the
+        Stop hook itself ran cleanly and merely propagated the
+        assembler's exit. Emitting ``hook-failed: stop`` here would
+        conflate the assembler's logical failure with a Stop hook
+        mechanical failure per AC-3's remediation-shape principle.
+        For ANY other non-zero exit code under ``hook_name == "stop"``
+        — and for non-zero exits under ``subagent-stop`` /
+        ``session-start`` regardless of code — the helper invokes
+        :func:`record_hook_failure_marker` per the existing path. Both
+        markers may fire independently when both surfaces fail (Stop
+        hook crashes mechanically AND the assembler also crashed):
+        ``bundle-assembly-failed`` is emitted by
+        :func:`surface_assembly_failure` from the assembler's own
+        failure path; ``hook-failed: stop`` is emitted here when the
+        Stop hook's exit code is non-zero AND not equal to
+        :data:`BUNDLE_ASSEMBLY_FAILED_EXIT_CODE`.
+
     Pure function (no I/O). The lazy import of
     :func:`loud_fail_harness.marker_wiring.record_hook_failure_marker`
     avoids the circular import that would otherwise arise from the cycle:
     ``orchestrator_run_entry`` → ``marker_wiring`` (lazy) →
     ``specialist_dispatch`` (top-level) → ``orchestrator_run_entry``
     (top-level). The lazy import in THIS module breaks the cycle by
-    deferring the ``marker_wiring`` import until call time.
+    deferring the ``marker_wiring`` import until call time. The
+    :data:`BUNDLE_ASSEMBLY_FAILED_EXIT_CODE` import is similarly lazy
+    to avoid the cycle through ``bundle_assembly_failure`` →
+    ``marker_wiring``.
 
     Marker-permanence rule (Story 1.4): a second non-zero exit for the
     SAME ``hook_name`` returns the input run-state unchanged via the
@@ -1251,10 +1278,21 @@ def handle_hook_exit_code(
     Returns:
         A new :class:`RunState` carrying the
         ``hook-failed: <hook_name>`` marker entry; or the input
-        run-state unchanged on zero-exit / de-dup.
+        run-state unchanged on zero-exit / Story-6.9 exit-code-2 under
+        ``stop`` / de-dup.
     """
     if exit_code == 0:
         return run_state
+    from loud_fail_harness.bundle_assembly_failure import (
+        BUNDLE_ASSEMBLY_FAILED_EXIT_CODE,
+    )
+
+    if hook_name == "stop" and exit_code == BUNDLE_ASSEMBLY_FAILED_EXIT_CODE:
+        # Story 6.9 AC-3: assembler-logic failure already emitted
+        # `bundle-assembly-failed` via `surface_assembly_failure`; do
+        # NOT emit `hook-failed: stop` for the same run.
+        return run_state
+
     from loud_fail_harness.marker_wiring import HookName, record_hook_failure_marker
 
     return record_hook_failure_marker(

@@ -1,0 +1,11 @@
+=== bundle-assembly-failed ===
+story_id: auto-001
+run_id: run-fixture-001
+failed_step: envelope-mismatch
+exception_type: EnvelopeReValidationFailed
+exception_message: EnvelopeReValidationFailed: specialist='dev' envelope recovered from dispatch log failed re-validation: envelope shape mismatch — required field missing
+generated_at: 2026-05-07T00:00:00Z
+partial_bundle_path: <none>
+
+traceback:
+loud_fail_harness.bundle_assembly.EnvelopeReValidationFailed: EnvelopeReValidationFailed: specialist='dev' envelope recovered from dispatch log failed re-validation: envelope shape mismatch — required field missing

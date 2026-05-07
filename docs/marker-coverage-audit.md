@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 30
+- Emitted: 32
 - Not-applicable: 369
-- Scheduled-by-story: 7
+- Scheduled-by-story: 5
 - Gaps: 0
 
 ## Coverage matrix
@@ -63,10 +63,10 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | Tier-3-not-configured | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | Tier-3-not-configured | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_tier.py:354` | 2026-05-05 |  |
 | Tier-3-not-configured | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
-| bundle-assembly-failed | bundle-assembler | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.9 — Bundle-assembly failure detection + bundle-assembly-failed marker emission lands in Story 6.9. |
+| bundle-assembly-failed | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_failure.py:354` | 2026-05-07 |  |
 | bundle-assembly-failed | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
 | bundle-assembly-failed | hook-session-start | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
-| bundle-assembly-failed | hook-stop | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 6.9 — Stop hook invokes bundle_assembly substrate; failure-detection marker emission lands in Story 6.9. |
+| bundle-assembly-failed | hook-stop | emitted | `tools/loud-fail-harness/src/loud_fail_harness/orchestrator_run_entry.py:1290` | 2026-05-07 |  |
 | bundle-assembly-failed | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
 | bundle-assembly-failed | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
 | bundle-assembly-failed | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |

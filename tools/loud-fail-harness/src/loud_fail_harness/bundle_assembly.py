@@ -141,6 +141,11 @@ from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.qa_plan_persistence_compromise import (
     render_compromise_blockquote,
 )
+from loud_fail_harness.bundle_assembly_failure import (
+    BUNDLE_ASSEMBLY_FAILED_EXIT_CODE,
+    classify_assembly_failure,
+    surface_assembly_failure,
+)
 from loud_fail_harness.review_layer_failure import (
     META_REVIEW_COMPLETENESS,
     REVIEW_LAYER_FAILED_MARKER,
@@ -148,7 +153,6 @@ from loud_fail_harness.review_layer_failure import (
 from loud_fail_harness.run_state import RunState
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
-    UnknownMarkerClass,
     load_marker_class_registry,
     validate_marker_emission,
 )
@@ -1807,12 +1811,44 @@ def main(argv: list[str] | None = None) -> int:
         )
     except (
         SpecialistDispatchLogNotFound,
-        EnvelopeReValidationFailed,
         RunStateStoryIdMismatch,
-        UnknownMarkerClass,
     ) as exc:
+        # Pre-condition failures: dispatch log missing or run-state did
+        # not match the requested story. The assembler had nothing to
+        # assemble; this is NOT an assembler-logic failure per the
+        # remediation-shape principle (epics.md Story 6.9 lines 2841-2842),
+        # so DO NOT emit `bundle-assembly-failed`. Existing exit-1 path
+        # preserved.
         sys.stderr.write(f"{type(exc).__name__}: {exc}\n")
         return 1
+    except (SystemExit, KeyboardInterrupt):
+        # Pattern 5: never catch SystemExit / KeyboardInterrupt; propagate
+        # so `bundle-assembly-failed` does NOT mask intentional process exit.
+        raise
+    except BaseException as exc:  # noqa: BLE001 — Story 6.9 outer catchall
+        # Story 6.9 AC-1: assembler-logic failure (envelope shape
+        # mismatch, missing finding fields, taxonomy reference unresolved,
+        # finding-rendering crash, assembler-internal exception). Route
+        # through `surface_assembly_failure` to emit the
+        # `bundle-assembly-failed` marker across all three reinforcing
+        # channels atomically, then exit with the distinct exit code 2
+        # (signalling "assembler logic failed; marker already emitted")
+        # so `handle_hook_exit_code` can distinguish this from a Stop
+        # hook mechanical failure (AC-3).
+        failed_step = classify_assembly_failure(exc, partial_bundle_path=None)
+        try:
+            surface_assembly_failure(
+                story_id=args.story_id,
+                run_id=args.run_id,
+                run_state_path=args.run_state_path,
+                bundle_root=args.bundle_root,
+                exc=exc,
+                failed_step=failed_step,
+                partial_bundle_path=None,
+            )
+        except Exception:  # noqa: BLE001 — partial emission; AC-3 discriminator still holds
+            pass
+        return BUNDLE_ASSEMBLY_FAILED_EXIT_CODE
     sys.stdout.write(f"{result.bundle_path}\n")
     return 0
 

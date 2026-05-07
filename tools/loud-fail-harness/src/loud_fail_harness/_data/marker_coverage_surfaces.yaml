@@ -367,12 +367,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: bundle-assembly-failed
     surface_name: bundle-assembler
-    verdict: scheduled-by-story
-    discharging_story: "6.9"
-    rationale: |-
-      Bundle-assembly failure detection + bundle-assembly-failed marker emission lands in
-      Story 6.9.
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_failure.py:354
+    audit_date: "2026-05-07"
   - marker_class: bundle-assembly-failed
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -389,12 +386,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: bundle-assembly-failed
     surface_name: hook-stop
-    verdict: scheduled-by-story
-    discharging_story: "6.9"
-    rationale: |-
-      Stop hook invokes bundle_assembly substrate; failure-detection marker emission lands
-      in Story 6.9.
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/orchestrator_run_entry.py:1290
+    audit_date: "2026-05-07"
   - marker_class: bundle-assembly-failed
     surface_name: hook-subagent-stop
     verdict: not-applicable
