@@ -378,8 +378,8 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_2(taxonomy_data: dict) -> None:
-    assert taxonomy_data.get("schema_version") == "1.2"
+def test_taxonomy_declares_schema_version_1_3(taxonomy_data: dict) -> None:
+    assert taxonomy_data.get("schema_version") == "1.3"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:

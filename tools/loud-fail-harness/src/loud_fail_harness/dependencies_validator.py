@@ -96,11 +96,18 @@ _DEPENDENCY_ALLOWED: tuple[str, ...] = (
 
 #: Keys permitted inside a profile-spec mapping (the value at
 #: ``profiles.<phase>`` or ``by_project_type.<type>.profiles.<phase>``).
+#:
+#: ``sub_classification`` (singular) is the Story 7.3 additive field for
+#: total-block init profiles: when the profile fails, the dispatcher
+#: registers ``<marker_class>: <sub_classification>`` per AC-3 / AC-8.
+#: Distinct from ``sub_classifications`` (plural list) which describes
+#: alternative opt-in-skip conditions.
 _PROFILE_SPEC_ALLOWED: tuple[str, ...] = (
     "profile",
     "diagnostic",
     "diagnostic_pointer",
     "marker_class",
+    "sub_classification",
     "sub_classifications",
 )
 

@@ -1,0 +1,76 @@
+# Story 7.3 test fixture — extended dependencies.yaml exercising:
+#   * graceful-degrade init profile (no canonical entry currently uses it
+#     at init phase per dependencies.yaml; the fixture exercises the
+#     branch structurally per Story 7.3 module docstring + AC-4).
+#   * `by_project_type` with a missing project-type key (per AC-7 — the
+#     dispatcher records `outcome="silent"` rather than crashing).
+
+schema_version: "1.1"
+
+dependencies:
+  claude-code:
+    version_floor: "2.1.32"
+    version_ceiling_policy: "tracked-against-current-releases"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "Claude Code v2.1.32+ required."
+        marker_class: env-setup-failed
+        sub_classification: claude-code-version-mismatch
+      runtime:
+        profile: total-block
+
+  bmad-core:
+    version_floor: "6.0"
+    version_ceiling_policy: "tracked-against-bmad-releases"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "BMAD core v6.0+ required."
+        marker_class: env-setup-failed
+        sub_classification: bmad-core-version-mismatch
+      runtime:
+        profile: total-block
+
+  tea-module:
+    version_policy: "version-agnostic; detected at init"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "TEA module not installed."
+        marker_class: env-setup-failed
+        sub_classification: tea-module-missing
+      runtime:
+        profile: total-block
+
+  # Synthetic graceful-degrade init profile — exercises AC-4 branch.
+  synthetic-graceful-degrade:
+    version_policy: "version-agnostic; synthetic"
+    profiles:
+      init:
+        profile: graceful-degrade
+        diagnostic: "Synthetic dependency unavailable; init proceeds with marker."
+        diagnostic_pointer: "Synthetic init-time degradation pointer."
+        marker_class: env-setup-failed
+        sub_classification: tea-module-missing
+      runtime:
+        profile: graceful-degrade
+        marker_class: env-setup-failed
+        diagnostic_pointer: "Synthetic dependency unavailable mid-run."
+
+  # `by_project_type` with NO `mobile` key — exercises AC-7 missing-key path.
+  partial-project-type:
+    version_floor: "1.0"
+    by_project_type:
+      web:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+      api:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip

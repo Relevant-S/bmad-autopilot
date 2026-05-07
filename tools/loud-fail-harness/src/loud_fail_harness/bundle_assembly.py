@@ -1124,6 +1124,108 @@ def _merge_evidence_linkability_markers(
     return existing + deduped
 
 
+def _render_marker_entry_body(
+    marker_class: str,
+    *,
+    marker_registry: MarkerClassRegistry,
+    marker_contexts: Mapping[str, Mapping[str, str]],
+    taxonomy_entries: Mapping[str, Mapping[str, Any]],
+) -> list[str]:
+    """Render the per-marker H3 header + 3 bullets for a single marker.
+
+    Story 7.3 path (b) — single source of truth for the marker-entry
+    shape consumed by BOTH:
+
+    * Story 6.1's :func:`_render_loud_fail_block` (this file's PR-bundle
+      loud-fail block renderer)
+    * Story 7.3's :func:`loud_fail_harness.init_preconditions.format_init_diagnostic`
+      (the ``init`` precondition aggregated diagnostic renderer)
+
+    The shared helper guarantees that a future taxonomy bump or
+    pointer-text edit propagates to BOTH consumers without drift per
+    Story 5.8 AC-4 + Story 6.1 AC-2's structural-derivation invariant.
+    Story 7.3 AC-6 path (b) names this extraction as the canonical
+    landing of the cross-consumer shape.
+
+    Args:
+        marker_class: The full marker string (possibly carrying a
+            ``: <sub_class>`` Pattern 2 suffix). The bullet rendering
+            strips the suffix before taxonomy lookup but the H3 header
+            uses the full string verbatim so the run-specific sub-class
+            is visible.
+        marker_registry: Validates the BASE marker class against the
+            taxonomy enumeration per Pattern 5; rejection raises
+            :exc:`UnknownMarkerClass`.
+        marker_contexts: Per-base-marker-class context mapping for
+            Story 6.2 actionable-pointer interpolation (the
+            ``How to enable`` bullet).
+        taxonomy_entries: Pre-loaded mapping from marker-class string
+            to taxonomy entry per :func:`_load_marker_taxonomy_entries`.
+
+    Returns:
+        A list of five lines in the canonical shape:
+        ``["### {marker_class}", "", "- Sub-classification: …",
+        "- Diagnostic pointer: …", "- How to enable: …"]``. The caller
+        composes these with surrounding header / blank-line separators.
+
+    Raises:
+        UnknownMarkerClass: The base marker class is not in the
+            registry.
+        MarkerContextMissing: The marker class has non-empty
+            ``pointer_context_fields`` and one or more required fields
+            are missing from ``marker_contexts``.
+    """
+    # Pattern 2 (architecture.md line 962): an active marker may carry an
+    # optional ``: <sub_class>`` suffix (e.g.
+    # ``cost-telemetry-unavailable: otel-pipeline-unreachable``). Strip the
+    # suffix before the registry / taxonomy lookup so the base class
+    # validates and the entry is found; the rendered H3 still uses the
+    # full marker string (including the suffix) so the run-specific sub-
+    # classification is visible.
+    if ":" in marker_class:
+        base_marker_class, run_specific_sub = marker_class.split(":", 1)
+        base_marker_class = base_marker_class.strip()
+        run_specific_sub = run_specific_sub.strip()
+    else:
+        base_marker_class = marker_class
+        run_specific_sub = ""
+    validate_marker_emission(marker_registry, base_marker_class)
+    entry = taxonomy_entries.get(base_marker_class, {})
+    diagnostic_pointer_raw = str(entry.get("diagnostic_pointer", ""))
+    diagnostic_pointer = " ".join(diagnostic_pointer_raw.split())
+    if run_specific_sub:
+        # Run-specific sub-classification (Pattern 2 suffix) supersedes the
+        # taxonomy's full enumeration for the rendered bullet — the bullet
+        # reflects the SPECIFIC failure mode this run hit, not the set of
+        # possibilities.
+        sub_class_str = run_specific_sub
+    else:
+        # No sub-classification was emitted for this run (base class only).
+        # Render "none" regardless of what the taxonomy enumerates for
+        # sub_classifications — that field documents possible suffixes, not
+        # which one this run hit (Story 6.5 review patch D1).
+        sub_class_str = "none"
+    required_fields = tuple(entry.get("pointer_context_fields") or ())
+    marker_context = marker_contexts.get(base_marker_class, {})
+    try:
+        actionable_pointer_raw = _interpolate_actionable_pointer(
+            template=diagnostic_pointer_raw,
+            context=marker_context,
+            required_fields=required_fields,
+        )
+    except MarkerContextMissing as exc:
+        exc.marker_class = marker_class
+        raise
+    actionable_pointer = " ".join(actionable_pointer_raw.split())
+    return [
+        f"### {marker_class}",
+        "",
+        f"- Sub-classification: {sub_class_str}",
+        f"- Diagnostic pointer: {diagnostic_pointer}",
+        f"- How to enable: {actionable_pointer}",
+    ]
+
+
 def _render_loud_fail_block(
     active_markers: tuple[str, ...],
     *,
@@ -1180,6 +1282,15 @@ def _render_loud_fail_block(
     placeholders interpolate against the ``marker_contexts`` mapping
     populated by the recorders.
 
+    Story 7.3 path (b) refactor: the per-marker H3 + 3-bullet shape
+    is extracted into the shared :func:`_render_marker_entry_body`
+    helper so :func:`loud_fail_harness.init_preconditions.format_init_diagnostic`
+    consumes the single source of truth for the marker-entry shape
+    (Story 5.8 AC-4 + Story 6.1 AC-2's structural-derivation
+    invariant). The H2 header + iteration-order discipline + empty-case
+    sentinel remain owned by THIS function; the per-entry body is
+    delegated.
+
     Args:
         active_markers: Tuple of marker-class identifiers active on the
             run, sourced from
@@ -1233,53 +1344,13 @@ def _render_loud_fail_block(
     # marker-permanence rule); only the rendered iteration order is
     # normalized for stable display.
     for marker_class in compute_alphabetical_marker_order(active_markers):
-        # Pattern 2 (architecture.md line 962): an active marker may carry an
-        # optional ``: <sub_class>`` suffix (e.g.
-        # ``cost-telemetry-unavailable: otel-pipeline-unreachable``). Strip the
-        # suffix before the registry / taxonomy lookup so the base class
-        # validates and the entry is found; the rendered H3 still uses the
-        # full marker string (including the suffix) so the run-specific sub-
-        # classification is visible.
-        if ":" in marker_class:
-            base_marker_class, run_specific_sub = marker_class.split(":", 1)
-            base_marker_class = base_marker_class.strip()
-            run_specific_sub = run_specific_sub.strip()
-        else:
-            base_marker_class = marker_class
-            run_specific_sub = ""
-        validate_marker_emission(marker_registry, base_marker_class)
-        entry = entries.get(base_marker_class, {})
-        diagnostic_pointer_raw = str(entry.get("diagnostic_pointer", ""))
-        diagnostic_pointer = " ".join(diagnostic_pointer_raw.split())
-        if run_specific_sub:
-            # Run-specific sub-classification (Pattern 2 suffix) supersedes the
-            # taxonomy's full enumeration for the rendered bullet — the bullet
-            # reflects the SPECIFIC failure mode this run hit, not the set of
-            # possibilities.
-            sub_class_str = run_specific_sub
-        else:
-            # No sub-classification was emitted for this run (base class only).
-            # Render "none" regardless of what the taxonomy enumerates for
-            # sub_classifications — that field documents possible suffixes, not
-            # which one this run hit (Story 6.5 review patch D1).
-            sub_class_str = "none"
-        required_fields = tuple(entry.get("pointer_context_fields") or ())
-        marker_context = contexts.get(base_marker_class, {})
-        try:
-            actionable_pointer_raw = _interpolate_actionable_pointer(
-                template=diagnostic_pointer_raw,
-                context=marker_context,
-                required_fields=required_fields,
-            )
-        except MarkerContextMissing as exc:
-            exc.marker_class = marker_class
-            raise
-        actionable_pointer = " ".join(actionable_pointer_raw.split())
-        parts.append(f"### {marker_class}")
-        parts.append("")
-        parts.append(f"- Sub-classification: {sub_class_str}")
-        parts.append(f"- Diagnostic pointer: {diagnostic_pointer}")
-        parts.append(f"- How to enable: {actionable_pointer}")
+        entry_lines = _render_marker_entry_body(
+            marker_class,
+            marker_registry=marker_registry,
+            marker_contexts=contexts,
+            taxonomy_entries=entries,
+        )
+        parts.extend(entry_lines)
         parts.append("")
     # Drop the trailing blank line so the joined block does not
     # double-newline against the assembler's section separator.

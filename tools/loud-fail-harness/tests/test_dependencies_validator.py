@@ -805,26 +805,34 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     assert rc == 0, f"enumeration-check failed: stdout={out.getvalue()!r} stderr={err.getvalue()!r}"
 
     text = out.getvalue()
-    # Post-Story-5.8: 10 passing + 21 orphans, no deferral note.
+    # Post-Story-7.3: 15 passing + 20 orphans, no deferral note.
     # Arithmetic: 29 total taxonomy markers (post-Story-4.9 baseline) −
-    # 8 distinct referenced markers across the two reconciliation pairs:
-    #   dependencies.yaml pair: env-setup-failed, mobile-blocked, LAD-skipped
+    # 9 distinct referenced markers across the two reconciliation pairs:
+    #   dependencies.yaml pair: env-setup-failed, mobile-blocked, LAD-skipped,
+    #                            playwright-mcp-unavailable (NEW in 7.3 —
+    #                            the playwright-mcp web init total-block
+    #                            profile gained a marker_class reference)
     #   escalation-bundles pair: Tier-3-not-configured, plan-drift-detected,
-    #                            smoke-first-abort, retry-budget-exhausted (NEW
-    #                            in 5.8), scope-assertion-violation (NEW in 5.8)
+    #                            smoke-first-abort, retry-budget-exhausted,
+    #                            scope-assertion-violation
     # (env-setup-failed appears in BOTH pairs but counts as ONE distinct
-    # taxonomy entry) → 29 − 8 = 21 orphans.
-    # The 10 passing references break down as:
-    #   dependencies.yaml: env-setup-failed ×1, mobile-blocked ×1,
-    #                       LAD-skipped ×2 = 4 refs
+    # taxonomy entry) → 29 − 9 = 20 orphans.
+    # The 15 passing references break down as:
+    #   dependencies.yaml: env-setup-failed ×4 (NEW: claude-code init +
+    #                        bmad-core init + tea-module init in Story 7.3;
+    #                        existing: playwright-mcp web runtime),
+    #                       mobile-blocked ×2 (mobile-mcp mobile init [C1 fix]
+    #                        + mobile-mcp mobile runtime), LAD-skipped ×2,
+    #                       playwright-mcp-unavailable ×1 (NEW in 7.3 —
+    #                       playwright-mcp web init) = 9 refs
     #   escalation-bundles: env-setup-failed ×1, Tier-3-not-configured ×1,
     #                        plan-drift-detected ×1, smoke-first-abort ×1,
-    #                        retry-budget-exhausted ×1 (NEW in 5.8),
-    #                        scope-assertion-violation ×1 (NEW in 5.8) = 6 refs
+    #                        retry-budget-exhausted ×1,
+    #                        scope-assertion-violation ×1 = 6 refs
     # If a future story adds markers to marker-taxonomy.yaml or new
     # marker_class references to dependencies.yaml or to schemas/escalation-
     # bundles/*.yaml, update this count accordingly.
-    assert "Summary: 10 passing reference(s), 0 missing reference(s), 21 orphan marker class(es)" in text
+    assert "Summary: 15 passing reference(s), 0 missing reference(s), 20 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
@@ -886,7 +894,7 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.0"
+    assert raw["schema_version"] == "1.1"
     deps = raw["dependencies"]
     # Per AC-4: phase: "1.5" present on mobile-mcp + lad; absent on the four MVP entries.
     assert "phase" not in deps["claude-code"]

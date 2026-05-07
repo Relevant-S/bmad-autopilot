@@ -16,6 +16,13 @@ dependencies = [
     # config carries hand-edited customizations that survive across re-installs
     # (FR42); plain PyYAML loses comments + key order on round-trip.
     "ruamel.yaml>=0.18,<1",
+    # Story 7.3 (AC-3) — semver comparison for total-block init precondition
+    # checks (`packaging.version.Version`) when a dependency declares a
+    # numeric `version_floor` (e.g., claude-code "2.1.32", bmad-core "6.0").
+    # Free-text version_floor entries (e.g., "officially-supported-as-of-mvp-
+    # release", "version-agnostic; detected at init") skip version comparison
+    # and treat probe `available: True` as the success condition.
+    "packaging>=24,<27",
 ]
 
 [project.scripts]

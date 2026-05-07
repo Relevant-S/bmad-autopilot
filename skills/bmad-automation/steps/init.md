@@ -1,6 +1,7 @@
 # /bmad-automation init — STUB (Epic 7 thickening)
 
 [Story 7.2 landed (2026-05-07): the install-path-priority module + plugin manifest at `.claude-plugin/plugin.json` are now available at `tools/loud-fail-harness/src/loud_fail_harness/install_path.py`; full `/bmad-automation init` flow still arrives in Stories 7.3-7.9. Story 7.2 does NOT thicken this stub's runtime behavior.]
+[Story 7.3 landed (2026-05-08): the init-precondition module at `tools/loud-fail-harness/src/loud_fail_harness/init_preconditions.py` is now available (typed Pydantic API: `run_init_preconditions`, `format_init_diagnostic`); the full `/bmad-automation init` flow still arrives in Stories 7.4-7.9. Story 7.3 does NOT thicken this stub's runtime behavior.]
 
 Full implementation spans Stories 7.1-7.9: plugin-install primitive spike (7.1) and install path (7.2), precondition checks (7.3), sample-story scaffold (7.4), config + qa-runbook stubs (7.5), non-destructive guard (7.6), `bmad` story-doc version-tolerance contract (7.7), TEA-boundary first-run orientation (7.8), and the 5-min first-loop benchmark (7.9).
 

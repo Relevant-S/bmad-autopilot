@@ -1,0 +1,16 @@
+# Story 7.3 test fixture — SDN-001 shape violation per AC-9 case 14.
+# The `synthetic-broken` entry's init profile declares an unknown
+# `profile:` value ("bogus") that fails dependencies_validator's
+# closed-set enum check. `load_dependencies` raises RuntimeError; per
+# AC-1 the exception propagates UNCHANGED through
+# `run_init_preconditions(...)`.
+
+schema_version: "1.1"
+
+dependencies:
+  synthetic-broken:
+    version_floor: "1.0"
+    profiles:
+      init:
+        profile: bogus
+        diagnostic: "Synthetic broken entry."

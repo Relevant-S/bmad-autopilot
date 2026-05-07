@@ -64,7 +64,7 @@
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
 # (mobile-mcp, lad).
 
-schema_version: "1.0"
+schema_version: "1.1"
 
 dependencies:
   claude-code:
@@ -74,6 +74,8 @@ dependencies:
       init:
         profile: total-block
         diagnostic: "Claude Code v2.1.32+ required. Run `claude --version` to check."
+        marker_class: env-setup-failed
+        sub_classification: claude-code-version-mismatch
       runtime:
         profile: total-block
 
@@ -84,6 +86,8 @@ dependencies:
       init:
         profile: total-block
         diagnostic: "BMAD core v6.0+ required."
+        marker_class: env-setup-failed
+        sub_classification: bmad-core-version-mismatch
       runtime:
         profile: total-block
 
@@ -93,6 +97,8 @@ dependencies:
       init:
         profile: total-block
         diagnostic: "TEA module not installed. Run `/bmad:install tea` and re-run `/bmad-automation init`."
+        marker_class: env-setup-failed
+        sub_classification: tea-module-missing
       runtime:
         profile: total-block
 
@@ -104,6 +110,7 @@ dependencies:
           init:
             profile: total-block
             diagnostic: "Playwright MCP unreachable. Required for web QA. See docs/playwright-mcp-setup.md."
+            marker_class: playwright-mcp-unavailable
           runtime:
             profile: graceful-degrade
             marker_class: env-setup-failed
@@ -130,6 +137,7 @@ dependencies:
           init:
             profile: total-block
             diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
+            marker_class: mobile-blocked
           runtime:
             profile: graceful-degrade
             marker_class: mobile-blocked
