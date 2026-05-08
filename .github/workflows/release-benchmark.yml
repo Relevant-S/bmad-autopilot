@@ -1,0 +1,109 @@
+# Release benchmark workflow (Story 7.9 / FR44 + NFR-P3).
+#
+# This workflow runs the onboarding benchmark on release branches AND release
+# tags ONLY — NOT on every PR. The release-cadence cost-vs-coverage tradeoff
+# (AC-5) makes per-PR full first-loop benchmarks economically infeasible:
+# every PR running the ≈5-minute first-loop would incur substantial Anthropic
+# API cost without proportional coverage gain. Release-time gating provides
+# target-met evidence at the moment of release-tag publication.
+#
+# Exit-code triage (per onboarding_benchmark.main):
+#   0 — benchmark passed: end-to-end total ≤ 300 seconds; row appended to
+#       docs/onboarding-benchmark.md.
+#   1 — benchmark missed target: row STILL appended (with missed_component +
+#       remediation_or_deferral_note); workflow fails so release-tag
+#       publication is gated. Per AC-4 + AC-5: "missed-target gates the
+#       release per the discipline of NFR-P3 being a published commitment".
+#   2 — benchmark broken: BenchmarkArtifactError (anchor markers missing,
+#       atomic-write failed, claude binary missing, phase subprocess exited
+#       non-zero). Workflow ALSO fails; release-manager must investigate the
+#       harness before re-evaluating the target.
+#
+# ANTHROPIC_API_KEY secret dependency: the benchmark's first-specialist-
+# dispatch + per-specialist-runtime + bundle-assembly phases invoke the
+# `claude` CLI in non-interactive mode against the sample-auto-001 fixture.
+# The CLI requires an authenticated API session — declared via the
+# repository-level secret ANTHROPIC_API_KEY consumed under env: per the
+# GitHub Actions security-hardening convention.
+
+name: Release benchmark
+
+on:
+  push:
+    branches:
+      - "release/*"
+    tags:
+      - "v*"
+
+jobs:
+  release-benchmark:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: tools/loud-fail-harness
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Derive release version from ref
+        id: derive_version
+        # Release tags (`v*`) carry the canonical version; release branches
+        # (`release/*`) carry the next-release version in their suffix.
+        run: |
+          ref="${GITHUB_REF#refs/tags/}"
+          ref="${ref#refs/heads/release/}"
+          ref="${ref#v}"
+          if [ -z "$ref" ]; then
+            echo "harness-level error: cannot derive release version from $GITHUB_REF" >&2
+            exit 2
+          fi
+          echo "version=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Run onboarding benchmark (story 7.9)
+        # The benchmark drives install → init → first-loop → bundle-assembly
+        # end-to-end against a FRESH reference project, captures per-component
+        # timings, evaluates the ≤5-minute release-gate verdict, and appends
+        # a row to docs/onboarding-benchmark.md. Library-as-CLI-aid; mirrors
+        # marker-coverage-audit's posture (pyproject.toml lines 70-74).
+        run: >
+          uv run onboarding-benchmark
+          --hardware-tier ci-runner-standard
+          --version ${{ steps.derive_version.outputs.version }}
+
+      - name: Persist appended row to release branch
+        # On release branches, push the appended row commit back to the
+        # release branch so the longitudinal artifact survives past the
+        # workflow run. On tag pushes, the appended row is NOT pushed
+        # back — the release manager opens a follow-up PR to main with
+        # the row commit per the artifact's longitudinal-record discipline.
+        # Exit-code 1 from the benchmark step ALREADY failed the workflow;
+        # this step only fires on success (exit 0) since there's no
+        # explicit `if: failure()`.
+        if: startsWith(github.ref, 'refs/heads/release/')
+        working-directory: .
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ steps.derive_version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/onboarding-benchmark.md; then
+            echo "release-benchmark: no row delta to persist (unexpected)"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/onboarding-benchmark.md
+          git commit -m "Onboarding benchmark row for $RELEASE_VERSION"
+          git push origin HEAD:$REF_NAME
