@@ -1,0 +1,89 @@
+# BMAD Agent Development Automator — `_bmad/automation/config.yaml` stub.
+#
+# Story 7.5 (FR40) — `init` writes this canonical default at the
+# practitioner's project root: `<project_root>/_bmad/automation/config.yaml`.
+# Every documented default below is traceable to its source FR/NFR via the
+# `# Source:` cross-reference line. Every line citation references
+# `_bmad-output/planning-artifacts/prd.md` in the planning workspace.
+#
+# To customize: edit the value below the relevant `# Source:` block.
+# To re-derive defaults: re-run `/bmad-automation init --overwrite-confirmed`
+# (Story 7.6 owns the non-destructive guard + override path).
+#
+# This file is USER-OWNED — Story 7.6's additive-merge layer preserves your
+# customizations on re-init; new fields introduced by future Automator
+# upgrades are added without overwriting existing values
+# (see `_bmad-output/planning-artifacts/epics.md` lines 3050-3051).
+
+# Whole-story retry budget. Orchestrator routes patch-bucket findings back to
+# the responsible specialist up to this many times before assembling an
+# escalation bundle (Story 5.1; FR8 verbatim).
+# Source: FR8 (see _bmad-output/planning-artifacts/prd.md line 819)
+# Default rationale: 2 retries balance recovery from transient findings against
+# unbounded loop-amplified cost; reference-project runs settled here.
+retry_budget: 2
+
+# Per-specialist invocation timeout (minutes). Specialist invocations exceeding
+# this signal a hang and surface a `specialist-timeout: {specialist}` loud-fail
+# marker with a diagnostic pointer rather than open-endedly waiting (Story 6.7).
+# Source: NFR-P2 (see _bmad-output/planning-artifacts/prd.md line 935)
+# Default rationale: 15 minutes accommodates legitimate long-running specialist
+# work (review against large diffs, QA env-provisioning) while catching hangs
+# inside one active-session window — revisited per release against reference-
+# project specialist runtime distributions.
+specialist_timeout_minutes: 15
+
+# Per-story cost ceiling (USD). Orchestrator surfaces a `cost-near-ceiling`
+# marker at 75% of this value (Story 6.5) and refuses further specialist
+# dispatches once the ceiling is exceeded; ceiling enforcement protects
+# against runaway-cost adoption-killer scenarios (NFR-P1 verbatim — "$5 per
+# story before the 'default implementation loop' positioning is earned").
+# Source: NFR-P1 (see _bmad-output/planning-artifacts/prd.md line 934)
+# Default rationale: $5 is the published per-story ceiling — the boundary
+# between "default implementation loop" and "escalation territory". Unit is
+# USD; the numeric value is what `cost_telemetry.py` compares against.
+cost_ceiling_per_story: 5
+
+# QA evidence bundle size budget (MB). Per-run evidence at
+# `_bmad-output/qa-evidence/{story-id}/{run-id}/` is truncated above this
+# limit with an `evidence-truncated: {story-id}` loud-fail marker rather
+# than unbounded disk growth (Story 4.12).
+# Source: NFR-P6 (see _bmad-output/planning-artifacts/prd.md line 939)
+# Default rationale: 50 MB accommodates a typical screenshot-bearing QA
+# evidence bundle (Playwright traces + per-AC screenshots + HTTP transcripts)
+# without growing unbounded across long retry chains. NFR-P6 names the
+# default as "TBD, published pre-release"; this canonical value settles it.
+evidence_max_size_mb: 50
+
+# BMAD story-doc template-version tolerance window (number of minor versions
+# behind the current Automator-supported version). Story-doc reads succeed
+# silently within the window; out-of-window versions emit a
+# `story-doc-version-out-of-window` marker with upgrade guidance
+# (Story 7.7 owns the detector + the marker).
+# Source: FR43 | NFR-I5 (see _bmad-output/planning-artifacts/prd.md line 868)
+# Default rationale: N-2 (two minor versions back) — accommodates one full
+# upgrade cycle so an in-progress story straddling a BMAD release does not
+# break mid-loop while still flagging genuine drift before it accumulates.
+story_doc_version_tolerance_window: 2
+
+# Pointer to the canonical dependency version pins manifest. The pins
+# themselves LIVE in `_bmad/automation/dependencies.yaml` (Story 7.3's
+# cell-1 portable manifest per ADR-002 + SDN-001); this field is a
+# DOCUMENTED POINTER, not an inline duplicate, to prevent drift between
+# two sources of truth for the same fact.
+# Source: FR40 (see _bmad-output/planning-artifacts/prd.md line 865)
+# Default rationale: the phrase "dependency version pins (referencing
+# `dependencies.yaml`)" at epics.md line 3017 names this interpretation
+# explicitly; do not inline duplicate values here.
+dependency_version_pins:
+  source: _bmad/automation/dependencies.yaml
+
+# Install method recorded by `init` per Story 7.2. UNCOMMENT only if you
+# need to override the resolved install method by hand — the production
+# path is `loud_fail_harness.install_path.record_install_method` writing
+# this key on first install (plugin-primitive | git-clone-symlink). A
+# hard-coded value here would silently override the resolved method.
+# Source: FR35 | FR36 (see _bmad-output/planning-artifacts/prd.md lines 860-861)
+# Default rationale: omitted by default; Story 7.2's runtime path
+# additively adds the resolved value on first call.
+# install_method: <set by `init` per Story 7.2; do not edit by hand>

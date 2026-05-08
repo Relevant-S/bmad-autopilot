@@ -1,0 +1,60 @@
+# BMAD Agent Development Automator — `_bmad/automation/qa-runbook.yaml` stub.
+#
+# Story 7.5 (FR40) — `init` writes this canonical default at the
+# practitioner's project root: `<project_root>/_bmad/automation/qa-runbook.yaml`.
+# Every documented surface below is OPT-IN with a discoverable enablement
+# path. Each surface follows the loud-fail doctrine — a feature that WOULD
+# fire markers when configured does NOT fire on absence (no auto-scrubbing-
+# by-shame; no marker on absence of `masked_selectors` per Story 4.12 AC-5;
+# `not_configured` is the default Tier-3 evidence-tier posture per Story 4.8).
+#
+# The stub ships ALL surfaces commented-out by default; uncomment the worked
+# example block for the surface you want to enable, then edit the values.
+# Re-run `/bmad-automation init --overwrite-confirmed` (Story 7.6) to reset
+# to defaults; otherwise this file is USER-OWNED and customizations are
+# preserved across re-installs (FR42).
+
+# ---
+# masked_selectors — opt-in (default: absent → drivers persist evidence raw)
+# Story 4.12; FR49 | NFR-S2
+# How to enable: uncomment the block below and list the selectors that
+# should be redacted from QA evidence (Playwright traces + HTTP transcripts).
+# Empty by default per Story 4.12 AC-5 ("no marker on absence of
+# `masked_selectors`"); the Automator does NOT auto-scrub.
+# Worked example (uncomment to enable):
+# masked_selectors:
+#   - "input[type=password]"
+#   - "[data-test-id=\"sensitive\"]"
+# ---
+
+# ---
+# tier_3_semantic_verification — opt-in (default: not_configured)
+# Story 4.8; FR20 | FR21
+# How to enable: uncomment the block below and configure a semantic
+# verification provider (LLM judge, equivalent acceptance-threshold
+# evaluator). When absent, QA emits a `Tier-3-not-configured` marker
+# ONLY on ACs that declare Tier-3 as `required` in the QA Behavioral Plan;
+# ACs declaring Tier-3 as `not_applicable` (default) verify with
+# Tier-1 mechanical + Tier-2 outcome evidence alone.
+# Worked example (uncomment to enable):
+# tier_3_semantic_verification:
+#   provider: <name-of-llm-judge-or-equivalent>
+#   acceptance_threshold: 0.85
+# ---
+
+# ---
+# behavioral_plan_overrides — opt-in (default: absent → QA generates plan from ACs)
+# Story 4.1; FR23 | FR25
+# How to enable: uncomment the block below to override per-AC expected
+# evidence tiers and exploratory-heuristic applicability for specific
+# stories. Story 4.1's QA Behavioral Plan generator reads these overrides
+# at plan-generation time and persists the resolved plan into the story
+# doc's `## QA Behavioral Plan` section. Use sparingly — overrides
+# compromise the run-to-run plan-independence per FR25 verbatim.
+# Worked example (uncomment to enable):
+# behavioral_plan_overrides:
+#   <story-id>:
+#     ac_<n>:
+#       expected_evidence_tier: tier-2-outcome
+#       semantic_verification_requirement: not_applicable
+# ---
