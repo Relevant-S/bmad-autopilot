@@ -985,7 +985,7 @@ def format_init_diagnostic(
         marker_registry = load_marker_class_registry()
     taxonomy_entries = _load_marker_taxonomy_entries()
 
-    contexts: dict[str, Mapping[str, str]] = {}
+    contexts: dict[str, Mapping[str, object]] = {}
     if run.run_state is not None:
         contexts = dict(run.run_state.marker_contexts)
 

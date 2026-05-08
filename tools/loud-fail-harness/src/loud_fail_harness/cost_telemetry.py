@@ -241,7 +241,7 @@ class CollectionResult:
 
     cost_event: dict[str, Any] | None
     aggregation: CostAggregation
-    marker_classification: tuple[str, Mapping[str, str]] | None
+    marker_classification: tuple[str, Mapping[str, object]] | None
 
 
 @runtime_checkable
@@ -396,7 +396,7 @@ def derive_cost_telemetry_unavailable_marker(
     story_id: str,
     prompt_id: str,
     exc: BaseException,
-) -> tuple[str, Mapping[str, str]]:
+) -> tuple[str, Mapping[str, object]]:
     """Translate an OTel-pipeline exception into a
     ``(marker_class, marker_context)`` pair per the v1 marker taxonomy
     at ``schemas/marker-taxonomy.yaml`` lines 303-312.

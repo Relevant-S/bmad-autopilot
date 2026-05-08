@@ -471,7 +471,7 @@ import logging
 import pathlib
 import re
 from collections.abc import Callable
-from typing import Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -499,6 +499,13 @@ from loud_fail_harness.run_state import (
     StoryDocCallbackResult,
     advance_run_state,
 )
+# Story 7.7 — type-only references at module-import time (the runtime
+# imports happen lazily inside ``run_story_loop_entry`` to avoid a
+# circular import: ``story_doc_version_check`` → ``marker_wiring`` →
+# ``specialist_dispatch`` → ``orchestrator_run_entry``).
+if TYPE_CHECKING:
+    from loud_fail_harness.specialist_dispatch import MarkerClassRegistry
+    from loud_fail_harness.story_doc_version_check import VersionCheckOutcome
 
 #: Module-level logger for the dispatch-stub diagnostic. The substrate
 #: emits diagnostics via ``logging.info`` only from
@@ -1318,6 +1325,7 @@ def run_story_loop_entry(
     trunk_allowlist: tuple[str, ...],
     working_tree_probe: WorkingTreeProbe,
     dispatch_callback: DispatchCallback,
+    marker_registry: MarkerClassRegistry | None = None,
 ) -> RunStoryLoopEntryResult:
     """Execute the six-step ``/bmad-automation run <story-id>`` entry
     sequence.
@@ -1400,6 +1408,14 @@ def run_story_loop_entry(
             :func:`commit_transition`.
         OSError: Step 4 OR step 5 — temp-write or atomic-rename failure
             inside :func:`advance_run_state`.
+        loud_fail_harness.story_doc_version_check.StoryDocVersionDetectionError:
+            Step 1b — detection failed (neither inline marker nor manifest
+            fallback yielded a parseable version), OR the tolerance-window
+            config-file value is non-integer or negative
+            (``reason="tolerance-window-not-an-integer"``), OR the config
+            file contains non-UTF-8 bytes or invalid YAML
+            (``reason="config-yaml-parse-error"``). Only raised when
+            ``marker_registry is not None``; bypassed otherwise.
     """
     # ===================================================================== #
     # Pre-flight phase (steps 1-2): NO side effects; named-invariant       #
@@ -1414,6 +1430,31 @@ def run_story_loop_entry(
         raise StoryDocNotFound(  # type: ignore[unreachable]
             story_id=story_id,
             searched_paths=(project_root,),
+        )
+
+    # Step 1b (Story 7.7 — FR43 + NFR-I5): preflight version-check.
+    # Pure-decision detection at preflight per AC-8 Option A — exceptions
+    # surface BEFORE any commit-phase step runs (Pattern 5). Marker
+    # emission deferred to step 5b so the marker folds into ``next_state``
+    # and persists across the lifecycle transition. The check is gated
+    # on ``marker_registry is not None`` so existing tests that use
+    # stub resolvers (and don't provide a registry) bypass the check
+    # entirely. Imports are lazy here to break the circular module
+    # dependency through marker_wiring → specialist_dispatch.
+    from loud_fail_harness.story_doc_version_check import (
+        VersionCheckRequest,
+        check_story_doc_version,
+    )
+
+    version_check_outcome: VersionCheckOutcome | None = None
+    if marker_registry is not None:
+        version_check_outcome, _ = check_story_doc_version(
+            VersionCheckRequest(
+                story_doc_path=story_doc_resolution.path,
+                project_root=project_root,
+            ),
+            run_state=None,
+            marker_registry=None,
         )
 
     # Step 2a: Validate the story-doc lifecycle state.
@@ -1500,6 +1541,36 @@ def run_story_loop_entry(
         f"next_state.story_id={next_state.story_id!r}, "
         f"story_id={story_id!r}"
     )
+    # Step 5b (Story 7.7): fold the version-check marker into next_state.
+    # The marker class ``story-doc-version-out-of-window`` is the v1
+    # closed-taxonomy entry consumed AS-IS; emission goes through the
+    # canonical ``record_marker_with_context`` path inside
+    # ``check_story_doc_version`` itself. A second call is required
+    # here (rather than at step 1b) so the marker folds into the
+    # post-transition ``next_state`` rather than being lost.
+    # ``StoryDocVersionDetectionError``, ``check_story_doc_version``
+    # and ``VersionCheckRequest`` are already in scope from the lazy
+    # import at step 1b above.
+    if (
+        version_check_outcome is not None
+        and version_check_outcome.action == "proceed-with-marker"
+        and marker_registry is not None
+    ):
+        # Step 5b: emit the version-check marker into next_state. Any
+        # StoryDocVersionDetectionError here (e.g., manifest disappeared
+        # between step 1b and 5b) propagates unchanged — consistent with
+        # step 1b's posture and satisfying NFR-I5's loud-fail requirement.
+        _, maybe_updated_next_state = check_story_doc_version(
+            VersionCheckRequest(
+                story_doc_path=story_doc_resolution.path,
+                project_root=project_root,
+            ),
+            run_state=next_state,
+            marker_registry=marker_registry,
+        )
+        if maybe_updated_next_state is not None:
+            next_state = maybe_updated_next_state
+
     commit_result = commit_transition(
         run_state_path,
         initial_run_state,

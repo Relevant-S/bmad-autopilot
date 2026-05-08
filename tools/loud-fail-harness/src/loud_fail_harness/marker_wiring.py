@@ -119,7 +119,7 @@ Cross-references:
       ``{specialist}`` / ``{timeout_seconds}`` placeholders against
       the ``marker_contexts`` populated by this module's recorders.
     * Story 6.5 :class:`loud_fail_harness.cost_streaming.CostStreamingResult.marker_classifications_to_append`
-      — the ``tuple[tuple[str, Mapping[str, str]], ...]`` payload shape
+      — the ``tuple[tuple[str, Mapping[str, object]], ...]`` payload shape
       this module's design follows in spirit (the recorders produce a
       new ``RunState`` rather than a payload tuple because they
       persist immediately via ``advance_run_state`` rather than
@@ -229,10 +229,10 @@ def _format_marker_with_suffix(base: str, sub: str | None) -> str:
 
 
 def _extend_marker_contexts(
-    existing: Mapping[str, Mapping[str, str]],
+    existing: Mapping[str, Mapping[str, object]],
     base_class: str,
-    context: Mapping[str, str] | None,
-) -> Mapping[str, Mapping[str, str]]:
+    context: Mapping[str, object] | None,
+) -> Mapping[str, Mapping[str, object]]:
     """Set ``marker_contexts[base_class] = context`` if not already present.
 
     Marker-permanence rule (Story 1.4) parallel to ``active_markers``:
@@ -248,7 +248,7 @@ def _extend_marker_contexts(
         return existing
     if base_class in existing:
         return existing
-    new_contexts: dict[str, Mapping[str, str]] = dict(existing)
+    new_contexts: dict[str, Mapping[str, object]] = dict(existing)
     new_contexts[base_class] = dict(context)
     return new_contexts
 
@@ -419,7 +419,7 @@ def record_marker_with_context(
     run_state: RunState,
     marker_class: str,
     sub_classification: str | None = None,
-    context: Mapping[str, str] | None = None,
+    context: Mapping[str, object] | None = None,
     marker_registry: MarkerClassRegistry | None = None,
 ) -> RunState:
     """Generic orchestrator-side marker recorder with optional context.

@@ -1001,7 +1001,7 @@ def _load_marker_taxonomy_entries(
 
 def _interpolate_actionable_pointer(
     template: str,
-    context: Mapping[str, str],
+    context: Mapping[str, object],
     *,
     required_fields: Sequence[str],
 ) -> str:
@@ -1128,7 +1128,7 @@ def _render_marker_entry_body(
     marker_class: str,
     *,
     marker_registry: MarkerClassRegistry,
-    marker_contexts: Mapping[str, Mapping[str, str]],
+    marker_contexts: Mapping[str, Mapping[str, object]],
     taxonomy_entries: Mapping[str, Mapping[str, Any]],
 ) -> list[str]:
     """Render the per-marker H3 header + 3 bullets for a single marker.
@@ -1230,7 +1230,7 @@ def _render_loud_fail_block(
     active_markers: tuple[str, ...],
     *,
     marker_registry: MarkerClassRegistry,
-    marker_contexts: Mapping[str, Mapping[str, str]] | None = None,
+    marker_contexts: Mapping[str, Mapping[str, object]] | None = None,
     taxonomy_entries: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> str:
     """Render the Story 6.1 dedicated top-of-bundle loud-fail block.
@@ -1332,7 +1332,7 @@ def _render_loud_fail_block(
         if taxonomy_entries is not None
         else _load_marker_taxonomy_entries()
     )
-    contexts: Mapping[str, Mapping[str, str]] = (
+    contexts: Mapping[str, Mapping[str, object]] = (
         marker_contexts if marker_contexts is not None else {}
     )
 
@@ -1362,7 +1362,7 @@ def _render_loud_fail_block(
 
 def _render_cost_breakdown(
     active_markers: tuple[str, ...],
-    marker_contexts: Mapping[str, Mapping[str, str]],
+    marker_contexts: Mapping[str, Mapping[str, object]],
     cost_aggregation: "CostAggregation",
     *,
     marker_registry: MarkerClassRegistry,

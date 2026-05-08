@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 32
+- Emitted: 34
 - Not-applicable: 369
-- Scheduled-by-story: 5
+- Scheduled-by-story: 3
 - Gaps: 0
 
 ## Coverage matrix
@@ -211,7 +211,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | init-would-destroy-existing-artifact | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
 | init-would-destroy-existing-artifact | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
 | init-would-destroy-existing-artifact | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
-| init-would-destroy-existing-artifact | orchestrator-state-machine | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 7.6 — Non-destructive init guard + explicit override path + init-would-destroy-existing- artifact marker emission lands in Story 7.6 (FR41 + FR42). |
+| init-would-destroy-existing-artifact | orchestrator-state-machine | emitted | `tools/loud-fail-harness/src/loud_fail_harness/init_non_destructive_guard.py:847` | 2026-05-08 | Discharged in Story 7.6. The orchestrator-state-machine surface composes evaluate_non_destructive_guard at init time. Marker emission goes through the canonical record_marker_with_context path inside evaluate_non_destructive_guard. |
 | init-would-destroy-existing-artifact | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
 | init-would-destroy-existing-artifact | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
 | init-would-destroy-existing-artifact | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
@@ -393,7 +393,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | story-doc-version-out-of-window | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
 | story-doc-version-out-of-window | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
 | story-doc-version-out-of-window | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
-| story-doc-version-out-of-window | orchestrator-state-machine | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 7.7 — BMAD story-doc N-2 version tolerance + story-doc-version-out-of-window marker contract pair lands in Story 7.7 (FR43 + NFR-I5). |
+| story-doc-version-out-of-window | orchestrator-state-machine | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_version_check.py:890` | 2026-05-08 | Discharged in Story 7.7. The orchestrator-state-machine surface composes check_story_doc_version at the story-doc resolution path (run_story_loop_entry step 1b + step 5b). Marker emission goes through the canonical record_marker_with_context path inside check_story_doc_version. |
 | story-doc-version-out-of-window | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
 | story-doc-version-out-of-window | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
 | story-doc-version-out-of-window | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |

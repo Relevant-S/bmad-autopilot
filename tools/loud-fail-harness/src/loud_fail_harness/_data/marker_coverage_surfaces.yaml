@@ -1402,12 +1402,14 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: init-would-destroy-existing-artifact
     surface_name: orchestrator-state-machine
-    verdict: scheduled-by-story
+    verdict: emitted
     discharging_story: "7.6"
     rationale: |-
-      Non-destructive init guard + explicit override path + init-would-destroy-existing-
-      artifact marker emission lands in Story 7.6 (FR41 + FR42).
-    audit_date: "2026-05-05"
+      Discharged in Story 7.6. The orchestrator-state-machine surface composes
+      evaluate_non_destructive_guard at init time. Marker emission goes through the
+      canonical record_marker_with_context path inside evaluate_non_destructive_guard.
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/init_non_destructive_guard.py:847
+    audit_date: "2026-05-08"
   - marker_class: init-would-destroy-existing-artifact
     surface_name: reconciliation-gate-fixture
     verdict: not-applicable
@@ -2707,12 +2709,15 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: story-doc-version-out-of-window
     surface_name: orchestrator-state-machine
-    verdict: scheduled-by-story
+    verdict: emitted
     discharging_story: "7.7"
     rationale: |-
-      BMAD story-doc N-2 version tolerance + story-doc-version-out-of-window marker contract
-      pair lands in Story 7.7 (FR43 + NFR-I5).
-    audit_date: "2026-05-05"
+      Discharged in Story 7.7. The orchestrator-state-machine surface composes
+      check_story_doc_version at the story-doc resolution path (run_story_loop_entry
+      step 1b + step 5b). Marker emission goes through the canonical
+      record_marker_with_context path inside check_story_doc_version.
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/story_doc_version_check.py:890
+    audit_date: "2026-05-08"
   - marker_class: story-doc-version-out-of-window
     surface_name: reconciliation-gate-fixture
     verdict: not-applicable

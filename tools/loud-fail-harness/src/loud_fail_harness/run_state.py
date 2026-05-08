@@ -479,7 +479,7 @@ class RunState(BaseModel):
     pending_qa_dispatch_payload: dict[str, Any] | None
     retry_history: tuple[RetryAttempt, ...]
     active_markers: tuple[str, ...]
-    marker_contexts: Mapping[str, Mapping[str, str]] = Field(default_factory=dict)
+    marker_contexts: Mapping[str, Mapping[str, object]] = Field(default_factory=dict)
     # Note: MappingProxyType({}) default was specified by Story 6.2 for immutability
     # parity with active_markers:tuple. Pydantic v2's Rust JSON serializer rejects
     # MappingProxyType (PydanticSerializationError); dict is used instead. The Mapping

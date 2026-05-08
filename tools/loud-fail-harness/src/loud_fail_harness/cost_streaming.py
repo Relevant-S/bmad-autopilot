@@ -248,7 +248,7 @@ class CostThresholdDecision:
     discipline.
     """
 
-    marker_classification: tuple[str, Mapping[str, str]] | None
+    marker_classification: tuple[str, Mapping[str, object]] | None
     is_first_75pct_crossing: bool
     is_first_100pct_crossing: bool
 
@@ -275,7 +275,7 @@ class CostStreamingResult:
     """
 
     running_total_usd: float
-    marker_classifications_to_append: tuple[tuple[str, Mapping[str, str]], ...]
+    marker_classifications_to_append: tuple[tuple[str, Mapping[str, object]], ...]
     threshold_decision: CostThresholdDecision
 
 
@@ -490,7 +490,7 @@ def stream_cost_at_boundary(
         already_emitted_markers=already_emitted_markers,
     )
 
-    markers_to_append: list[tuple[str, Mapping[str, str]]] = []
+    markers_to_append: list[tuple[str, Mapping[str, object]]] = []
 
     # Same-boundary 75%+100% jump: append the 75% warning first
     # (ascending-severity order) then the ceiling-crossed warning.
