@@ -87,3 +87,16 @@ dependency_version_pins:
 # Default rationale: omitted by default; Story 7.2's runtime path
 # additively adds the resolved value on first call.
 # install_method: <set by `init` per Story 7.2; do not edit by hand>
+
+# First-run TEA-boundary orientation tracking. `init` reads this field
+# before emitting the FR34 one-time TEA-vs-Automator orientation message
+# in terminal output (Story 7.8). On first emission, `init` flips this
+# field to `true`; subsequent re-runs read `true` and skip the message
+# per FR34's "one-time" qualifier. To force re-emission, run
+# `/bmad-automation init --overwrite-confirmed --yes` (Story 7.6's
+# explicit-override path; resets the entire config to canonical defaults).
+# Source: FR34 (see _bmad-output/planning-artifacts/prd.md line 856)
+# Default rationale: `false` on fresh install — the orientation message
+# has not yet been shown; `init`'s first successful run on the project
+# is the "first run" the FR34 one-time qualifier names.
+tea_boundary_orientation_emitted: false
