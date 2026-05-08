@@ -215,7 +215,12 @@ def test_run_md_entry_sequence_labels(
     [
         ("status", ("8.4", "8.5"), 8),
         ("resume", ("8.3",), 8),
-        ("init", ("7.1", "7.9"), 7),
+        # `init` was removed from the literal-stub gate by Story 7.6 — the
+        # stub thickened in place into a runtime-protocol per the verbatim
+        # epic AC at `epics.md` line 3068 (REPLACE the "not yet implemented"
+        # + "zero functional logic" paragraphs with the thickened protocol).
+        # Story 7.6's `test_init_md_runtime_protocol_present` below is the
+        # successor structural-witness for the post-thickening shape.
     ],
 )
 def test_stub_md_discipline(
@@ -241,6 +246,66 @@ def test_stub_md_discipline(
         f"steps/{stub_name}.md must include the literal-stub disclaimer "
         f"'zero functional logic' (per AC-1's literal-stub posture)"
     )
+
+
+def test_init_md_runtime_protocol_present(
+    skill_bundle_root: pathlib.Path,
+) -> None:
+    """Story 7.6 thickened ``steps/init.md`` from a literal stub into a
+    runtime-protocol that composes the Story 7.3 / 7.4 / 7.5 substrate
+    + the new Story 7.6 non-destructive guard. The structural witness:
+
+    * the canonical STUB heading is preserved (Stories 7.7-7.9 still
+      cite `init.md` as Epic-7 work-in-progress),
+    * the five Story 7.2-7.5 augmentation lines are preserved as the
+      audit trail,
+    * the new Story-7.6 augmentation line is present,
+    * the literal "not yet implemented" message has been REMOVED,
+    * the "zero functional logic" disclaimer has been REMOVED,
+    * the runtime-protocol checklist references the four
+      ``GuardOutcome.action`` branches by name,
+    * the Story 7.8 placeholder is present so future thickeners
+      can locate the next surface.
+    """
+    init_md = (skill_bundle_root / "steps" / "init.md").read_text(encoding="utf-8")
+
+    # Canonical heading retained.
+    assert "# /bmad-automation init — STUB (Epic 7 thickening)" in init_md
+    # Five augmentation lines preserved as the audit trail.
+    for landing_year_marker in (
+        "[Story 7.2 landed",
+        "[Story 7.3 landed",
+        "[Story 7.4 landed",
+        "[Story 7.5 landed",
+        "[Story 7.6 landed",
+    ):
+        assert landing_year_marker in init_md, (
+            f"steps/init.md must preserve {landing_year_marker!r} as the "
+            "audit-trail line for the Epic-7 build-order"
+        )
+    # The pre-thickening "not yet implemented" message must be GONE.
+    assert "is not yet implemented" not in init_md, (
+        "steps/init.md must REPLACE the 'not yet implemented' message "
+        "with the thickened runtime-protocol per Story 7.6 AC-6"
+    )
+    # The pre-thickening "zero functional logic" disclaimer must be GONE.
+    assert "zero functional logic" not in init_md, (
+        "steps/init.md must REPLACE the 'zero functional logic' disclaimer "
+        "with the thickened runtime-protocol per Story 7.6 AC-6"
+    )
+    # Runtime-protocol references the four GuardOutcome.action branches.
+    for action in (
+        "proceed-fresh",
+        "preserve-merge",
+        "overwrite-confirmed",
+        "halt-would-destroy",
+    ):
+        assert action in init_md, (
+            f"steps/init.md runtime-protocol must reference the "
+            f"{action!r} GuardOutcome branch per Story 7.6 AC-6"
+        )
+    # Story 7.8 placeholder is present so the next thickener can find it.
+    assert "Story 7.8" in init_md and "placeholder" in init_md.lower()
 
 
 # --------------------------------------------------------------------------- #
