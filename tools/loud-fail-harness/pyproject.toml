@@ -83,6 +83,11 @@ onboarding-benchmark = "loud_fail_harness.onboarding_benchmark:main"
 # emits recovery-state-conflict marker on prior-version run-state files.
 # See src/loud_fail_harness/session_start_reattach.py for the substrate.
 session-start-reattach = "loud_fail_harness.session_start_reattach:main"
+# cross-state-recovery (Story 8.2) — invoked by /bmad-automation resume (Story 8.3, when landed).
+# Implements ADR-005 Reading-3 cross-state consistency recovery algorithm per NFR-R8;
+# emits recovery-state-conflict marker when reconciliation cannot complete cleanly.
+# See src/loud_fail_harness/cross_state_recovery.py for the substrate.
+cross-state-recovery = "loud_fail_harness.cross_state_recovery:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 

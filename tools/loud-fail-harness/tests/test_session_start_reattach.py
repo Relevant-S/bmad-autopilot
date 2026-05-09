@@ -652,6 +652,103 @@ def test_recovery_state_conflict_marker_class_is_in_taxonomy(
     assert RECOVERY_STATE_CONFLICT_MARKER_CLASS in marker_registry.marker_classes
 
 
+def test_session_start_reattach_clean_pairs_with_cross_state_recovery_clean(
+    tmp_project: pathlib.Path,
+) -> None:
+    """Story 8.2 forward-compat smoke: a clean reattach scenario also yields
+    a clean cross-state recovery outcome when the run-state and story-doc
+    agree on lifecycle state.
+
+    The import of ``cross_state_recovery`` lives in this test, NOT in
+    ``session_start_reattach.py`` — Story 8.1's substrate stays unmodified
+    per Story 8.2 AC-11.
+    """
+    from loud_fail_harness.cross_state_recovery import (
+        RecoveryRequest,
+        evaluate_recovery,
+    )
+    from loud_fail_harness.orchestrator_run_entry import (
+        AcceptanceCriterion,
+        SprintStatusResolution,
+        StoryDocResolution,
+    )
+
+    _write_run_state_file(
+        tmp_project,
+        schema_version="1.3",
+        story_id="8-1-test",
+        current_state="ready-for-dev",
+    )
+    _run_git("checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project)
+
+    # 8.1's reattach must classify the clean run-state as clean.
+    reattach_request = ReattachRequest(project_root=tmp_project)
+    reattach_outcome, _ = evaluate_reattach(reattach_request)
+    assert reattach_outcome.action == "reattach-clean"
+
+    # Now construct a story-doc that agrees with the run-state.
+    target = (
+        tmp_project
+        / "_bmad-output"
+        / "implementation-artifacts"
+        / "8-1-test-slug.md"
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "# Story 8-1\n\nStatus: ready-for-dev\n\n"
+        "## Acceptance Criteria\n\n**AC-1 — placeholder**\n",
+        encoding="utf-8",
+    )
+
+    def stub_story_doc_resolver(
+        story_id: str, project_root: pathlib.Path
+    ) -> StoryDocResolution:
+        return StoryDocResolution(
+            path=target,
+            current_state="ready-for-dev",
+            acceptance_criteria=(
+                AcceptanceCriterion(ac_id="AC-1", text="placeholder"),
+            ),
+        )
+
+    def stub_sprint_status_resolver(
+        story_id: str, project_root: pathlib.Path
+    ) -> SprintStatusResolution:
+        return SprintStatusResolution(current_state="ready-for-dev")
+
+    rs_path = tmp_project / "_bmad" / "automation" / "run-state.yaml"
+    parsed_run_state = RunState.model_validate(
+        {
+            "schema_version": "1.3",
+            "story_id": "8-1-test",
+            "run_id": "r1",
+            "current_state": "ready-for-dev",
+            "branch_name": "bmad-automation/story/8-1-test",
+            "dispatched_specialist": None,
+            "last_envelope": None,
+            "pending_qa_dispatch_payload": None,
+            "retry_history": (),
+            "active_markers": (),
+            "cost_to_date_by_specialist": {},
+        }
+    )
+
+    recovery_request = RecoveryRequest(
+        project_root=tmp_project,
+        story_id="8-1-test",
+        story_doc_resolver=stub_story_doc_resolver,
+        sprint_status_resolver=stub_sprint_status_resolver,
+        run_state_writer=lambda p, s: None,
+    )
+    recovery_outcome, _ = evaluate_recovery(
+        recovery_request, run_state=parsed_run_state
+    )
+    assert recovery_outcome.action == "recovery-clean"
+    assert recovery_outcome.disagreements == ()
+    # Confirm rs_path was not modified by either substrate.
+    assert rs_path.is_file()
+
+
 def test_evaluate_reattach_purity_byte_identical_outcome(
     tmp_project: pathlib.Path,
 ) -> None:

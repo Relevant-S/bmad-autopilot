@@ -2117,12 +2117,16 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: recovery-state-conflict
     surface_name: orchestrator-run-state-helper
-    verdict: scheduled-by-story
-    discharging_story: "8.2"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/cross_state_recovery.py:1275
     rationale: |-
-      Cross-state consistency recovery algorithm + recovery-state-conflict marker emission
-      lands in Story 8.2 (NFR-R2 + NFR-R8).
-    audit_date: "2026-05-05"
+      Cross-state consistency recovery algorithm (Story 8.2, the second emission path for
+      recovery-state-conflict; Story 8.1 owns the schema-mismatch sub-case at hook-session-start
+      surface) emits the marker on the unsalvageable-conflict path via
+      cross_state_recovery.evaluate_recovery. Reconcilable disagreement auto-rebuilds run-state
+      from story-doc per ADR-005 Reading-3 without marker emission (silent-with-rebuild posture
+      per architecture.md:498).
+    audit_date: "2026-05-09"
   - marker_class: recovery-state-conflict
     surface_name: orchestrator-state-machine
     verdict: not-applicable
