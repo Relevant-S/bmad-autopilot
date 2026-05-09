@@ -900,3 +900,73 @@ def test_main_exits_one_on_recovery_conflict_halt(
     assert rc == 1
     assert "cross-state-recovery: recovery-state-conflict:" in captured.err
     assert "story-doc-corrupt-or-missing" in captured.err
+
+
+# --------------------------------------------------------------------------- #
+# Story 8.3 integration smoke — pairability of evaluate_recovery and          #
+# evaluate_resume against the same fixture. Import lives in the test          #
+# function (NOT in cross_state_recovery.py) per Story 8.3 AC-11 — 8.2's       #
+# substrate is unmodified at 8.3's landing.                                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_cross_state_recovery_clean_pairs_with_resume_command_clean(
+    tmp_project: pathlib.Path,
+) -> None:
+    """Clean recovery scenario invokes BOTH evaluate_recovery (returns
+    recovery-clean) AND evaluate_resume (returns resume-dispatch) against
+    the same fixture; asserts API-level pairability without coupling 8.2's
+    substrate to 8.3's import."""
+    from loud_fail_harness.resume_command import ResumeRequest, evaluate_resume
+
+    _write_story_doc(tmp_project, "8-3-pair", status="ready-for-dev", sections=())
+    rs_path = tmp_project / RUN_STATE_RELATIVE_PATH
+    rs_path.parent.mkdir(parents=True, exist_ok=True)
+    rs_path.write_text(
+        "schema_version: '1.3'\n"
+        "story_id: 8-3-pair-test-slug\n"
+        "run_id: r1\n"
+        "current_state: ready-for-dev\n"
+        "branch_name: bmad-automation/story/8-3-pair\n"
+        "dispatched_specialist: null\n"
+        "last_envelope: null\n"
+        "retry_history: []\n"
+        "active_markers: []\n"
+        "cost_to_date_by_specialist: {}\n"
+        "pending_qa_dispatch_payload: null\n",
+        encoding="utf-8",
+    )
+
+    # 8.2 substrate verdict.
+    recovery_request = RecoveryRequest(
+        project_root=tmp_project,
+        story_id="8-3-pair",
+        story_doc_resolver=_stub_story_doc_resolver(
+            _make_resolution(tmp_project, "8-3-pair", "ready-for-dev")
+        ),
+        sprint_status_resolver=_stub_sprint_status_resolver(state="ready-for-dev"),
+    )
+    prior = _make_run_state(
+        story_id="8-3-pair-test-slug",
+        current_state="ready-for-dev",
+        branch_name="bmad-automation/story/8-3-pair",
+    )
+    recovery_outcome, _ = evaluate_recovery(recovery_request, run_state=prior)
+    assert recovery_outcome.action == "recovery-clean"
+
+    # 8.3 substrate verdict against the same fixture.
+    resume_request = ResumeRequest(
+        project_root=tmp_project,
+        story_id="8-3-pair",
+        story_doc_resolver=_stub_story_doc_resolver(
+            _make_resolution(tmp_project, "8-3-pair", "ready-for-dev")
+        ),
+        sprint_status_resolver=_stub_sprint_status_resolver(state="ready-for-dev"),
+    )
+    resume_outcome, _ = evaluate_resume(resume_request, marker_registry=None)
+    assert resume_outcome.action == "resume-dispatch"
+    assert resume_outcome.next_specialist == "dev"
+    # Pairability: the resume substrate's recovery_outcome.action matches 8.2's
+    # direct verdict.
+    assert resume_outcome.recovery_outcome is not None
+    assert resume_outcome.recovery_outcome.action == recovery_outcome.action

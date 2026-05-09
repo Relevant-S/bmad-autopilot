@@ -12,7 +12,7 @@ The skill dispatches to one of four sub-step files based on the slash command th
 | ---------------------------------- | -------------------- | --------------------------------------------------- | ------------------------------- |
 | `/bmad-automation run <story-id>`  | `steps/run.md`       | Thickened — six-step entry sequence per AC-2        | This story (Story 2.5)          |
 | `/bmad-automation status [<id>]`   | `steps/status.md`    | Literal stub — emits not-yet-implemented diagnostic | Stories 8.4 + 8.5               |
-| `/bmad-automation resume [<id>]`   | `steps/resume.md`    | Literal stub — emits not-yet-implemented diagnostic | Story 8.3 (mid-loop = Story 8.1) |
+| `/bmad-automation resume [<id>]`   | `steps/resume.md`    | Thickened — resume protocol per Story 8.3           | This story (Story 8.3)          |
 | `/bmad-automation init`            | `steps/init.md`      | Literal stub — emits not-yet-implemented diagnostic | Stories 7.1-7.9                 |
 
 When dispatching, read the matching sub-step file in full BEFORE executing any of its instructions. The stub files explicitly forbid functional logic — do not infer behavior from the heading alone.

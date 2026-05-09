@@ -88,6 +88,12 @@ session-start-reattach = "loud_fail_harness.session_start_reattach:main"
 # emits recovery-state-conflict marker when reconciliation cannot complete cleanly.
 # See src/loud_fail_harness/cross_state_recovery.py for the substrate.
 cross-state-recovery = "loud_fail_harness.cross_state_recovery:main"
+# bmad-automation-resume (Story 8.3) — invoked by /bmad-automation resume <story-id>'s orchestrator-skill step.
+# Composes Story 8.2's cross_state_recovery.evaluate_recovery + the lifecycle-state-to-specialist map for
+# next-specialist determination. Halts on no-in-flight-run OR recovery-state-conflict; otherwise advances to the
+# next undetermined seam in the story loop per FR47.
+# See src/loud_fail_harness/resume_command.py for the substrate.
+bmad-automation-resume = "loud_fail_harness.resume_command:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 

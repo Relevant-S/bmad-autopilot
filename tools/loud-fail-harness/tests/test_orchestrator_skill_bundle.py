@@ -214,7 +214,13 @@ def test_run_md_entry_sequence_labels(
     "stub_name,binding_stories,binding_epic",
     [
         ("status", ("8.4", "8.5"), 8),
-        ("resume", ("8.3",), 8),
+        # `resume` was removed from the literal-stub gate by Story 8.3 — the
+        # stub thickened in place into a runtime-protocol per the verbatim
+        # epic AC at `epics.md` lines 3272-3298 (REPLACE the "not yet
+        # implemented" + "zero functional logic" paragraphs with the
+        # thickened protocol). Story 8.3's `test_resume_md_runtime_protocol_present`
+        # below is the successor structural-witness for the post-thickening shape.
+        #
         # `init` was removed from the literal-stub gate by Story 7.6 — the
         # stub thickened in place into a runtime-protocol per the verbatim
         # epic AC at `epics.md` line 3068 (REPLACE the "not yet implemented"
@@ -306,6 +312,65 @@ def test_init_md_runtime_protocol_present(
         )
     # Story 7.8 placeholder is present so the next thickener can find it.
     assert "Story 7.8" in init_md and "placeholder" in init_md.lower()
+
+
+def test_resume_md_runtime_protocol_present(
+    skill_bundle_root: pathlib.Path,
+) -> None:
+    """Story 8.3 thickened ``steps/resume.md`` from a literal stub into a
+    runtime-protocol that composes the Story 8.2 ``cross_state_recovery``
+    substrate + Story 8.3's ``resume_command`` substrate. The structural
+    witness:
+
+    * the literal "not yet implemented" message has been REMOVED,
+    * the "zero functional logic" disclaimer has been REMOVED,
+    * the substrate-invocation `uv run bmad-automation-resume` is named,
+    * the four ``ResumeOutcome.action`` branches are referenced by name,
+    * cross-references to ``resume_command.py``,
+      ``cross_state_recovery.py``, ``lifecycle_state_machine.py``, and
+      ``steps/dispatch.md`` are present.
+    """
+    resume_md = (
+        skill_bundle_root / "steps" / "resume.md"
+    ).read_text(encoding="utf-8")
+
+    # The pre-thickening stub messages must be GONE per Story 8.3 AC-7.
+    assert "is not yet implemented" not in resume_md, (
+        "steps/resume.md must REPLACE the 'not yet implemented' message "
+        "with the thickened runtime-protocol per Story 8.3 AC-7"
+    )
+    assert "zero functional logic" not in resume_md, (
+        "steps/resume.md must REPLACE the 'zero functional logic' disclaimer "
+        "with the thickened runtime-protocol per Story 8.3 AC-7"
+    )
+
+    # Substrate invocation named per Story 8.3 AC-7.
+    assert "bmad-automation-resume" in resume_md, (
+        "steps/resume.md must name the bmad-automation-resume CLI per Story 8.3 AC-7"
+    )
+
+    # The four ResumeOutcome.action branches referenced by name.
+    for action in (
+        "resume-dispatch",
+        "resume-already-terminal",
+        "resume-conflict-halt",
+        "resume-no-run-state",
+    ):
+        assert action in resume_md, (
+            f"steps/resume.md runtime-protocol must reference the "
+            f"{action!r} ResumeOutcome branch per Story 8.3 AC-7"
+        )
+
+    # Cross-references to the substrate libraries + dispatch step.
+    for reference in (
+        "resume_command.py",
+        "cross_state_recovery.py",
+        "lifecycle_state_machine.py",
+        "steps/dispatch.md",
+    ):
+        assert reference in resume_md, (
+            f"steps/resume.md must cross-reference {reference!r} per Story 8.3 AC-7"
+        )
 
 
 # --------------------------------------------------------------------------- #
