@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 34
+- Emitted: 35
 - Not-applicable: 369
-- Scheduled-by-story: 3
+- Scheduled-by-story: 2
 - Gaps: 0
 
 ## Coverage matrix
@@ -303,7 +303,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | reconciler-mismatch-runtime | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
 | recovery-state-conflict | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
 | recovery-state-conflict | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
-| recovery-state-conflict | hook-session-start | scheduled-by-story | `n/a` | 2026-05-05 | discharging-story: 8.2 — SessionStart reattachment full implementation (Story 8.1 — replaces the Story 2.7 literal stub) + recovery-state-conflict marker integration lands in Story 8.2. |
+| recovery-state-conflict | hook-session-start | emitted | `tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:746` | 2026-05-08 | SessionStart reattachment full implementation (Story 8.1, replaces Story 2.7 literal stub) emits recovery-state-conflict marker on schema-mismatch sub-case at hook-session-start surface via session_start_reattach.evaluate_reattach. Cross-state recovery algorithm sub-case lands at orchestrator-run-state-helper surface in Story 8.2. |
 | recovery-state-conflict | hook-stop | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
 | recovery-state-conflict | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
 | recovery-state-conflict | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |

@@ -78,6 +78,11 @@ marker-coverage-audit = "loud_fail_harness.marker_coverage_audit:main"
 # tradeoff). Mirrors marker-coverage-audit's posture per pyproject.toml lines
 # 70-74.
 onboarding-benchmark = "loud_fail_harness.onboarding_benchmark:main"
+# session-start-reattach (Story 8.1) — invoked by hooks/session-start.sh.
+# Implements SessionStart reattachment + schema-version handling per FR46;
+# emits recovery-state-conflict marker on prior-version run-state files.
+# See src/loud_fail_harness/session_start_reattach.py for the substrate.
+session-start-reattach = "loud_fail_harness.session_start_reattach:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 

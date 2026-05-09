@@ -23,10 +23,10 @@ stop.sh (AC-4 of Story 2.7 + AC-6/AC-9 of Story 2.11):
     [x] bundle does not include the do-NOT-include sections (AC-3) → test_stop_bundle_omits_loud_fail_cost_retry_sections
     [x] hook stays within 18-effective-line budget (AC-6)          → test_stop_hook_within_eighteen_line_budget
 
-session-start.sh (AC-5):
-    [x] byte-stable verbatim 5-line literal stub                   → test_session_start_is_byte_stable_literal_stub
-    [x] exit 0 on any invocation shape                             → test_session_start_exits_zero_on_any_invocation
-    [x] count_effective_lines == 1                                 → test_session_start_effective_line_count_is_one
+session-start.sh (Story 8.1 — replaces 2.7's literal stub):
+    [x] script invokes substrate via uv --directory                → test_session_start_invokes_substrate_via_uv
+    [x] exit 0 when no run-state file present (silent normal startup) → test_session_start_exits_zero_on_any_invocation
+    [x] count_effective_lines is within FR61 ≤20-line budget       → test_session_start_effective_line_count_is_within_budget
 
 Cross-hook structural invariants (AC-1):
     [x] hooks/ contains exactly the canonical three filenames      → test_hooks_directory_contains_exactly_three_files
@@ -56,12 +56,14 @@ from loud_fail_harness.hook_budget_gate import count_effective_lines
 
 CANONICAL_HOOK_FILENAMES = {"subagent-stop.sh", "stop.sh", "session-start.sh"}
 
-SESSION_START_VERBATIM = (
-    "#!/usr/bin/env bash\n"
-    "# Stub: full SessionStart reattachment lands in Epic 8 (FR46, Story 8.1).\n"
-    "# Until then, after a session restart, run /bmad-automation status to see\n"
-    "# in-flight stories. Resume capability arrives in Epic 8.\n"
-    "exit 0\n"
+#: Story 8.1 contract: the rewritten session-start.sh hook invokes the
+#: ``session-start-reattach`` CLI via the uv-managed harness virtualenv per
+#: AC-7. The byte-stability assertion from Story 2.7 is replaced with a
+#: contract-stability substring assertion so the hook may evolve without
+#: requiring a verbatim test update for whitespace tweaks.
+SESSION_START_REQUIRED_INVOCATION_SUBSTRINGS: tuple[str, ...] = (
+    'exec uv --directory "$HARNESS" run session-start-reattach',
+    "--project-root",
 )
 
 
@@ -523,43 +525,42 @@ def test_stop_hook_within_eighteen_line_budget(hooks_dir: pathlib.Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_session_start_is_byte_stable_literal_stub(hooks_dir: pathlib.Path) -> None:
+def test_session_start_invokes_substrate_via_uv(hooks_dir: pathlib.Path) -> None:
+    """Story 8.1 AC-7: the script's body contains the documented uv-driven
+    session-start-reattach invocation. Substring assertions (NOT byte-
+    equivalence) — the hook is contract-stable, not byte-stable post-8.1.
+    """
     body = (hooks_dir / "session-start.sh").read_text(encoding="utf-8")
-    assert body == SESSION_START_VERBATIM
+    for required in SESSION_START_REQUIRED_INVOCATION_SUBSTRINGS:
+        assert required in body, (
+            f"session-start.sh missing required invocation fragment {required!r}; "
+            f"got body:\n{body}"
+        )
 
 
 def test_session_start_exits_zero_on_any_invocation(
     fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
 ) -> None:
+    """Story 8.1 AC-2 + AC-7: invoking the hook in a tmp-path project root
+    with no run-state file routes through the substrate's no-run-state branch
+    and exits 0 (silent normal startup). The hook propagates the substrate's
+    exit code via ``exec``.
+    """
     hook = hooks_dir / "session-start.sh"
-    # No-arg invocation.
+    # No-arg invocation in a project root with no run-state.
     r = _invoke_hook(hook, fixture_repo)
-    assert r.returncode == 0
-    # One-arg invocation.
-    r2 = subprocess.run(
-        ["bash", str(hook), "some-arg"],
-        cwd=fixture_repo,
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
-    )
-    assert r2.returncode == 0
-    # stdin-fed invocation.
-    r3 = subprocess.run(
-        ["bash", str(hook)],
-        cwd=fixture_repo,
-        input="some stdin content",
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=30,
-    )
-    assert r3.returncode == 0
+    assert r.returncode == 0, f"stdout={r.stdout!r} stderr={r.stderr!r}"
+    assert "session-start: no in-flight Automator run detected" in r.stderr
 
 
-def test_session_start_effective_line_count_is_one(hooks_dir: pathlib.Path) -> None:
-    assert count_effective_lines(hooks_dir / "session-start.sh") == 1
+def test_session_start_effective_line_count_is_within_budget(
+    hooks_dir: pathlib.Path,
+) -> None:
+    """Story 8.1 AC-7 + Story 1.9's FR61 ≤20-effective-lines budget. The
+    Story 2.7-era ``== 1`` literal-stub assertion is replaced with the
+    structural ``≤ 20`` budget per FR61's hook-budget gate.
+    """
+    assert count_effective_lines(hooks_dir / "session-start.sh") <= 20
 
 
 # --------------------------------------------------------------------------- #

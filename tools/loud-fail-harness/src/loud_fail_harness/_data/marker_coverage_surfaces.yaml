@@ -2078,12 +2078,15 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: recovery-state-conflict
     surface_name: hook-session-start
-    verdict: scheduled-by-story
-    discharging_story: "8.2"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:746
     rationale: |-
-      SessionStart reattachment full implementation (Story 8.1 — replaces the Story 2.7
-      literal stub) + recovery-state-conflict marker integration lands in Story 8.2.
-    audit_date: "2026-05-05"
+      SessionStart reattachment full implementation (Story 8.1, replaces Story 2.7
+      literal stub) emits recovery-state-conflict marker on schema-mismatch sub-case
+      at hook-session-start surface via session_start_reattach.evaluate_reattach.
+      Cross-state recovery algorithm sub-case lands at orchestrator-run-state-helper
+      surface in Story 8.2.
+    audit_date: "2026-05-08"
   - marker_class: recovery-state-conflict
     surface_name: hook-stop
     verdict: not-applicable
