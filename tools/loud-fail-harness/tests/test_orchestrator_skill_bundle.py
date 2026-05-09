@@ -213,7 +213,13 @@ def test_run_md_entry_sequence_labels(
 @pytest.mark.parametrize(
     "stub_name,binding_stories,binding_epic",
     [
-        ("status", ("8.4", "8.5"), 8),
+        # `status` was removed from the literal-stub gate by Story 8.4 — the
+        # stub thickened in place into a runtime-protocol per the verbatim
+        # epic AC at `epics.md` lines 3300-3329 (REPLACE the "not yet
+        # implemented" + "zero functional logic" paragraphs with the
+        # thickened protocol). Story 8.4's `test_status_md_runtime_protocol_present`
+        # below is the successor structural-witness for the post-thickening shape.
+        #
         # `resume` was removed from the literal-stub gate by Story 8.3 — the
         # stub thickened in place into a runtime-protocol per the verbatim
         # epic AC at `epics.md` lines 3272-3298 (REPLACE the "not yet
@@ -370,6 +376,76 @@ def test_resume_md_runtime_protocol_present(
     ):
         assert reference in resume_md, (
             f"steps/resume.md must cross-reference {reference!r} per Story 8.3 AC-7"
+        )
+
+
+def test_status_md_runtime_protocol_present(
+    skill_bundle_root: pathlib.Path,
+) -> None:
+    """Story 8.4 thickened ``steps/status.md`` from a literal stub into
+    a runtime-protocol that composes the Story 8.4 ``status_command``
+    substrate (which itself composes Story 8.2's
+    ``_load_run_state_from_disk`` + Story 5.5's
+    ``retry_history.resolve_retry_round`` + Story 2.6's
+    ``LOG_PATH_TEMPLATE``). The structural witness:
+
+    * the literal "not yet implemented" message has been REMOVED,
+    * the "zero functional logic" disclaimer has been REMOVED,
+    * the substrate-invocation `uv run bmad-automation-status` is named,
+    * the two ``StatusOutcome.action`` branches are referenced by name,
+    * the "No mutation invariant" section heading is present (the
+      read-only invariant per NFR-O4),
+    * cross-references to ``status_command.py``,
+      ``cross_state_recovery.py``, ``retry_history.py``, and the
+      Story 8.5 multi-story listing are present.
+    """
+    status_md = (
+        skill_bundle_root / "steps" / "status.md"
+    ).read_text(encoding="utf-8")
+
+    # The pre-thickening stub messages must be GONE per Story 8.4 AC-7.
+    assert "is not yet implemented" not in status_md, (
+        "steps/status.md must REPLACE the 'not yet implemented' message "
+        "with the thickened runtime-protocol per Story 8.4 AC-7"
+    )
+    assert "zero functional logic" not in status_md, (
+        "steps/status.md must REPLACE the 'zero functional logic' disclaimer "
+        "with the thickened runtime-protocol per Story 8.4 AC-7"
+    )
+
+    # Substrate invocation named per Story 8.4 AC-7.
+    assert "bmad-automation-status" in status_md, (
+        "steps/status.md must name the bmad-automation-status CLI per "
+        "Story 8.4 AC-7"
+    )
+    assert "uv --directory" in status_md, (
+        "steps/status.md must show the uv --directory invocation pattern "
+        "per Story 8.4 AC-7"
+    )
+
+    # The two StatusOutcome.action branches referenced by name.
+    for action in ("status-found", "status-no-run-state"):
+        assert action in status_md, (
+            f"steps/status.md runtime-protocol must reference the "
+            f"{action!r} StatusOutcome branch per Story 8.4 AC-7"
+        )
+
+    # The No-mutation-invariant section heading per Story 8.4 AC-7.
+    assert "## No mutation invariant" in status_md, (
+        "steps/status.md must carry the 'No mutation invariant' section "
+        "heading per Story 8.4 AC-7"
+    )
+
+    # Cross-references to the substrate libraries + Story 8.5.
+    for reference in (
+        "status_command.py",
+        "cross_state_recovery.py",
+        "retry_history.py",
+        "Story 8.5",
+    ):
+        assert reference in status_md, (
+            f"steps/status.md must cross-reference {reference!r} per "
+            f"Story 8.4 AC-7"
         )
 
 

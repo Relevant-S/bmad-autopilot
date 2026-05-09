@@ -94,6 +94,12 @@ cross-state-recovery = "loud_fail_harness.cross_state_recovery:main"
 # next undetermined seam in the story loop per FR47.
 # See src/loud_fail_harness/resume_command.py for the substrate.
 bmad-automation-resume = "loud_fail_harness.resume_command:main"
+# bmad-automation-status (Story 8.4) — invoked by /bmad-automation status <story-id>'s orchestrator-skill step.
+# Read-only single-story inspection per FR48 + NFR-O4. Loads run-state via Story 8.2's _load_run_state_from_disk
+# helper (private import per Story 8.3's Dev's-call precedent), resolves retry rounds via Story 5.5's
+# retry_history.resolve_retry_round, projects per-specialist log dir via Story 2.6's LOG_PATH_TEMPLATE.
+# See src/loud_fail_harness/status_command.py for the substrate.
+bmad-automation-status = "loud_fail_harness.status_command:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 
