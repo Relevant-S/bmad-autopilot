@@ -1,0 +1,26 @@
+$ /bmad-automation init
+
+bmad-automation init: precondition checks (Story 7.3 / FR37 / FR38)
+  ✓ claude-code: available, version 2.1.32 (>=2.0.0 required)
+  ✓ bmad-core: available, version 6.2.2 (>=6.0 required)
+  ✓ tea-module: available (total-block dependency satisfied)
+  ✓ playwright-mcp: available (graceful-degrade dependency satisfied)
+  ✓ git: available, working tree clean
+  ✓ python: available, 3.12.5 (>=3.12 required)
+
+bmad-automation init: scaffolding sample story (Story 7.4 / FR39)
+  ✓ wrote _bmad-output/implementation-artifacts/sample-auto-001.md
+    (proceed-fresh; no existing file)
+
+bmad-automation init: scaffolding config + qa-runbook stubs (Story 7.5 / FR40)
+  ✓ wrote _bmad/automation/config.yaml with documented defaults
+  ✓ wrote _bmad/automation/qa-runbook.yaml with documented defaults
+  ✓ FR41 non-destructive guard: no existing user config overwritten
+
+bmad-automation init: TEA-boundary first-run orientation (Story 7.8 / FR34)
+  → TEA validates per-AC behavioral plans; the Automator exercises the running
+    product against acceptance criteria. The two are complementary, not
+    redundant. See docs/tea-vs-automator.md for the full boundary contract.
+
+bmad-automation init: complete. Run `/bmad-automation run sample-auto-001`
+to exercise your first end-to-end loop.

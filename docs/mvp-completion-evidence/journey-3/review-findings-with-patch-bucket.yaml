@@ -1,0 +1,29 @@
+# Review-BMAD return envelope round 1 (Story 5.2 patch-bucket routing)
+status: fail
+specialist: review-bmad
+layer_results:
+  - layer: blind-hunter
+    status: fail
+    findings:
+      - id: BH-001
+        severity: HIGH
+        bucket: patch
+        diagnostic: "Missing null check on user input in src/handlers/user_input.py:42; potential AttributeError on .strip()."
+        location:
+          file: src/handlers/user_input.py
+          line: 42
+        affected_files:
+          - src/handlers/user_input.py
+  - layer: edge-case-hunter
+    status: pass
+    findings: []
+  - layer: acceptance-auditor
+    status: pass
+    findings: []
+    rationale_validated: true
+failed_layers: []
+findings:
+  - id: BH-001  # passthrough from layer
+    bucket: patch
+    severity: HIGH
+rationale: "One patch-bucket finding; routes to Dev fix-only retry per Story 5.2."

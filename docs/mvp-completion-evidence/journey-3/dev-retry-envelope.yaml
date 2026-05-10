@@ -1,0 +1,19 @@
+# Dev specialist return envelope, retry round 2 (Story 5.3 fix-only)
+status: pass
+specialist: dev
+retry_mode: fix-only
+artifacts:
+  - path: src/handlers/user_input.py
+    role: implementation
+findings: []
+rationale: "Added null-check before .strip() per BH-001; no other changes."
+proposed_commit_message: |
+  Story sample: fix-only retry — null check on user input
+
+  Address Review-BMAD finding BH-001 (HIGH/patch). Add null-check
+  before .strip() in src/handlers/user_input.py:42.
+scope_expanded_to:
+  - src/handlers/user_input.py
+# scope_expanded_to lists files Dev TOUCHED in retry-mode; the orchestrator's
+# scope-assertion-verify (Story 5.4 / FR12) checks the actual git diff
+# against this declaration.

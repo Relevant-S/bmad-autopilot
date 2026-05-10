@@ -1,0 +1,33 @@
+$ /bmad-automation run sample-story-ac-drift
+
+[orchestrator] Story selected; per-story branch created.
+[orchestrator] Lifecycle: ready-for-dev → in-progress
+
+[seam: dev-dispatch] Dev round 1
+[seam: dev-return] Dev: pass
+
+[seam: review-dispatch] Review-BMAD round 1
+[seam: review-return] Review-BMAD: pass
+
+[seam: qa-dispatch] QA round 1
+[stream] QA: BPlan generated (ac_hash=a7f2c91...)
+[stream] QA: AC-1 evidence captured
+[seam: qa-return] QA: status=pass; plan_status=human-reviewed
+
+[note: practitioner edits story doc — AC-1 text revised]
+
+[seam: qa-dispatch] QA round 2 (re-run after story-doc edit)
+[stream] QA: BPlan AC-hash check — current=b3e8f12... != prior=a7f2c91...
+[stream] QA: AC-HASH DRIFT — plan_status reset to generated (Story 4.2)
+[stream] QA: emit loud-fail marker plan-drift-detected (Story 4.2 / FR23)
+[stream] QA: re-deriving plan against new AC text
+[stream] QA: AC-1 re-verification under new plan: pass
+[seam: qa-return] QA: status=pass; plan_status=generated
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] Loud-fail block: plan-drift-detected (with how-to-enable pointer per FR31)
+[stream] Merge-ready bundle written.
+
+run sample-story-ac-drift: complete; merge-ready bundle written
+                          with plan-drift-detected marker.

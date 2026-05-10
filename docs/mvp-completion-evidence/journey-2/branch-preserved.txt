@@ -1,0 +1,12 @@
+$ git branch --show-current
+bmad-autopilot/sample-story-retry-budget-exhaustion
+
+$ git log --oneline -5
+e3f4a21 (HEAD -> bmad-autopilot/sample-story-retry-budget-exhaustion) Story sample: retry-2 fix attempt (still failing AC-1)
+b2c1d09 Story sample: retry-1 fix-only attempt
+9e7f3a8 Story sample: initial implementation
+3110d42 (origin/main, main) 8-6-no-destructive-resume-substrate-guard
+1f6a7ae 8-5-bmad-automation-status-no-args-multi-story-listing-orphan-run-state-detected-marker
+
+# Branch preserved per FR14 / NFR-R5; not deleted on escalation.
+# Per NFR-R3 git-operation-safety: no force-push, no rebase, no main-touching.

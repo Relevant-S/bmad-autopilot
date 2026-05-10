@@ -353,6 +353,29 @@ jobs:
         # root from disk via find_repo_root.
         run: uv run review-layer-failure-emission-gate
 
+      - name: MVP completion evidence validator (story 8.7)
+        # Asserts docs/mvp-completion-evidence.md has all 102 rows
+        # (68 FR + 34 NFR) populated with non-empty cells per
+        # epics.md:3410 + 3425-3428. Step 4 final-validation hook per
+        # epics.md:3444 — the gate that blocks Epic 8's `done`
+        # transition until MVP gaps are remediated. Mirrors
+        # `marker-coverage-audit`'s posture (audit-against-closed-
+        # enumeration); the validator is library-as-CLI-aid invoked
+        # here per Story 8.7 AC-8.
+        # Operational meaning of a CI failure:
+        # (a) a missing FR/NFR row (e.g., a Phase-1.5 FR was added to
+        #     prd.md but `docs/mvp-completion-evidence.md` lacks a row);
+        # (b) an empty cell anywhere in the 510-cell matrix (Story 8.7
+        #     AC-5's no-empty-evidence discipline);
+        # (c) an invalid `Exercising Journey` value (typo or unrecognized
+        #     journey label outside the four-element closed set);
+        # (d) an `Evidence Link` that does not resolve to an existing
+        #     file under the inner repo root AND is not a syntactically-
+        #     valid `https://` URL.
+        # No positional arguments — the validator discovers
+        # docs/mvp-completion-evidence.md from disk via find_repo_root.
+        run: uv run mvp-completion-evidence
+
       - name: Bundle-assembly-failure emission gate (story 6.9; FR59 + NFR-O5)
         # Story 6.9 AC-4: enforces the three-channel atomic-emission
         # code-structure invariant — surface_assembly_failure (at

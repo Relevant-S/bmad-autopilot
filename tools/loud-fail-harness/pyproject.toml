@@ -72,6 +72,13 @@ bundle-assembly-failure-emission-gate = "loud_fail_harness.bundle_assembly_failu
 # future contributors when extending coverage. Mirrors `story-doc-validator`
 # posture per pyproject.toml lines 25-32. CI gating is forward-scoped.
 marker-coverage-audit = "loud_fail_harness.marker_coverage_audit:main"
+# mvp-completion-evidence (story 8.7; FR1-FR66 + 34 NFRs + Pattern 5/6) is
+# library-as-CLI-aid invoked from .github/workflows/ci.yml as the Step 4
+# final-validation hook per epics.md:3444 — the gate that blocks Epic 8's
+# `done` transition until MVP gaps are remediated. Mirrors marker-coverage-
+# audit's posture per pyproject.toml lines 70-74 (audit-against-closed-
+# enumeration); placed AFTER marker-coverage-audit per Story 8.7 AC-8.
+mvp-completion-evidence = "loud_fail_harness.mvp_completion_evidence:main"
 # onboarding-benchmark (story 7.9; FR44 + NFR-P3) is library-as-CLI-aid invoked
 # from .github/workflows/release-benchmark.yml on release branches and tags
 # ONLY (NOT a per-PR CI gate per AC-5: release-cadence cost-vs-coverage

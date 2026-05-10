@@ -1,0 +1,20 @@
+# QA Behavioral Plan — captured AFTER AC-hash drift detection (Story 4.2)
+plan_status: generated  # reset from human-reviewed per FR23 / Story 4.2
+ac_hash_current: "b3e8f12c4a9d8e7..."
+ac_hash_prior: "a7f2c919b8c4d2e..."
+drift_detected_at: "2026-05-10T14:32:18Z"
+drift_marker: plan-drift-detected
+plan_persistence_compromise:
+  visible_in_pr_bundle: true
+  rationale: "Plan was previously human-reviewed; AC text changed; full run-to-run independence broken until practitioner re-reviews the regenerated plan."
+ac_plans:
+  - ac_id: AC-1
+    semantic_verification: "not_required"
+    tier_1_assertions:
+      - "HTTP GET /widget returns 200"  # NEW — was /hello before AC edit
+    tier_2_assertions:
+      - "response body contains widget metadata"
+    heuristics:
+      - empty-state
+      - error-state
+      - auth-boundary

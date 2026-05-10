@@ -1,0 +1,19 @@
+$ uv run scope-assertion-verify --story-id sample-story-retry-patch-fix --round 2
+
+scope-assertion-verify: Story 5.4 / FR12
+
+Declared (Dev's envelope.scope_expanded_to):
+  - src/handlers/user_input.py
+
+Actual git diff (HEAD..HEAD~1 against retry round 1 commit):
+  M src/handlers/user_input.py
+
+Comparison: actual ⊆ declared ✓
+
+scope-assertion-verify: PASS — no scope-assertion-violation marker emitted.
+                         Retry proceeds.
+
+# Negative-case fixture (sample-story-retry-scope-violation) demonstrates
+# the loud-fail path: when actual diff includes files NOT in
+# scope_expanded_to, the orchestrator emits scope-assertion-violation
+# marker and HALTS the retry per FR12.

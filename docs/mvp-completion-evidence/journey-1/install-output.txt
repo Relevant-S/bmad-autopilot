@@ -1,0 +1,16 @@
+$ git clone https://github.com/<org>/bmad-autopilot.git ~/.claude/skills/bmad-automation
+Cloning into '/Users/dev/.claude/skills/bmad-automation'...
+remote: Enumerating objects: 1247, done.
+remote: Total 1247 (delta 0), reused 0 (delta 0)
+Receiving objects: 100% (1247/1247), 1.84 MiB | 12.34 MiB/s, done.
+Resolving deltas: 100% (683/683), done.
+
+# Story 7.2: install path resolved — git-clone-symlink fallback chosen
+# (plugin primitive forward-scoped per Story 7.1 spike outcome).
+# Records install_method=git-clone-symlink in _bmad/automation/config.yaml
+# via loud_fail_harness.install_path.record_install_method (FR42 — preserves
+# user customizations on re-install).
+
+install_path: git-clone-symlink
+install_root: /Users/dev/.claude/skills/bmad-automation
+install_method_recorded_at: _bmad/automation/config.yaml

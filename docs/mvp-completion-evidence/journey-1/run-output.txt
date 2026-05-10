@@ -1,0 +1,35 @@
+$ /bmad-automation run sample-auto-001
+
+[orchestrator] Story sample-auto-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-auto-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: implementing AC-1 (sample greeter endpoint)
+[stream] Dev: writing GET /hello implementation + smoke test
+[seam: dev-return] Dev returned status=pass; envelope persisted
+[hook: SubagentStop] Commit created: "Story sample-auto-001: implement greeter"
+[orchestrator] proposed_commit_message captured (FR50 / NFR-O6)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — clean
+[seam: review-return] Review-BMAD returned status=pass; failed_layers=[]
+
+[seam: env-provision] Provisioning QA env (Story 4.3 / FR7)
+[stream] dev-server up on ephemeral port :54232
+[seam: qa-dispatch] Dispatching QA specialist
+[stream] QA: BPlan generation (Story 4.1 / FR23) — created
+[stream] QA: AC-1 evidence — Tier-1 mechanical: HTTP 200; Tier-2 outcome: body matches "hello"
+[stream] QA: heuristics — empty/error/auth checked
+[seam: qa-return] QA returned status=pass; ac_results all pass
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-auto-001/run-001.md
+[stream] Loud-fail block: empty (no markers active)
+[stream] Cost telemetry: $1.24 (within NFR-P1 $3 target)
+
+run sample-auto-001: complete; merge-ready bundle written.

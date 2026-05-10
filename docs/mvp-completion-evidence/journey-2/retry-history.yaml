@@ -1,0 +1,18 @@
+# Retry history (Story 5.5 externalized references resolved)
+# Schema: schemas/run-state.yaml retry_history field
+story_id: sample-story-retry-budget-exhaustion
+retry_budget_total: 2
+retry_budget_consumed: 2
+retry_budget_status: exhausted
+rounds:
+  - round: 1
+    findings_ref: "_bmad-output/qa-evidence/.../round-1/findings.yaml"
+    scope_ref: "_bmad-output/qa-evidence/.../round-1/scope.yaml"
+    diff_ref: "_bmad-output/qa-evidence/.../round-1/diff.patch"
+    outcome: qa-fail
+  - round: 2
+    findings_ref: "_bmad-output/qa-evidence/.../round-2/findings.yaml"
+    scope_ref: "_bmad-output/qa-evidence/.../round-2/scope.yaml"
+    diff_ref: "_bmad-output/qa-evidence/.../round-2/diff.patch"
+    outcome: qa-fail
+preserved_for_human_triage: true

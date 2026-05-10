@@ -1,0 +1,18 @@
+# Dev specialist return envelope (Story 2.8; FR51 + FR54)
+# Schema: bmad-autopilot/schemas/envelope.schema.yaml (Story 1.2)
+status: pass
+specialist: dev
+artifacts:
+  - path: src/greeter.py
+    role: implementation
+  - path: tests/test_greeter.py
+    role: test
+findings: []
+rationale: "AC-1 implemented; smoke test verifies HTTP 200 on /hello."
+proposed_commit_message: |
+  Story sample-auto-001: implement greeter
+
+  Add GET /hello endpoint returning {"greeting": "hello"}; smoke test
+  verifies HTTP 200 and body shape per AC-1.
+scope_expanded_to: []
+retry_mode: null

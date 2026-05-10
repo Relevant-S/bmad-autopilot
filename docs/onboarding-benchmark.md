@@ -52,3 +52,7 @@ uv run onboarding-benchmark --hardware-tier <tier> --version <release>
 ```
 
 The `onboarding-benchmark` entry point is library-as-CLI-aid invoked from `.github/workflows/release-benchmark.yml` once per release (release branches and tags ONLY — NOT per PR per AC-5's release-cadence cost-vs-coverage tradeoff). Mirrors `marker-coverage-audit`'s posture per `pyproject.toml` lines 70-74.
+
+## Cross-references
+
+- [`docs/mvp-completion-evidence.md`](mvp-completion-evidence.md) (Story 8.7) — the per-FR/NFR coverage matrix at the MVP cut. THIS benchmark and the MVP completion evidence are complementary per `epics.md:3437-3438` verbatim ("complementary (onboarding-time benchmark covers NFR-P3 longitudinally; MVP completion evidence covers all FRs/NFRs once at MVP close)"). The seed row in the per-release table above IS the evidence link cited by `NFR-P3`'s row in `docs/mvp-completion-evidence.md` — the cross-reference is bidirectional.

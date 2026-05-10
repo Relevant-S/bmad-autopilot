@@ -1,0 +1,40 @@
+$ /bmad-automation run sample-story-retry-patch-fix
+
+[orchestrator] Story selected; per-story branch created.
+[orchestrator] Lifecycle: ready-for-dev → in-progress
+
+[seam: dev-dispatch] Dev round 1
+[seam: dev-return] Dev: pass
+
+[seam: review-dispatch] Review-BMAD round 1
+[stream] layer-1 (Blind Hunter): finding bucket=patch HIGH
+        — null check missing on user input
+[stream] layer-2 (Edge Case Hunter): clean
+[stream] layer-3 (Acceptance Auditor): clean
+[seam: review-return] Review-BMAD: status=fail (1 patch finding)
+
+[orchestrator] retry-router: patch-bucket → Dev fix-only retry (Story 5.2)
+[orchestrator] action-items derived from patch finding (FR9, NOT full prose)
+[orchestrator] retry-budget consumed 1/2
+
+[seam: dev-dispatch] Dev round 2 (retry_mode=fix-only)
+[stream] Dev: scope_expanded_to=[src/handlers/user_input.py]
+[stream] Dev: applying null-check fix
+[seam: dev-return] Dev: pass; scope_expanded_to declaration captured
+
+[orchestrator] scope-assertion-verify: actual diff ⊆ scope_expanded_to ✓ (Story 5.4)
+[hook: SubagentStop] Commit created: "Story sample: fix-only retry — null check"
+
+[seam: review-dispatch] Review-BMAD round 2
+[seam: review-return] Review-BMAD: status=pass (3 layers clean)
+
+[seam: qa-dispatch] QA round 1
+[seam: qa-return] QA: status=pass
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready (with retry history per FR13)
+[stream] Loud-fail block: empty
+[stream] is_retry_present=true (Story 5.9 thickening flag)
+[stream] Merge-ready bundle written.
+
+run sample-story-retry-patch-fix: complete; merge-ready bundle written.

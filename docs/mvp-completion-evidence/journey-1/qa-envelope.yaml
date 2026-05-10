@@ -1,0 +1,27 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13; FR55)
+status: pass
+specialist: qa
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "HTTP GET /hello returns 200"
+      - 'response body is {"greeting": "hello"}'
+    evidence_refs:
+      - "_bmad-output/qa-evidence/sample-auto-001/run-001/ac-1/http-trace.json"
+      - "_bmad-output/qa-evidence/sample-auto-001/run-001/ac-1/screenshot.png"
+    semantic_verification: "not_required"
+behavioral_plan_status: human-reviewed
+exploratory_heuristics:
+  - heuristic: empty-state
+    status: not-applicable
+    rationale: "no input field on /hello endpoint"
+  - heuristic: error-state
+    status: pass
+    assertions:
+      - "GET /hello/<garbage> returns 404 not 500"
+  - heuristic: auth-boundary
+    status: not-applicable
+    rationale: "no auth declared in story scope"
+findings: []
+rationale: "All ACs pass; Tier-1 + Tier-2 evidence captured; heuristics covered."

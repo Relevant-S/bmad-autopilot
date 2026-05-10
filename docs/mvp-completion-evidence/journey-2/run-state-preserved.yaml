@@ -1,0 +1,17 @@
+# Preserved run-state (Story 5.6 non-advance state preservation)
+# Captured immediately after retry-budget exhaustion fired.
+schema_version: "1.0"
+story_id: sample-story-retry-budget-exhaustion
+lifecycle_state: review  # NOT advanced to done per FR14
+branch: bmad-autopilot/sample-story-retry-budget-exhaustion
+retry_budget_total: 2
+retry_budget_consumed: 2
+retry_budget_status: exhausted
+active_markers:
+  - retry-budget-exhausted
+last_specialist: qa
+last_specialist_round: 2
+last_specialist_status: fail
+escalation_bundle_written: true
+escalation_bundle_path: "_bmad-output/pr-bundles/sample-story-retry-budget-exhaustion/escalation.md"
+preserved_for_human_triage: true

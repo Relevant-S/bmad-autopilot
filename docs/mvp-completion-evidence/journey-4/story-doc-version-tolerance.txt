@@ -1,0 +1,20 @@
+$ uv run story-doc-version-check --story _bmad-output/implementation-artifacts/sample-story-old-template.md
+
+story-doc-version-check: Story 7.7 / FR43 / NFR-I5
+
+Story-doc template version: 6.0.4 (declared in story doc frontmatter)
+Current Automator window: 6.0 (current) - 5.8 (N-2)
+Verdict: WITHIN-WINDOW (6.0.4 → 6.0 minor; 5.8 floor)
+Action: proceed; no marker emitted.
+
+# Negative case (out-of-window):
+$ uv run story-doc-version-check --story _bmad-output/implementation-artifacts/very-old-story.md
+story-doc-version-check: Story 7.7 / FR43 / NFR-I5
+Story-doc template version: 5.4.0
+Current Automator window: 6.0 (current) - 5.8 (N-2)
+Verdict: OUT-OF-WINDOW (5.4 < 5.8 floor)
+Action: emit story-doc-version-out-of-window marker; HALT story processing.
+        Upgrade guidance: re-export the story from BMAD module ≥ 5.8.
+
+# This is the marker contract pair from Story 7.7 — both window-tolerance
+# AND out-of-window upgrade-guidance enforced.

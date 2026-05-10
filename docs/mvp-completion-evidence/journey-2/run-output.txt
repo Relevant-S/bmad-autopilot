@@ -1,0 +1,39 @@
+$ /bmad-automation run sample-story-retry-budget-exhaustion
+
+[orchestrator] Story selected; per-story branch created.
+[orchestrator] Lifecycle: ready-for-dev → in-progress
+[orchestrator] retry-budget: 2 (default per Story 5.1 / FR8)
+
+[seam: dev-dispatch] Dev round 1
+[stream] Dev: implementing AC-1 per story spec
+[seam: dev-return] Dev: pass; commit created via SubagentStop hook
+
+[seam: review-dispatch] Review-BMAD round 1
+[seam: review-return] Review-BMAD: pass (3 layers clean)
+
+[seam: qa-dispatch] QA round 1
+[stream] QA: BPlan generated
+[stream] QA: AC-1 evidence captured
+[stream] QA: assertion fail — response shape diverges from AC text
+[seam: qa-return] QA: status=fail; finding routed via patch-bucket
+
+[orchestrator] retry-budget consumed 1/2 (Story 5.5)
+[seam: dev-dispatch] Dev round 2 (retry_mode=fix-only)
+[stream] Dev: scope_expanded_to=[src/greeter.py]
+[stream] Dev: applying fix; new commit
+[seam: dev-return] Dev: pass; scope-assertion-verify clean (Story 5.4)
+
+[seam: qa-dispatch] QA round 2
+[stream] QA: re-running AC-1 against patched code
+[stream] QA: assertion fail again — underlying spec ambiguity
+[seam: qa-return] QA: status=fail
+
+[orchestrator] retry-budget consumed 2/2; EXHAUSTED (Story 5.6 / FR14)
+[orchestrator] Lifecycle: review (NOT advancing to done)
+[orchestrator] Branch + run-state preserved
+[hook: Stop] Bundle assembly: ESCALATION variant (Story 5.8 / FR15)
+[stream] Loud-fail block: retry-budget-exhausted (Story 5.6)
+[stream] Escalation bundle written to _bmad-output/pr-bundles/.../escalation.md
+[stream] Pointer: deferred-work.md (Story 5.7) attached
+
+run sample-story-retry-budget-exhaustion: ESCALATED; human triage required.
