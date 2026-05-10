@@ -617,6 +617,18 @@ def inspect_story(request: StatusRequest) -> StatusOutcome:
             diagnostic=diagnostic,
         )
 
+    # Story-id mismatch guard: the loaded file may belong to a different
+    # story (e.g., when run_state_path defaults to the canonical path and
+    # another story's run-state is resident there). Return status-no-run-state
+    # rather than returning status-found with contaminated data.
+    if run_state.story_id != request.story_id:
+        diagnostic = render_no_run_state_diagnostic(request, run_state_path)
+        return StatusOutcome(
+            action="status-no-run-state",
+            inspection=None,
+            diagnostic=diagnostic,
+        )
+
     # AC-3 — story-doc resolution with graceful-degrade.
     story_doc_path = _resolve_story_doc_path(request)
 

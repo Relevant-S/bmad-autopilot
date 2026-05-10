@@ -100,6 +100,12 @@ bmad-automation-resume = "loud_fail_harness.resume_command:main"
 # retry_history.resolve_retry_round, projects per-specialist log dir via Story 2.6's LOG_PATH_TEMPLATE.
 # See src/loud_fail_harness/status_command.py for the substrate.
 bmad-automation-status = "loud_fail_harness.status_command:main"
+# bmad-automation-status-list (Story 8.5) — invoked by /bmad-automation status (no-args)'s
+# orchestrator-skill step. Multi-story enumeration with orphan-run-state-detected marker
+# emission per FR48b. Projects Story 8.4's status_command.inspect_story per enumerated
+# story-id; emits orphan markers for run-state entries whose story-doc is missing.
+# See src/loud_fail_harness/multi_story_status.py for the substrate.
+bmad-automation-status-list = "loud_fail_harness.multi_story_status:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 

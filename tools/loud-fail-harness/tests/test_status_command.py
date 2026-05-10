@@ -412,7 +412,7 @@ def test_inspect_story_status_found_basic_fields(
     _write_story_doc(tmp_project, "8-4")
     rs_path = _write_run_state_yaml(
         tmp_project,
-        story_id="8-4-test-slug",
+        story_id="8-4",
         current_state="in-progress",
         branch_name="bmad-automation/story/8-4",
         run_id="r1",
@@ -454,10 +454,10 @@ def test_inspect_story_resolve_retry_rounds_false_returns_none(
     _write_run_state_yaml(tmp_project)
     request = StatusRequest(
         project_root=tmp_project,
-        story_id="8-4",
+        story_id="8-4-test-slug",
         resolve_retry_rounds=False,
         story_doc_resolver=_stub_story_doc_resolver(
-            raises=StoryDocNotFound(story_id="8-4", searched_paths=())
+            raises=StoryDocNotFound(story_id="8-4-test-slug", searched_paths=())
         ),
     )
     outcome = inspect_story(request)
@@ -496,10 +496,10 @@ def test_inspect_story_resolve_retry_rounds_true_resolves_populated_refs(
     _write_run_state_yaml(tmp_project, retry_history_yaml=retry_history_yaml)
     request = StatusRequest(
         project_root=tmp_project,
-        story_id="8-4",
+        story_id="8-4-test-slug",
         resolve_retry_rounds=True,
         story_doc_resolver=_stub_story_doc_resolver(
-            raises=StoryDocNotFound(story_id="8-4", searched_paths=())
+            raises=StoryDocNotFound(story_id="8-4-test-slug", searched_paths=())
         ),
     )
     outcome = inspect_story(request)
@@ -527,10 +527,10 @@ def test_inspect_story_resolve_retry_rounds_skips_pre_5_5_entries(
     _write_run_state_yaml(tmp_project, retry_history_yaml=retry_history_yaml)
     request = StatusRequest(
         project_root=tmp_project,
-        story_id="8-4",
+        story_id="8-4-test-slug",
         resolve_retry_rounds=True,
         story_doc_resolver=_stub_story_doc_resolver(
-            raises=StoryDocNotFound(story_id="8-4", searched_paths=())
+            raises=StoryDocNotFound(story_id="8-4-test-slug", searched_paths=())
         ),
     )
     outcome = inspect_story(request)
@@ -559,10 +559,10 @@ def test_inspect_story_dangling_refs_surface_structurally(
     _write_run_state_yaml(tmp_project, retry_history_yaml=retry_history_yaml)
     request = StatusRequest(
         project_root=tmp_project,
-        story_id="8-4",
+        story_id="8-4-test-slug",
         resolve_retry_rounds=True,
         story_doc_resolver=_stub_story_doc_resolver(
-            raises=StoryDocNotFound(story_id="8-4", searched_paths=())
+            raises=StoryDocNotFound(story_id="8-4-test-slug", searched_paths=())
         ),
     )
     # Should NOT raise.
@@ -586,9 +586,9 @@ def test_inspect_story_resolver_failure_yields_none_story_doc_path(
     _write_run_state_yaml(tmp_project)
     request = StatusRequest(
         project_root=tmp_project,
-        story_id="8-4",
+        story_id="8-4-test-slug",
         story_doc_resolver=_stub_story_doc_resolver(
-            raises=StoryDocNotFound(story_id="8-4", searched_paths=())
+            raises=StoryDocNotFound(story_id="8-4-test-slug", searched_paths=())
         ),
     )
     outcome = inspect_story(request)
@@ -739,10 +739,10 @@ def test_inspect_story_does_not_mutate_run_state_file(
     before_sha = hashlib.sha256(rs_path.read_bytes()).hexdigest()
     request = StatusRequest(
         project_root=tmp_project,
-        story_id="8-4",
+        story_id="8-4-test-slug",
         resolve_retry_rounds=True,
         story_doc_resolver=_stub_story_doc_resolver(
-            raises=StoryDocNotFound(story_id="8-4", searched_paths=())
+            raises=StoryDocNotFound(story_id="8-4-test-slug", searched_paths=())
         ),
     )
     inspect_story(request)
@@ -850,7 +850,7 @@ def test_main_exits_zero_on_status_found(
 ) -> None:
     _write_story_doc(tmp_project, "8-4")
     _write_run_state_yaml(
-        tmp_project, story_id="8-4-test-slug", current_state="in-progress"
+        tmp_project, story_id="8-4", current_state="in-progress"
     )
     rc = main(["8-4", "--project-root", str(tmp_project)])
     captured = capsys.readouterr()
@@ -862,7 +862,7 @@ def test_main_exits_zero_on_status_found(
 def test_main_exits_zero_on_status_found_with_json_flag(
     tmp_project: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    _write_run_state_yaml(tmp_project)
+    _write_run_state_yaml(tmp_project, story_id="8-4")
     rc = main(["8-4", "--project-root", str(tmp_project), "--json"])
     captured = capsys.readouterr()
     assert rc == 0

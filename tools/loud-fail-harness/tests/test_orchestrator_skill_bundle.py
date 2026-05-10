@@ -449,6 +449,56 @@ def test_status_md_runtime_protocol_present(
         )
 
 
+def test_status_md_no_args_branch_present(
+    skill_bundle_root: pathlib.Path,
+) -> None:
+    """Story 8.5 thickened ``steps/status.md`` with the no-args branch
+    dispatch protocol.
+
+    Structural witness per Story 8.5 AC-7:
+
+    * ``## Branch on argument presence`` section header is present
+      (the dispatch routing between with-id and no-args branches);
+    * the new no-args CLI ``bmad-automation-status-list`` is named;
+    * the ``## No-args multi-story listing protocol`` section header
+      is present;
+    * the two ``ListingOutcome.action`` branches are referenced by
+      name (``listing-found``, ``listing-empty``);
+    * cross-references to ``multi_story_status.py`` AND the marker-
+      taxonomy line for ``orphan-run-state-detected`` are present.
+    """
+    status_md = (
+        skill_bundle_root / "steps" / "status.md"
+    ).read_text(encoding="utf-8")
+
+    assert "## Branch on argument presence" in status_md, (
+        "steps/status.md must carry the '## Branch on argument presence' "
+        "section heading per Story 8.5 AC-7"
+    )
+    assert "bmad-automation-status-list" in status_md, (
+        "steps/status.md must name the bmad-automation-status-list CLI "
+        "per Story 8.5 AC-7"
+    )
+    assert "## No-args multi-story listing protocol" in status_md, (
+        "steps/status.md must carry the no-args multi-story listing "
+        "protocol section heading per Story 8.5 AC-7"
+    )
+    for action in ("listing-found", "listing-empty"):
+        assert action in status_md, (
+            f"steps/status.md no-args runtime-protocol must reference "
+            f"the {action!r} ListingOutcome branch per Story 8.5 AC-7"
+        )
+    for reference in (
+        "multi_story_status.py",
+        "marker-taxonomy.yaml:382",
+        "_bmad-output/planning-artifacts/epics.md:3331-3363",
+    ):
+        assert reference in status_md, (
+            f"steps/status.md must cross-reference {reference!r} per "
+            f"Story 8.5 AC-7"
+        )
+
+
 # --------------------------------------------------------------------------- #
 # find_repo_root() discipline test                                            #
 # --------------------------------------------------------------------------- #

@@ -1703,12 +1703,9 @@ verdicts:
     audit_date: "2026-05-05"
   - marker_class: orphan-run-state-detected
     surface_name: orchestrator-run-state-helper
-    verdict: scheduled-by-story
-    discharging_story: "8.5"
-    rationale: |-
-      Multi-story status enumerator + orphan-run-state-detected marker emission lands in
-      Story 8.5 (FR48b).
-    audit_date: "2026-05-05"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py:747
+    audit_date: "2026-05-10"
   - marker_class: orphan-run-state-detected
     surface_name: orchestrator-state-machine
     verdict: not-applicable

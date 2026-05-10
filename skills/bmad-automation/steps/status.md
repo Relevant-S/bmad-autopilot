@@ -28,6 +28,13 @@ Exit-code semantics per Story 8.4 AC-1 / AC-12:
 - **`1`** — `status-no-run-state` (halt with named-invariant diagnostic to stderr).
 - **`2`** — harness-level error inside the substrate per Pattern 5 (Pydantic validation failure, run-state access failure, recovery substrate raised an unexpected exception).
 
+## Branch on argument presence
+
+The slash command `/bmad-automation status [<id>]` accepts an OPTIONAL story-id argument. The runtime branches on argument presence:
+
+- **With `<story-id>`** (single-story inspection per Story 8.4) — invoke `bmad-automation-status <story-id>` per the `## Substrate invocation` section above AND follow the `## Branch on outcome` protocol below.
+- **Without `<story-id>`** (no-args multi-story listing per Story 8.5) — invoke `bmad-automation-status-list` per the `## No-args multi-story listing protocol` section near the end of this file. The single-story protocol is bypassed entirely on this branch.
+
 ## Branch on outcome
 
 Branch on the parsed exit code.
@@ -71,8 +78,60 @@ If the practitioner needs to advance state, they MUST invoke `/bmad-automation r
 
 The substrate's `inspect_story` function does NOT invoke `cross_state_recovery.evaluate_recovery` because that function's rebuild path mutates run-state via the `run_state_writer` DI seam — even if run-state and story-doc disagree, status surfaces the run-state's recorded values WITHOUT correcting them. The recovery-on-disagreement path is `/bmad-automation resume`'s job, not `/bmad-automation status`'s.
 
+## No-args multi-story listing protocol
+
+When the practitioner invokes `/bmad-automation status` without a `<story-id>` argument, dispatch to the Story 8.5 multi-story enumeration substrate. THIS is structurally distinct from the single-story inspection protocol above — both surfaces share the `/bmad-automation status` slash command and dispatch on argument presence per the `## Branch on argument presence` section near the top.
+
+### Goal
+
+Enumerate every story with non-terminal automator state (across run-state files under `_bmad/automation/` AND non-terminal `development_status` entries in `_bmad-output/implementation-artifacts/sprint-status.yaml`); detect orphan run-state entries whose story-doc has been deleted, renamed, or moved; emit `orphan-run-state-detected` (Story 1.4 v1 27-class taxonomy entry registered at `schemas/marker-taxonomy.yaml:382`) per orphan; surface a compact per-row summary `(story_id, current_state, marker_count, last_activity_timestamp, branch_name)` per `epics.md:3342` verbatim — projecting Story 8.4's canonical `status_command.inspect_story` per enumerated story-id with NO parallel inspection logic per `epics.md:3318-3320` verbatim.
+
+### Substrate invocation
+
+```bash
+uv --directory bmad-autopilot/tools/loud-fail-harness/ run bmad-automation-status-list --project-root <absolute-path>
+```
+
+Optional flags:
+
+- `--json` — emit machine-consumable JSON output instead of the human-readable render. The JSON output's per-row `last_activity_timestamp` is ISO-8601 from `last_envelope.timestamp`; orphan rows carry `is_orphan: true` for tooling consumers.
+- `--automation-dir <path>` — override the default (`<project_root>/_bmad/automation`). Production runs leave this unset.
+- `--implementation-artifacts-dir <path>` — override the default (`<project_root>/_bmad-output/implementation-artifacts`). Production runs leave this unset.
+- `--qa-evidence-root <path>` — override the default (`<project_root>/_bmad-output/qa-evidence`).
+- `--repo-root <path>` — override the default (`<project_root>`).
+
+NOTE on the cheap-default invariant: the no-args enumeration substrate invokes Story 8.4's `inspect_story` per candidate with `resolve_retry_rounds=False` per `epics.md:3320` verbatim — multi-story enumeration cannot afford per-story retry-round filesystem resolution. The JSON output does NOT include resolved retry rounds (those are accessed via `bmad-automation-status <story-id> --json` for a single named story-id).
+
+Exit-code semantics per Story 8.5 AC-1:
+
+- **`0`** — `listing-found` OR `listing-empty` (silent success; both are non-error outcomes; orphan emissions are conveyed through the rendered listing structurally, NOT through the exit code).
+- **`2`** — harness-level error inside the substrate per Pattern 5 (Pydantic validation failure, etc.).
+
+There is NO exit-code-1 path here — distinct from the single-story `bmad-automation-status` CLI's `status-no-run-state` halt. The multi-story enumeration has no analogous "named-story-not-found" halt; an empty listing is the steady-state outcome for a project between story loops.
+
+### Branch on outcome
+
+Branch on the parsed `outcome.action`:
+
+- **`listing-found`** (exit 0) — substrate prints the rendered listing (human-readable per `render_story_listing_human` OR JSON per `render_story_listing_json` depending on `--json`); the orchestrator skill surfaces verbatim. Orphan rows have already had their `orphan-run-state-detected` markers emitted by the substrate via `marker_recorder` per AC-3; no further action.
+- **`listing-empty`** (exit 0) — substrate prints the empty-listing message `(no stories with non-terminal automator state found)` via `render_listing_empty_message`; the orchestrator skill surfaces verbatim. No marker emission (no orphan ⇒ no `orphan-run-state-detected`); silent success.
+
+### Loud-fail discipline
+
+- Substrate-level errors (exit code 2) propagate to the orchestrator skill which surfaces them to the practitioner. The multi-story listing does NOT auto-retry on substrate-level errors. Pattern 5 chained-exception discipline is observed inside the substrate (`MultiStoryStatusError` analogous in shape to `StatusCommandError`).
+- Orphan emission via `marker_recorder("orphan-run-state-detected", context)` is the substrate's ONLY write surface; the marker context carries `story_id`, `run_state_file_path`, `expected_story_doc_dir`, and a `remediation:` clause naming the two paths per `epics.md:3351-3355` verbatim: (a) purge orphan run-state via direct filesystem `rm <run_state_file_path>` after triage; (b) recover missing story-doc from version control (e.g., `git log --diff-filter=D` to locate the deletion commit).
+
+### Mutation surface
+
+The no-args listing IS a write surface for the `orphan-run-state-detected` marker class — the substrate's only write. It does NOT mutate run-state, story-doc, sprint-status, per-specialist logs, events.jsonl, deferred-work.md, or the git working tree. Orphan run-state files are NOT auto-purged per `epics.md:3351-3355` verbatim ("`/bmad-automation` does NOT auto-purge orphans — the destructive action requires explicit practitioner intent (mirroring Story 7.6's non-destructive guard pattern)") — purge requires explicit practitioner intent (`rm <orphan_run_state_path>`).
+
+The substrate is read-only against run-state contents per AC-6: every run-state file's mtime + sha256 are byte-identical before/after `enumerate_stories` invocation (the structural witness is `tests/test_multi_story_status.py::test_enumerate_stories_does_not_mutate_run_state_files`).
+
 ## Cross-references
 
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py` — the no-args multi-story enumeration substrate (Story 8.5).
+- `bmad-autopilot/schemas/marker-taxonomy.yaml:382` — the `orphan-run-state-detected` marker class registration (Story 1.4 v1 27-class taxonomy).
+- `_bmad-output/planning-artifacts/epics.md:3331-3363` — Story 8.5 epic AC.
 - `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/status_command.py` — the substrate library (Story 8.4).
 - `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/cross_state_recovery.py` — the run-state load helper consumed via private same-package import (`_load_run_state_from_disk`) per Story 8.3's Dev's-call precedent.
 - `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/retry_history.py` — `resolve_retry_round` + `detect_dangling_refs` (Story 5.5; the retry-round resolution helpers).
