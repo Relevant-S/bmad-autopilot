@@ -313,6 +313,15 @@ jobs:
         # disk via find_repo_root.
         run: uv run pluggability-gate
 
+      - name: No-destructive-resume lint gate (story 8.6)
+        # Asserts Stories 8.1 / 8.2 / 8.3 ALL route dispatch decisions
+        # through no_destructive_resume_guard.can_dispatch() per
+        # epics.md:3389-3393. AST-based scanner (parallel in shape to
+        # pluggability-gate but operating on Python source instead of
+        # markdown). Three structural rules: A-import-missing,
+        # B-callsite-missing, C-inline-reintroduced.
+        run: uv run no-destructive-resume-lint
+
       - name: Review-layer-failure emission gate (story 3.3; FR28 + FR56)
         # Story 3.3 AC-9: enforces the three-channel atomic-emission
         # code-structure invariant — surface_failed_layers (at

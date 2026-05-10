@@ -37,11 +37,12 @@ remains forward-scoped beyond MVP).
   substrate IS the implementation.
 - **NFR-R7** (PRD line 951) — "No destructive resume — on resume,
   orchestrator does not re-dispatch specialists whose prior output was
-  recorded." Honored via documentation + AC-5 inline ``_can_dispatch_inline``
-  defensive check + AC-9 tests; Story 8.6 supersedes structurally with
-  ``can_dispatch(specialist, story_id, run_state) -> Verdict`` substrate
-  guard + a CI lint asserting Stories 8.1 / 8.2 / 8.3 ALL route dispatch
-  decisions through it.
+  recorded." Consumed via
+  :func:`no_destructive_resume_guard.can_dispatch` — the canonical
+  substrate guard (Story 8.6) — invoked on the dispatch path before
+  the orchestrator skill threads through to ``steps/dispatch.md``. The
+  Story 8.6 CI lint at :mod:`no_destructive_resume_lint` asserts
+  Stories 8.1 / 8.2 / 8.3 ALL route dispatch decisions through it.
 - **NFR-R8** (PRD line 952) — "Cross-state consistency" — delegated to
   :func:`cross_state_recovery.evaluate_recovery` for the actual recovery
   decision; THIS substrate consumes the verdict.
@@ -86,13 +87,14 @@ which is delegated to :func:`cross_state_recovery.evaluate_recovery` via
 its ``run_state_writer`` DI seam. THIS substrate does NOT directly write
 run-state, story-doc, sprint-status, or events.
 
-The defensive ``_can_dispatch_inline`` check per AC-5 raises
-:class:`CanDispatchInvariantViolation` when 8.2's ``evaluate_recovery``
-returns a recoverable-and-clean verdict despite a structural disagreement
-that would re-dispatch a specialist whose prior output is already recorded
-— a substrate-bug indicator at 8.2's level. Story 8.6's canonical
-``can_dispatch(specialist, story_id, run_state) -> Verdict`` supersedes
-this inline stub.
+The dispatch-eligibility check is delegated to the canonical Story 8.6
+substrate :func:`no_destructive_resume_guard.can_dispatch`. When the
+canonical guard returns a deny verdict on a path that 8.2's
+``evaluate_recovery`` cleared as recoverable,
+:class:`CanDispatchInvariantViolation` is raised — a substrate-bug
+indicator at 8.2's level. The exception's ``reason`` and ``diagnostic``
+fields are sourced from the :class:`Verdict` so downstream consumers
+can route on the structured ``DenyReason`` enum.
 
 ## Sensor-not-advisor
 
@@ -126,6 +128,7 @@ from .cross_state_recovery import (
     evaluate_recovery,
 )
 from .lifecycle_state_machine import LIFECYCLE_TRANSITIONS, TERMINAL_STATES
+from .no_destructive_resume_guard import Verdict, can_dispatch
 from .orchestrator_run_entry import SprintStatusResolver, StoryDocResolver
 from .run_state import CurrentState, RunState
 
@@ -232,19 +235,20 @@ class ResumeCommandError(Exception):
 
 
 class CanDispatchInvariantViolation(ResumeCommandError):
-    """Raised by AC-5's inline check when ``_can_dispatch_inline`` denies
-    dispatch on a path that 8.2's ``evaluate_recovery`` cleared as
-    recoverable.
+    """Raised when the canonical Story 8.6 substrate guard
+    :func:`no_destructive_resume_guard.can_dispatch` denies dispatch on
+    a path that 8.2's ``evaluate_recovery`` cleared as recoverable.
 
-    This indicates either:
-      (a) a Story 8.2 substrate bug — ``evaluate_recovery`` returned
-          ``recovery-clean``/``recovery-rebuilt`` despite a structural
-          disagreement that would re-dispatch a specialist whose prior
-          output is recorded;
-      (b) a Story 8.6 pre-shipment opportunity — the canonical
-          ``can_dispatch(specialist, story_id, run_state) -> Verdict``
-          will catch this structurally with a CI lint asserting Stories
-          8.1 / 8.2 / 8.3 ALL route dispatch decisions through it.
+    This indicates a Story 8.2 substrate bug — ``evaluate_recovery``
+    returned ``recovery-clean`` / ``recovery-rebuilt`` despite a
+    structural disagreement that would re-dispatch a specialist whose
+    prior output is recorded.
+
+    The exception's ``reason`` and ``diagnostic`` fields are sourced
+    from the :class:`Verdict` returned by the canonical guard — so
+    downstream consumers can route on the structured ``DenyReason``
+    enum (one of ``"prior-output-recorded"``, ``"branch-already-exists"``,
+    ``"work-already-committed"``, ``"run-state-unexpected-state"``).
 
     Programmer-error invariant per Pattern 5.
     """
@@ -397,11 +401,16 @@ class ResumeOutcome(BaseModel):
             its AC-7). Populated on ``resume-no-run-state`` (rendered
             per AC-2's named-invariant template).
         pre_dispatch_can_dispatch_verdict: Populated on
-            ``resume-dispatch``; the result of the AC-5 inline
-            ``_can_dispatch_inline`` check. ``True`` on the normal
-            recoverable-and-clean path; substrate raises
-            :class:`CanDispatchInvariantViolation` instead of returning
-            ``False``. ``None`` on the other three actions.
+            ``resume-dispatch``; the projection of
+            :class:`Verdict.allow` returned by the canonical
+            :func:`no_destructive_resume_guard.can_dispatch` (Story 8.6).
+            ``True`` on the normal recoverable-and-clean path; substrate
+            raises :class:`CanDispatchInvariantViolation` instead of
+            returning ``False``. The structured ``DenyReason`` and
+            human-readable diagnostic are surfaced via the rewritten
+            exception message — the bool projection is retained for
+            backward compatibility with downstream consumers.
+            ``None`` on the other three actions.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -497,53 +506,7 @@ def render_no_run_state_diagnostic(
     return "; ".join(parts)
 
 
-def _can_dispatch_inline(
-    specialist: Literal["dev", "review-bmad", "qa"],
-    story_id: str,
-    run_state: RunState,
-) -> bool:
-    """Module-private defensive check — Story 8.6 supersedes structurally.
 
-    Returns ``True`` iff the specialist's prior output for this story-id
-    is NOT recorded in ``run_state`` — specifically when
-    ``run_state.dispatched_specialist != specialist`` OR
-    ``run_state.last_envelope is None``. Returns ``False`` iff both
-    conditions hold (prior output IS recorded) — which would only happen
-    if 8.2's
-    ``evaluate_recovery`` returned ``recovery-clean``/``recovery-rebuilt``
-    despite a structural disagreement; THIS would indicate an 8.2
-    substrate bug AND the resume substrate raises
-    :class:`CanDispatchInvariantViolation` per AC-1's exception class.
-
-    The structural check: prior output is recorded iff
-    ``run_state.dispatched_specialist == specialist`` AND
-    ``run_state.last_envelope is not None``.
-
-    Story 8.6 supersedes this stub with the canonical
-    ``can_dispatch(specialist, story_id, run_state) -> Verdict`` substrate
-    guard at ``loud_fail_harness.no_destructive_resume_guard`` (or wherever
-    8.6 places it) + a CI lint asserting Stories 8.1 / 8.2 / 8.3 ALL
-    route dispatch decisions through it.
-
-    Args:
-        specialist: The about-to-be-dispatched specialist; one of
-            ``"dev"``, ``"review-bmad"``, ``"qa"``.
-        story_id: BMAD story identifier; carried for diagnostic context.
-            (THIS stub does not consult story_id; the canonical 8.6
-            implementation may.)
-        run_state: Post-recovery :class:`RunState` instance.
-
-    Returns:
-        ``True`` if dispatching ``specialist`` is non-destructive;
-        ``False`` if the prior output is already recorded.
-    """
-    del story_id  # unused in stub; retained for 8.6 API parity
-    if (
-        run_state.dispatched_specialist == specialist
-        and run_state.last_envelope is not None
-    ):
-        return False
-    return True
 
 
 # --------------------------------------------------------------------------- #
@@ -570,9 +533,11 @@ def evaluate_resume(
        :func:`evaluate_recovery` is NOT invoked.
     2. ``recovery-clean`` OR ``recovery-rebuilt`` AND non-terminal
        ``current_state`` → ``resume-dispatch``. ``next_specialist`` is
-       computed via :func:`determine_next_specialist`; the AC-5 inline
-       defensive check runs and either passes (``True``) or raises
-       :class:`CanDispatchInvariantViolation`.
+       computed via :func:`determine_next_specialist`; the canonical
+       :func:`no_destructive_resume_guard.can_dispatch` (Story 8.6)
+       runs and either returns ``Verdict(allow=True)`` or causes the
+       substrate to raise :class:`CanDispatchInvariantViolation` with
+       the verdict's structured ``reason`` and ``diagnostic`` populated.
     3. ``recovery-clean`` OR ``recovery-rebuilt`` AND terminal
        ``current_state`` (``done`` / ``escalated``) →
        ``resume-already-terminal``. No dispatch; the orchestrator skill
@@ -602,7 +567,8 @@ def evaluate_resume(
     Raises:
         ResumeCommandError: When :func:`evaluate_recovery` raises
             :class:`CrossStateRecoveryError` (chained via ``from exc``).
-        CanDispatchInvariantViolation: When the AC-5 inline check denies
+        CanDispatchInvariantViolation: When the canonical Story 8.6
+            :func:`no_destructive_resume_guard.can_dispatch` denies
             dispatch on a path 8.2 cleared as recoverable.
     """
     run_state_path = (
@@ -735,21 +701,21 @@ def evaluate_resume(
         "is out of sync with TERMINAL_STATES"
     )
 
-    # AC-5 — inline defensive check; raise on deny.
-    inline_verdict = _can_dispatch_inline(
+    # AC-5 — canonical Story 8.6 substrate guard; raise on deny. The
+    # raised CanDispatchInvariantViolation surfaces the verdict's
+    # structured DenyReason and the human-readable diagnostic, so
+    # downstream consumers (automated triage tooling, logs) can route
+    # on the structured reason rather than parsing free text.
+    verdict: Verdict = can_dispatch(
         next_specialist, request.story_id, final_run_state
     )
-    if not inline_verdict:
+    if not verdict.allow:
         raise CanDispatchInvariantViolation(
-            reason="prior-output-recorded-for-next-specialist",
+            reason="can-dispatch-deny-on-recovered-state",
             diagnostic=(
-                f"can-dispatch invariant violated: specialist={next_specialist!r}, "
-                f"story_id={request.story_id!r}, "
-                f"current_state={final_run_state.current_state!r}, "
-                f"dispatched_specialist={final_run_state.dispatched_specialist!r}, "
-                "last_envelope is recorded — re-dispatch would mutate prior "
-                "output. Story 8.6's can_dispatch() substrate guard supersedes "
-                "this inline check structurally."
+                f"can-dispatch denied: reason={verdict.reason}; "
+                f"{verdict.diagnostic}; specialist={next_specialist!r}; "
+                f"story_id={request.story_id!r}"
             ),
         )
 

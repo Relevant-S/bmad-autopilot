@@ -31,8 +31,14 @@ SessionStart reattachment substrate). Consumers:
   disagreement: story-doc canonical, run-state reconstructed from it."
 - **NFR-R7** (PRD line 951) — "No destructive resume" — the substrate is
   read-only against story-doc, sprint-status, and the git working tree.
-  Story 8.6's ``can_dispatch()`` substrate guard supersedes this
-  documentation commitment with structural enforcement.
+  Dispatch eligibility is delegated to
+  :func:`no_destructive_resume_guard.can_dispatch` — the canonical
+  substrate guard (Story 8.6) — invoked by
+  :func:`resume_command.evaluate_resume` AFTER this substrate's
+  ``recovery-clean`` / ``recovery-rebuilt`` return. THIS module is
+  reconciliation, NOT dispatch; the canonical guard's allowlist
+  (per :mod:`no_destructive_resume_lint` AC-3 Rule A) excludes
+  ``cross_state_recovery`` from the import-required modules.
 - **NFR-R2** (PRD line 946) — "Crash recovery without duplicate state
   advance."
 - **ADR-005 Sub-decision (b) Reading 3** (architecture.md line 462) —
@@ -111,9 +117,11 @@ boundary is observable:
 The substrate writes ONLY to run-state (via :func:`run_state.advance_run_state`
 on the rebuild path with the no-op story-doc callback). It does NOT modify
 the story-doc, does NOT modify sprint-status, does NOT touch git working
-tree state, does NOT emit orchestrator-events to the JSONL log. Story 8.6's
-``can_dispatch`` substrate guard supersedes this commitment with structural
-enforcement.
+tree state, does NOT emit orchestrator-events to the JSONL log. Dispatch
+eligibility is delegated to
+:func:`no_destructive_resume_guard.can_dispatch` — invoked by
+:func:`resume_command.evaluate_resume` after this substrate returns. THIS
+module is reconciliation, NOT dispatch.
 """
 
 from __future__ import annotations

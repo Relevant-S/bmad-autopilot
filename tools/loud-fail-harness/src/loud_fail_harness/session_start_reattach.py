@@ -29,8 +29,13 @@ reviewers reject any creep of Epic 8 logic into Epic 2's stub").
 - **NFR-R2** (PRD line 946) — "Crash recovery without duplicate state advance."
 - **NFR-R7** (PRD line 951) — "No destructive resume" — the substrate is
   read-only against run-state, story-doc, sprint-status, and the git working
-  tree. Story 8.6's ``can_dispatch()`` substrate guard supersedes this
-  documentation commitment with structural enforcement.
+  tree. The dispatch-eligibility check is consumed via
+  :func:`no_destructive_resume_guard.can_dispatch` — the canonical
+  substrate guard (Story 8.6) — invoked on the reattach-clean path when a
+  non-terminal run-state already records a previously-dispatched
+  specialist; the verdict's diagnostic is captured into the outcome
+  without altering the outcome's ``action`` enum (SessionStart's job is
+  to SIGNAL reattachment, not to dispatch).
 - **NFR-R8** (PRD line 952) — "Cross-state consistency: story-doc canonical,
   run-state cache."
 - **Story 1.4 v1 marker taxonomy** — ``recovery-state-conflict`` is the
@@ -66,9 +71,12 @@ reviewers reject any creep of Epic 8 logic into Epic 2's stub").
 ## No state-advancing actions
 
 No state-advancing actions: this substrate is read-only against run-state,
-story-doc, sprint-status, and the git working tree. Story 8.6's
-can_dispatch() substrate guard supersedes this commitment with structural
-enforcement.
+story-doc, sprint-status, and the git working tree. The
+dispatch-eligibility check is consumed via
+:func:`no_destructive_resume_guard.can_dispatch` (Story 8.6) on the
+reattach-clean path; the verdict is informational at this seam — the
+deny diagnostic is enriched into the outcome without altering the
+outcome's ``action`` enum.
 """
 
 from __future__ import annotations
@@ -89,8 +97,10 @@ from referencing import Registry
 from referencing.jsonschema import DRAFT202012
 
 from ._shared import find_repo_root, load_schema
+from .lifecycle_state_machine import TERMINAL_STATES
 from .marker_wiring import record_marker_with_context
-from .run_state import RunState
+from .no_destructive_resume_guard import Verdict, can_dispatch
+from .run_state import CurrentState, RunState
 
 if TYPE_CHECKING:
     from .specialist_dispatch import MarkerClassRegistry
@@ -123,6 +133,23 @@ RUN_STATE_RELATIVE_PATH: Final[str] = "_bmad/automation/run-state.yaml"
 RECOVERY_STATE_CONFLICT_MARKER_CLASS: Final[
     Literal["recovery-state-conflict"]
 ] = "recovery-state-conflict"
+
+
+# TODO: future story may promote _NEXT_SPECIALIST_BY_STATE to
+# lifecycle_state_machine when a third direct consumer arrives (per
+# Story 8.6 Detected-Variances rationale + epic-7-retro-2026-05-08.md
+# line 166 third-caller-threshold precedent). Until then, the duplication
+# vs ``resume_command._NEXT_SPECIALIST_BY_STATE`` is bounded and explicit.
+_NEXT_SPECIALIST_BY_STATE: Final[
+    dict[CurrentState, Literal["dev", "review-bmad", "qa"] | None]
+] = {
+    "ready-for-dev": "dev",
+    "in-progress": "review-bmad",
+    "review": "qa",
+    "qa": "qa",
+    "done": None,
+    "escalated": None,
+}
 
 
 def _current_schema_version() -> str:
@@ -656,9 +683,16 @@ def evaluate_reattach(
     """Composite SessionStart-reattachment decision.
 
     No state-advancing actions: this substrate is read-only against
-    run-state, story-doc, sprint-status, and the git working tree. Story
-    8.6's can_dispatch() substrate guard supersedes this commitment with
-    structural enforcement.
+    run-state, story-doc, sprint-status, and the git working tree. The
+    dispatch-eligibility check is consumed via
+    :func:`no_destructive_resume_guard.can_dispatch` (Story 8.6) on the
+    reattach-clean path when the schema-validated run-state indicates a
+    non-terminal ``current_state`` AND a previously-dispatched specialist
+    (i.e., the reattach would IMPLICITLY re-dispatch on the next loop
+    tick). The verdict's diagnostic is captured into the outcome's
+    ``diagnostic`` field on deny without altering the outcome's
+    ``action`` enum — SessionStart SIGNALS reattachment, the dispatch
+    decision lives downstream.
 
     The four branches:
 
@@ -793,6 +827,29 @@ def evaluate_reattach(
             run_state,
         )
 
+    # Story 8.6 AC-4 — canonical no-destructive-resume substrate guard.
+    # SessionStart's job is to SIGNAL reattachment, not to dispatch; the
+    # verdict is informational at this seam — the deny diagnostic is
+    # enriched into the outcome's diagnostic field but does NOT alter
+    # the outcome's action enum. Gated on (a) non-terminal current_state
+    # and (b) a previously-dispatched specialist (i.e., the reattach
+    # would IMPLICITLY re-dispatch on the next loop tick).
+    can_dispatch_diagnostic: str | None = None
+    if (
+        current_state is not None
+        and current_state not in TERMINAL_STATES
+        and dispatched_specialist is not None
+    ):
+        candidate_specialist = _NEXT_SPECIALIST_BY_STATE.get(current_state)
+        if candidate_specialist is not None:
+            verdict: Verdict = can_dispatch(
+                candidate_specialist,
+                parsed_run_state.story_id,
+                parsed_run_state,
+            )
+            if not verdict.allow:
+                can_dispatch_diagnostic = verdict.diagnostic
+
     # Branch 2 — reattach-clean (branch present OR git unavailable).
     return (
         ReattachOutcome(
@@ -805,7 +862,7 @@ def evaluate_reattach(
             dispatched_specialist=dispatched_specialist,
             current_state=current_state,
             marker_class=None,
-            diagnostic=None,
+            diagnostic=can_dispatch_diagnostic,
             validation_failures=(),
         ),
         run_state,

@@ -45,6 +45,11 @@ AC-7 / AC-9 — CLI smoke (4):
     [x] test_main_exits_zero_on_schema_mismatch_with_marker_emitted_to_stderr
     [x] test_main_exits_zero_on_anomaly_branch_missing
     [x] test_main_exits_one_on_harness_error
+
+Story 8.6 AC-5 — Canonical can_dispatch() consumption (3):
+    [x] test_evaluate_reattach_invokes_can_dispatch_on_non_terminal_run_state
+    [x] test_evaluate_reattach_captures_deny_verdict_diagnostic_in_outcome
+    [x] test_evaluate_reattach_skips_can_dispatch_on_terminal_run_state
 """
 
 from __future__ import annotations
@@ -766,3 +771,123 @@ def test_evaluate_reattach_purity_byte_identical_outcome(
     assert (p1 is None) == (p2 is None)
     if p1 is not None and p2 is not None:
         assert p1.model_dump() == p2.model_dump()
+
+
+# --------------------------------------------------------------------------- #
+# Story 8.6 AC-5 — Canonical can_dispatch() consumption                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_evaluate_reattach_invokes_can_dispatch_on_non_terminal_run_state(
+    tmp_project: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the schema-validated run-state has a non-terminal current_state
+    AND a previously-dispatched specialist, ``evaluate_reattach`` invokes
+    the canonical Story 8.6 substrate
+    :func:`no_destructive_resume_guard.can_dispatch`."""
+    from loud_fail_harness import session_start_reattach as ssr_module
+    from loud_fail_harness.no_destructive_resume_guard import Verdict
+
+    _write_run_state_file(
+        tmp_project,
+        schema_version="1.3",
+        current_state="in-progress",
+        dispatched_specialist="dev",
+    )
+    _run_git(
+        "checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project
+    )
+
+    captured: list[tuple[Any, ...]] = []
+
+    def _spy_can_dispatch(specialist: Any, story_id: Any, run_state: Any) -> Verdict:
+        captured.append((specialist, story_id, run_state))
+        return Verdict(allow=True)
+
+    monkeypatch.setattr(ssr_module, "can_dispatch", _spy_can_dispatch)
+
+    request = ReattachRequest(project_root=tmp_project)
+    outcome, _ = evaluate_reattach(request)
+    assert outcome.action == "reattach-clean"
+    # The next-specialist for in-progress is "review-bmad" per the
+    # local _NEXT_SPECIALIST_BY_STATE map.
+    assert len(captured) == 1
+    spec_arg, story_arg, _rs_arg = captured[0]
+    assert spec_arg == "review-bmad"
+    assert story_arg == "8-1-test"
+
+
+def test_evaluate_reattach_captures_deny_verdict_diagnostic_in_outcome(
+    tmp_project: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On a deny verdict from can_dispatch, the verdict's diagnostic is
+    captured into the outcome's ``diagnostic`` field — without altering
+    the outcome's ``action`` enum (SessionStart's job is to SIGNAL
+    reattachment, not to halt dispatch)."""
+    from loud_fail_harness import session_start_reattach as ssr_module
+    from loud_fail_harness.no_destructive_resume_guard import Verdict
+
+    _write_run_state_file(
+        tmp_project,
+        schema_version="1.3",
+        current_state="in-progress",
+        dispatched_specialist="dev",
+    )
+    _run_git(
+        "checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project
+    )
+
+    deny_diagnostic = (
+        "can-dispatch deny[prior-output-recorded]: specialist='review-bmad'"
+    )
+
+    def _stub_deny(specialist: Any, story_id: Any, run_state: Any) -> Verdict:
+        return Verdict(
+            allow=False,
+            reason="prior-output-recorded",
+            diagnostic=deny_diagnostic,
+        )
+
+    monkeypatch.setattr(ssr_module, "can_dispatch", _stub_deny)
+
+    request = ReattachRequest(project_root=tmp_project)
+    outcome, _ = evaluate_reattach(request)
+    # Action enum is unchanged — reattach-clean per the structural
+    # invariant (SessionStart signals reattach, NOT halt).
+    assert outcome.action == "reattach-clean"
+    # The deny diagnostic is captured in the outcome.
+    assert outcome.diagnostic == deny_diagnostic
+
+
+def test_evaluate_reattach_skips_can_dispatch_on_terminal_run_state(
+    tmp_project: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When current_state is terminal (``done`` / ``escalated``), no
+    re-dispatch is implied — the can_dispatch invocation is skipped."""
+    from loud_fail_harness import session_start_reattach as ssr_module
+    from loud_fail_harness.no_destructive_resume_guard import Verdict
+
+    _write_run_state_file(
+        tmp_project,
+        schema_version="1.3",
+        current_state="done",
+        dispatched_specialist="qa",
+    )
+    _run_git(
+        "checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project
+    )
+
+    captured: list[tuple[Any, ...]] = []
+
+    def _spy_can_dispatch(specialist: Any, story_id: Any, run_state: Any) -> Verdict:
+        captured.append((specialist, story_id, run_state))
+        return Verdict(allow=True)
+
+    monkeypatch.setattr(ssr_module, "can_dispatch", _spy_can_dispatch)
+
+    request = ReattachRequest(project_root=tmp_project)
+    outcome, _ = evaluate_reattach(request)
+    assert outcome.action == "reattach-clean"
+    assert outcome.current_state == "done"
+    # can_dispatch must NOT be invoked on terminal states.
+    assert captured == []

@@ -106,6 +106,20 @@ bmad-automation-status = "loud_fail_harness.status_command:main"
 # story-id; emits orphan markers for run-state entries whose story-doc is missing.
 # See src/loud_fail_harness/multi_story_status.py for the substrate.
 bmad-automation-status-list = "loud_fail_harness.multi_story_status:main"
+# no-destructive-resume-guard (Story 8.6) — library-as-CLI-aid for ad-hoc
+# Verdict inspection. Mirrors marker-coverage-audit's posture per pyproject.toml
+# lines 70-74 (NOT a CI gate — invoked manually by practitioners debugging
+# a deny verdict). The canonical substrate is the can_dispatch() function
+# consumed by Stories 8.1 / 8.2 / 8.3 per epics.md:3384-3387.
+# See src/loud_fail_harness/no_destructive_resume_guard.py for the substrate.
+no-destructive-resume-guard = "loud_fail_harness.no_destructive_resume_guard:main"
+# no-destructive-resume-lint (Story 8.6) — CI gate enforcing the consumption
+# pattern across Stories 8.1 / 8.2 / 8.3 per epics.md:3389-3393. Parallel in
+# shape to pluggability-gate; AST-based instead of regex-based since governed
+# modules are Python source not markdown. Three structural rules: A-import-missing,
+# B-callsite-missing, C-inline-reintroduced.
+# See src/loud_fail_harness/no_destructive_resume_lint.py for the gate.
+no-destructive-resume-lint = "loud_fail_harness.no_destructive_resume_lint:main"
 scope-assertion-verify = "loud_fail_harness.scope_assertion:_main"
 retry-history-resolve = "loud_fail_harness.retry_history:_main"
 

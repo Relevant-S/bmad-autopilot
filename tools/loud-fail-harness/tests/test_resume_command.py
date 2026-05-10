@@ -31,9 +31,10 @@ AC-4 — Next-specialist determination (6):
     [x] test_determine_next_specialist_terminal_returns_none
     [x] test_next_specialist_map_keys_equal_lifecycle_union
 
-AC-5 — No-destructive guard (2):
-    [x] test_inline_check_denies_when_prior_output_recorded
-    [x] test_evaluate_resume_raises_can_dispatch_invariant_violation_on_inline_deny
+AC-5 — No-destructive guard (Story 8.6 canonical substrate consumption) (3):
+    [x] test_evaluate_resume_consumes_can_dispatch_on_dispatch_path
+    [x] test_evaluate_resume_raises_can_dispatch_invariant_violation_on_deny
+    [x] test_evaluate_resume_carries_verdict_diagnostic_into_exception_message
 
 AC-6 — Idempotency (3):
     [x] test_evaluate_resume_idempotent_on_clean_recovery
@@ -72,11 +73,11 @@ from loud_fail_harness.orchestrator_run_entry import (
     SprintStatusResolution,
     StoryDocResolution,
 )
+from loud_fail_harness.no_destructive_resume_guard import Verdict
 from loud_fail_harness.resume_command import (
     CanDispatchInvariantViolation,
     ResumeCommandError,
     ResumeRequest,
-    _can_dispatch_inline,
     _NEXT_SPECIALIST_BY_STATE,
     determine_next_specialist,
     evaluate_resume,
@@ -273,6 +274,12 @@ def test_module_exports_documented_public_api() -> None:
         "render_no_run_state_diagnostic",
     }
     assert set(resume_command_module.__all__) == expected
+
+
+def test_can_dispatch_invariant_violation_marker_class_is_none() -> None:
+    """CanDispatchInvariantViolation.marker_class is None per Pattern 5
+    (programmer-error invariant; no marker emission on substrate bugs)."""
+    assert CanDispatchInvariantViolation.marker_class is None
 
 
 def test_resume_command_classified_as_shared_substrate_by_pluggability_gate(
@@ -541,44 +548,65 @@ def test_next_specialist_map_keys_equal_lifecycle_union() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# AC-5 — No-destructive guard                                                 #
+# AC-5 — No-destructive guard (Story 8.6 canonical substrate consumption)     #
 # --------------------------------------------------------------------------- #
 
 
-def test_inline_check_denies_when_prior_output_recorded() -> None:
-    """``_can_dispatch_inline("dev", ...)`` returns False when run_state shows
-    dev was dispatched AND last_envelope is recorded."""
-    rs = _make_run_state(
-        dispatched_specialist="dev",
-        last_envelope={"specialist": "dev", "outcome": "success"},
-    )
-    assert _can_dispatch_inline("dev", "8-3", rs) is False
-
-    # Other specialists not previously dispatched → allow.
-    rs2 = _make_run_state(dispatched_specialist=None, last_envelope=None)
-    assert _can_dispatch_inline("dev", "8-3", rs2) is True
-
-    # Different specialist than dispatched → allow (fresh dispatch).
-    rs3 = _make_run_state(
-        dispatched_specialist="dev",
-        last_envelope={"specialist": "dev", "outcome": "success"},
-    )
-    assert _can_dispatch_inline("review-bmad", "8-3", rs3) is True
-
-
-def test_evaluate_resume_raises_can_dispatch_invariant_violation_on_inline_deny(
+def test_evaluate_resume_consumes_can_dispatch_on_dispatch_path(
     tmp_project: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Stub ``evaluate_recovery`` to return recovery-clean despite a
-    structural disagreement that would re-dispatch dev whose prior output
-    is recorded; assert the inline check raises."""
+    """Assert ``evaluate_resume`` consumes the canonical
+    :func:`no_destructive_resume_guard.can_dispatch` on the dispatch
+    path. We monkeypatch ``can_dispatch`` (as referenced by
+    ``resume_command``) and capture the call arguments."""
+    _write_story_doc(tmp_project, "8-3", status="ready-for-dev", sections=())
+    _write_run_state_yaml(
+        tmp_project,
+        story_id="8-3-test-slug",
+        current_state="ready-for-dev",
+    )
+
+    captured: list[tuple[Any, ...]] = []
+
+    def _spy_can_dispatch(specialist: Any, story_id: Any, run_state: Any) -> Verdict:
+        captured.append((specialist, story_id, run_state))
+        return Verdict(allow=True)
+
+    monkeypatch.setattr(resume_command_module, "can_dispatch", _spy_can_dispatch)
+
+    request = ResumeRequest(
+        project_root=tmp_project,
+        story_id="8-3",
+        story_doc_resolver=_stub_story_doc_resolver(
+            _make_resolution(tmp_project, "8-3", "ready-for-dev")
+        ),
+        sprint_status_resolver=_stub_sprint_status_resolver(state="ready-for-dev"),
+    )
+    outcome, _ = evaluate_resume(request, marker_registry=None)
+
+    assert outcome.action == "resume-dispatch"
+    assert outcome.pre_dispatch_can_dispatch_verdict is True
+    # Exactly one consumption with (next_specialist, request.story_id, final_run_state).
+    assert len(captured) == 1
+    spec_arg, story_arg, run_state_arg = captured[0]
+    assert spec_arg == "dev"
+    assert story_arg == "8-3"
+    assert run_state_arg.current_state == "ready-for-dev"
+
+
+def test_evaluate_resume_raises_can_dispatch_invariant_violation_on_deny(
+    tmp_project: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the canonical guard returns ``Verdict(allow=False, ...)``
+    on a path 8.2's evaluate_recovery cleared, the resume substrate
+    raises CanDispatchInvariantViolation per AC-4's raise-site rewrite."""
     _write_run_state_yaml(tmp_project, story_id="8-3-conflict-stub")
 
     rebuilt_run_state = _make_run_state(
         story_id="8-3-conflict-stub",
-        current_state="ready-for-dev",  # → next_specialist == "dev"
+        current_state="ready-for-dev",
         dispatched_specialist="dev",
-        last_envelope={"specialist": "dev", "outcome": "success"},
+        last_envelope={"specialist": "dev", "status": "completed"},
     )
 
     def _stub_evaluate_recovery(*_args: Any, **_kwargs: Any):  # noqa: ANN202
@@ -604,9 +632,53 @@ def test_evaluate_resume_raises_can_dispatch_invariant_violation_on_inline_deny(
     )
     with pytest.raises(CanDispatchInvariantViolation) as exc_info:
         evaluate_resume(request, marker_registry=None)
+    # Per AC-4 the raise-site rewrite uses
+    # reason="can-dispatch-deny-on-recovered-state".
+    assert exc_info.value.reason == "can-dispatch-deny-on-recovered-state"
+
+
+def test_evaluate_resume_carries_verdict_diagnostic_into_exception_message(
+    tmp_project: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The canonical guard's structured DenyReason and human-readable
+    diagnostic are surfaced via the rewritten exception message — so
+    automated triage tooling can parse Verdict.reason as enum + the
+    diagnostic without re-running the guard."""
+    _write_run_state_yaml(tmp_project, story_id="8-3-deny")
+
+    rebuilt_run_state = _make_run_state(
+        story_id="8-3-deny",
+        current_state="ready-for-dev",
+        dispatched_specialist="dev",
+        last_envelope={"specialist": "dev", "status": "completed"},
+    )
+
+    def _stub_evaluate_recovery(*_args: Any, **_kwargs: Any):  # noqa: ANN202
+        return (
+            RecoveryOutcome(
+                action="recovery-clean",
+                disagreements=(),
+                prior_run_state=rebuilt_run_state,
+                rebuilt_run_state=rebuilt_run_state,
+                story_doc_implied_state="ready-for-dev",
+                sprint_status_observed="ready-for-dev",
+            ),
+            rebuilt_run_state,
+        )
+
+    monkeypatch.setattr(
+        resume_command_module, "evaluate_recovery", _stub_evaluate_recovery
+    )
+
+    request = ResumeRequest(project_root=tmp_project, story_id="8-3-deny")
+    with pytest.raises(CanDispatchInvariantViolation) as exc_info:
+        evaluate_resume(request, marker_registry=None)
     diagnostic = exc_info.value.diagnostic
-    assert "specialist='dev'" in diagnostic
-    assert "8-3-conflict-stub" in diagnostic
+    # The rewritten exception surfaces the verdict's reason (one of the
+    # four DenyReason literals) AND the verdict's diagnostic.
+    assert "reason=prior-output-recorded" in diagnostic
+    assert "8-3-deny" in diagnostic
+    assert "'dev'" in diagnostic
 
 
 # --------------------------------------------------------------------------- #
