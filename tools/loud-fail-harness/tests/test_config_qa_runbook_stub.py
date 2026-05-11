@@ -85,13 +85,15 @@ _REQUIRED_CONFIG_KEYS_AND_VALUES: Final[dict[str, int]] = {
 }
 
 #: Required FR/NFR identifiers in the config ``# Source:`` cross-references
-#: per AC-1 / AC-7 case 4. The five core defaults' source identifiers.
+#: per AC-1 / AC-7 case 4. The five core defaults' source identifiers,
+#: extended by Story 9.2 (FR-P1.5-2) for the project_type discriminator.
 _REQUIRED_CONFIG_SOURCE_IDENTIFIERS: Final[tuple[str, ...]] = (
     "FR8",
     "NFR-P2",
     "NFR-P1",
     "NFR-P6",
     "FR43",
+    "FR-P1.5-2",
 )
 
 #: Required ``Story <N>`` cross-references in the qa-runbook canonical

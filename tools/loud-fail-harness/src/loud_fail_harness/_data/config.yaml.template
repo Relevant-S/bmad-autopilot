@@ -100,3 +100,19 @@ dependency_version_pins:
 # has not yet been shown; `init`'s first successful run on the project
 # is the "first run" the FR34 one-time qualifier names.
 tea_boundary_orientation_emitted: false
+
+# Project type discriminator. Drives Orchestrator dispatch to project-type-
+# specific QA driver (Playwright MCP for web, HTTP for api, mobile MCP for
+# mobile) AND `dependencies.yaml`'s `by_project_type` resolution at init
+# preconditions. `init` writes the detected value here automatically per the
+# detection rule documented in `project_type_detection.py`'s module
+# docstring; practitioners may edit this to override the auto-detection.
+# Source: FR40 | FR-P1.5-2 (see _bmad-output/planning-artifacts/prd.md lines 865, 928)
+# Default rationale: written by `init` at install time per Story 9.2's
+# detection rule (mobile via ios/+android/ | Flutter pubspec.yaml | Expo
+# app.json → web via package.json web frameworks → api via Node/Python/
+# Go/Rust/JVM markers). The line below ships as a commented placeholder
+# (parallel to the `install_method` convention at template lines 81-89);
+# runtime-write at `init` time replaces it with the detected value.
+# Valid values: "web" | "api" | "mobile".
+# project_type: <set by `init` per Story 9.2; do not edit by hand unless overriding auto-detection>
