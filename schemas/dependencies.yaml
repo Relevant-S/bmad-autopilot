@@ -64,7 +64,9 @@
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
 # (mobile-mcp, lad).
 
-schema_version: "1.1"
+schema_version: "1.2"
+# schema_version 1.1 → 1.2: mobile-mcp activated from phase: "1.5" gate;
+# version_floor pinned to 0.0.54 per ADR-007 (Story 9.1, 2026-05-11).
 
 dependencies:
   claude-code:
@@ -129,8 +131,7 @@ dependencies:
             profile: opt-in-skip
 
   mobile-mcp:
-    phase: "1.5"
-    version_floor: "TBD-at-Phase-1.5-design-time"
+    version_floor: "0.0.54"
     by_project_type:
       mobile:
         profiles:

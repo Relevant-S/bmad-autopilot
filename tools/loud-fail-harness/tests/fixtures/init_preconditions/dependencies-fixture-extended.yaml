@@ -5,7 +5,7 @@
 #   * `by_project_type` with a missing project-type key (per AC-7 — the
 #     dispatcher records `outcome="silent"` rather than crashing).
 
-schema_version: "1.1"
+schema_version: "1.2"
 
 dependencies:
   claude-code:
@@ -42,6 +42,35 @@ dependencies:
         sub_classification: tea-module-missing
       runtime:
         profile: total-block
+
+  # Story 9.1: mobile-mcp activated — phase: "1.5" gate removed, version_floor
+  # pinned (steady-state Phase 1.5 shape per ADR-007). Exercises substrate
+  # component 5 fixture-coverage on the activated mobile-QA dependency.
+  mobile-mcp:
+    version_floor: "0.0.54"
+    by_project_type:
+      mobile:
+        profiles:
+          init:
+            profile: total-block
+            diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
+            marker_class: mobile-blocked
+          runtime:
+            profile: graceful-degrade
+            marker_class: mobile-blocked
+            diagnostic_pointer: "Mobile MCP unavailable mid-run; mobile QA phase skipped."
+      web:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+      api:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
 
   # Synthetic graceful-degrade init profile — exercises AC-4 branch.
   synthetic-graceful-degrade:

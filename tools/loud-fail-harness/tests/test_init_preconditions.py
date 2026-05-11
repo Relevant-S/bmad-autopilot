@@ -628,10 +628,11 @@ def test_load_dependencies_sdn001_failure_propagates_unchanged(
 
 def test_schema_version_bumps_non_regression() -> None:
     """AC-9 case 15: the on-disk canonical schemas at HEAD parse with
-    schema_version "1.1" (dependencies.yaml) AND "1.3"
-    (marker-taxonomy.yaml). Verifies the Story 7.3 schema bumps landed
-    AND the existing enumeration_check substrate-component-4 gate
-    continues to pass.
+    schema_version "1.2" (dependencies.yaml — Story 9.1 mobile-mcp
+    activation bumped 1.1 → 1.2 per ADR-007) AND "1.3"
+    (marker-taxonomy.yaml). Verifies the Story 7.3 schema bumps and the
+    Story 9.1 activation bump landed AND the existing enumeration_check
+    substrate-component-4 gate continues to pass.
     """
     import subprocess
 
@@ -639,7 +640,7 @@ def test_schema_version_bumps_non_regression() -> None:
     from loud_fail_harness.reconciler import load_marker_taxonomy
 
     raw = load_dependencies()
-    assert raw["schema_version"] == "1.1"
+    assert raw["schema_version"] == "1.2"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field

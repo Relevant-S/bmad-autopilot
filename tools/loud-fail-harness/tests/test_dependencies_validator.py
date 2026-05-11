@@ -894,15 +894,18 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.1"
+    assert raw["schema_version"] == "1.2"
     deps = raw["dependencies"]
-    # Per AC-4: phase: "1.5" present on mobile-mcp + lad; absent on the four MVP entries.
+    # Story 9.1: mobile-mcp activated — phase: "1.5" removed; lad retains
+    # phase: "1.5" (Epic 10 deferred). The four MVP entries remain phase-free.
     assert "phase" not in deps["claude-code"]
     assert "phase" not in deps["bmad-core"]
     assert "phase" not in deps["tea-module"]
     assert "phase" not in deps["playwright-mcp"]
-    assert deps["mobile-mcp"]["phase"] == "1.5"
+    assert "phase" not in deps["mobile-mcp"]
     assert deps["lad"]["phase"] == "1.5"
+    # Story 9.1 AC-6: version_floor pinned to the concrete value per ADR-007.
+    assert deps["mobile-mcp"]["version_floor"] == "0.0.54"
     # Per AC-4: per-lifecycle-phase variance verifiable on playwright-mcp + mobile-mcp.
     assert (
         deps["playwright-mcp"]["by_project_type"]["web"]["profiles"]["init"]["profile"]
@@ -928,6 +931,36 @@ def test_load_dependencies_returns_dict() -> None:
         deps["mobile-mcp"]["by_project_type"]["mobile"]["profiles"]["runtime"]["marker_class"]
         == "mobile-blocked"
     )
+
+
+def test_extended_fixture_mobile_mcp_activated_state() -> None:
+    """Story 9.1 AC-7 — activation-state fixture witness.
+
+    Loads the Story 7.3 extended fixture (which now includes a Story 9.1
+    activation-state ``mobile-mcp`` entry) and verifies the activated shape:
+    ``phase`` field absent, ``version_floor`` pinned per ADR-007, and the
+    mobile-project runtime profile carries ``marker_class: mobile-blocked``.
+    Ensures the activation-state fixture row is structurally valid; the added
+    ``mobile-mcp`` entry provides substrate component 5 (fixture-coverage)
+    enumeration coverage for ``mobile-blocked`` in the Phase 1.5 steady-state
+    configuration.
+    """
+    fixture_path = (
+        pathlib.Path(__file__).resolve().parent
+        / "fixtures"
+        / "init_preconditions"
+        / "dependencies-fixture-extended.yaml"
+    )
+    raw = load_dependencies(fixture_path)
+    assert validate_dependencies(raw, str(fixture_path)) == []
+    deps = raw["dependencies"]
+    assert "mobile-mcp" in deps
+    assert "phase" not in deps["mobile-mcp"]
+    assert deps["mobile-mcp"]["version_floor"] == "0.0.54"
+    mobile_profiles = deps["mobile-mcp"]["by_project_type"]["mobile"]["profiles"]
+    assert mobile_profiles["init"]["profile"] == "total-block"
+    assert mobile_profiles["runtime"]["profile"] == "graceful-degrade"
+    assert mobile_profiles["runtime"]["marker_class"] == "mobile-blocked"
 
 
 def test_load_dependencies_raises_on_invalid_shape(tmp_path: pathlib.Path) -> None:
