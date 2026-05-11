@@ -20,7 +20,8 @@ Test enumeration (Story 4.6 AC-9 — 20 tests):
     10. test_iterate_acs_plan_none_raises
     11. test_iterate_acs_plan_empty_entries_raises
     12. test_iterate_acs_plan_ac_list_mismatch_raises
-    13. test_iterate_acs_project_type_mobile_raises_value_error
+    13. class TestMobileDispatch (Story 9.3 — supersedes the prior
+        slot's ``test_iterate_acs_project_type_mobile_raises_value_error``)
     14. test_iterate_acs_project_type_web_with_none_driver_raises
     15. test_iterate_acs_project_type_api_with_none_driver_raises
     16. test_ac_iteration_result_is_frozen_and_byte_stable
@@ -33,7 +34,7 @@ Test enumeration (Story 4.6 AC-9 — 20 tests):
 from __future__ import annotations
 
 import pathlib
-from typing import Any, cast
+from typing import Any
 
 import pytest
 import yaml
@@ -50,6 +51,10 @@ from loud_fail_harness.http_driver import (
     HttpResponse,
     NetworkTraceRecord,
     NoOpApiDriver,
+)
+from loud_fail_harness.mobile_driver import (
+    MobileElement,
+    NoOpMobileDriver,
 )
 from loud_fail_harness.playwright_driver import (
     MaskedSelectorPolicy,
@@ -319,6 +324,7 @@ def test_module_all_exports() -> None:
         "SmokeFirstAbortEmissionRecord",
         "SmokeFirstAbortEmission",
         "AcIterationResult",
+        "MobileDriver",
         "PlanAbsentForIteration",
         "surface_smoke_first_abort",
         "iterate_acs",
@@ -679,23 +685,156 @@ def test_iterate_acs_plan_ac_list_mismatch_raises() -> None:
 # --------------------------------------------------------------------------- #
 
 
-# 13
-def test_iterate_acs_project_type_mobile_raises_value_error() -> None:
-    """AC-9 #13 — `project_type="mobile"` raises ValueError naming the
-    unsupported value.
+# 13 — Story 9.3: replaced by class TestMobileDispatch below. The
+# pre-Phase-1.5 rejection of project_type="mobile" was the very
+# rejection Story 9.3 repairs (per the AC-3 wording: "The existing
+# rejection on `project_type='mobile'` ... is REMOVED — it is the
+# very rejection this story repairs."). See `class TestMobileDispatch`
+# for the Phase-1.5 mobile-dispatch tests that supersede this slot.
+class TestMobileDispatch:
+    """Story 9.3 AC-3 — `iterate_acs` dispatches to
+    :func:`mobile_driver.verify_ac` on the new ``project_type='mobile'``
+    branch.
+
+    The four tests (parallel to the existing web/api dispatch tests):
+
+        * ``test_iterate_acs_mobile_happy_path`` — happy-path
+          three-AC dispatch through :class:`NoOpMobileDriver`.
+        * ``test_iterate_acs_mobile_missing_driver_raises`` —
+          ``project_type='mobile'`` with ``mobile_driver=None``
+          raises ``ValueError`` naming the missing-driver branch.
+        * ``test_iterate_acs_mobile_smoke_first_abort_on_ac1_fail``
+          — smoke-first abort fires on AC-1 fail; AC-2 is never
+          dispatched.
+        * ``test_project_type_enum_extended_to_three_members`` —
+          literal-args structural invariant
+          ``typing.get_args(ProjectType) == ("web", "api", "mobile")``.
     """
-    plan = _make_plan(("AC-1",))
-    ac_list = _make_ac_list(("AC-1",))
-    with pytest.raises(ValueError, match="unsupported project_type"):
-        iterate_acs(
+
+    def test_iterate_acs_mobile_happy_path(self) -> None:
+        """``project_type='mobile'`` + ``NoOpMobileDriver`` runs all
+        ACs through ``mobile_driver.verify_ac``; every AcResult has
+        ``status='pass'`` on the synthetic NoOp path."""
+        plan = _make_plan(("AC-1", "AC-2", "AC-3"))
+        ac_list = _make_ac_list(("AC-1", "AC-2", "AC-3"))
+        elements = (
+            MobileElement(
+                label=ac_list[0].ac_text,
+                x=10,
+                y=20,
+                width=100,
+                height=44,
+                role="AXButton",
+            ),
+            MobileElement(
+                label=ac_list[1].ac_text,
+                x=10,
+                y=80,
+                width=100,
+                height=44,
+                role="AXButton",
+            ),
+            MobileElement(
+                label=ac_list[2].ac_text,
+                x=10,
+                y=140,
+                width=100,
+                height=44,
+                role="AXButton",
+            ),
+        )
+        mobile_driver = NoOpMobileDriver(
+            assert_passed=True, elements=elements
+        )
+        capturer = NoOpEvidenceCapturer()
+        registry = _make_registry()
+
+        result = iterate_acs(
             plan=plan,
             ac_list=ac_list,
-            project_type=cast(ProjectType, "mobile"),
+            project_type="mobile",
             story_id="story-001",
-            registry=_make_registry(),
-            evidence_capturer=NoOpEvidenceCapturer(),
+            registry=registry,
+            mobile_driver=mobile_driver,
+            evidence_capturer=capturer,
             masked_selectors=MaskedSelectorPolicy(),
         )
+
+        assert len(result.ac_results) == 3
+        for ac_result in result.ac_results:
+            assert ac_result.status == "pass"
+            # FR19 evidence-triple invariant: ≥ 1 evidence_ref on every AC.
+            assert len(ac_result.evidence_refs) >= 1
+        assert result.smoke_first_abort is None
+        assert result.project_type == "mobile"
+
+    def test_iterate_acs_mobile_missing_driver_raises(self) -> None:
+        """``project_type='mobile'`` with ``mobile_driver=None``
+        raises ``ValueError`` naming the missing-driver branch
+        (parallel to the existing web/api missing-driver tests)."""
+        plan = _make_plan(("AC-1",))
+        ac_list = _make_ac_list(("AC-1",))
+        with pytest.raises(
+            ValueError, match=r"project_type='mobile' requires mobile_driver"
+        ):
+            iterate_acs(
+                plan=plan,
+                ac_list=ac_list,
+                project_type="mobile",
+                story_id="story-001",
+                registry=_make_registry(),
+                mobile_driver=None,
+                evidence_capturer=NoOpEvidenceCapturer(),
+                masked_selectors=MaskedSelectorPolicy(),
+            )
+
+    def test_iterate_acs_mobile_smoke_first_abort_on_ac1_fail(self) -> None:
+        """AC-1 fail triggers ``surface_smoke_first_abort`` exactly
+        like web/api; the result carries a single AC-1 entry with
+        ``status='fail'`` AND a ``smoke_first_abort`` record AND no
+        AC-2 dispatch."""
+        plan = _make_plan(("AC-1", "AC-2"))
+        ac_list = _make_ac_list(("AC-1", "AC-2"))
+        # NoOpMobileDriver with assert_passed=False makes
+        # assert_element_present return passed=False -> AC fails.
+        mobile_driver = NoOpMobileDriver(assert_passed=False, elements=())
+        capturer = NoOpEvidenceCapturer()
+        registry = _make_registry()
+
+        result = iterate_acs(
+            plan=plan,
+            ac_list=ac_list,
+            project_type="mobile",
+            story_id="story-001",
+            registry=registry,
+            mobile_driver=mobile_driver,
+            evidence_capturer=capturer,
+            masked_selectors=MaskedSelectorPolicy(),
+        )
+
+        assert len(result.ac_results) == 1
+        assert result.ac_results[0].ac_id == "AC-1"
+        assert result.ac_results[0].status == "fail"
+        assert result.smoke_first_abort is not None
+        assert (
+            result.smoke_first_abort.marker_class == SMOKE_FIRST_ABORT_MARKER
+        )
+        assert result.project_type == "mobile"
+        # AC-2 was never dispatched (smoke-first abort).
+        recorded_actions = [
+            entry[0] for entry in mobile_driver.recorded
+        ]
+        # Exactly one assert_element_present call (AC-1 only).
+        assert recorded_actions.count("assert_element_present") == 1
+
+    def test_project_type_enum_extended_to_three_members(self) -> None:
+        """``typing.get_args(qa_ac_iteration.ProjectType) ==
+        ("web", "api", "mobile")`` — the literal-args structural
+        invariant locking in the enum widening (parallel to how
+        Story 9.2 AC-8 locks in ``_PROJECT_TYPES`` invariance)."""
+        from typing import get_args
+
+        assert get_args(ProjectType) == ("web", "api", "mobile")
 
 
 # 14

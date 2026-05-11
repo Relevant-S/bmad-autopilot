@@ -97,20 +97,27 @@ _REQUIRED_CONFIG_SOURCE_IDENTIFIERS: Final[tuple[str, ...]] = (
 )
 
 #: Required ``Story <N>`` cross-references in the qa-runbook canonical
-#: content per AC-2 / AC-7 case 5.
+#: content per AC-2 / AC-7 case 5. Story 9.3 added the `mobile_app_package_name`
+#: field for Phase 1.5 mobile QA per ADR-007.
 _REQUIRED_QA_RUNBOOK_STORY_REFS: Final[tuple[str, ...]] = (
     "Story 4.1",
     "Story 4.8",
     "Story 4.12",
+    "Story 9.3",
 )
 
 #: Required canonical-name strings in the qa-runbook content per AC-7
-#: case 5 — exercise the documented opt-in field names directly.
+#: case 5 — exercise the documented opt-in field names directly. Story 9.3
+#: extended with `mobile_app_package_name` (REQUIRED for project_type=mobile)
+#: + the `FR-P1.5-2` source identifier (parallel to Story 9.2's
+#: `_REQUIRED_CONFIG_SOURCE_IDENTIFIERS` extension precedent).
 _REQUIRED_QA_RUNBOOK_NAME_STRINGS: Final[tuple[str, ...]] = (
     "masked_selectors",
     "tier_3_semantic_verification",
     "behavioral_plan_overrides",
     "not_configured",
+    "mobile_app_package_name",
+    "FR-P1.5-2",
 )
 
 #: Forbidden placeholder markers per AC-7 case 7.

@@ -28,6 +28,21 @@
 # ---
 
 # ---
+# mobile_app_package_name — REQUIRED for `project_type: mobile`; IGNORED for web/api
+# Story 9.3 — Phase 1.5 mobile QA via mobile MCP per ADR-007
+# Source: FR-P1.5-2 | FR17 (see _bmad-output/planning-artifacts/prd.md lines 928, 851)
+# Mobile-app package name OR iOS bundle identifier. Consumed by the mobile-MCP
+# driver's `launch_app` at AC-iteration start (Story 9.3). REQUIRED for
+# `project_type: mobile`; IGNORED for `project_type: web|api`. The value MUST be
+# the runtime-installed app's identifier (Android: `com.example.app`; iOS:
+# `com.example.MyApp`). The mobile-MCP server resolves this against the
+# connected device's installed-apps list via `mobile_list_apps` if needed; the
+# practitioner sets this once per project.
+# Worked example (uncomment to enable for mobile projects):
+# mobile_app_package_name: com.example.app
+# ---
+
+# ---
 # tier_3_semantic_verification — opt-in (default: not_configured)
 # Story 4.8; FR20 | FR21
 # How to enable: uncomment the block below and configure a semantic

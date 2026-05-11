@@ -629,10 +629,13 @@ def test_load_dependencies_sdn001_failure_propagates_unchanged(
 def test_schema_version_bumps_non_regression() -> None:
     """AC-9 case 15: the on-disk canonical schemas at HEAD parse with
     schema_version "1.2" (dependencies.yaml — Story 9.1 mobile-mcp
-    activation bumped 1.1 → 1.2 per ADR-007) AND "1.3"
-    (marker-taxonomy.yaml). Verifies the Story 7.3 schema bumps and the
-    Story 9.1 activation bump landed AND the existing enumeration_check
-    substrate-component-4 gate continues to pass.
+    activation bumped 1.1 → 1.2 per ADR-007) AND "1.4"
+    (marker-taxonomy.yaml — Story 9.3 bumped 1.3 → 1.4 for the
+    ``mobile-mcp-init-unreachable`` sub-classification addition per
+    ADR-007 / Phase 1.5 mobile-mcp activation). Verifies the Story 7.3
+    + Story 9.3 schema bumps and the Story 9.1 activation bump landed
+    AND the existing enumeration_check substrate-component-4 gate
+    continues to pass.
     """
     import subprocess
 
@@ -653,7 +656,7 @@ def test_schema_version_bumps_non_regression() -> None:
         / "marker-taxonomy.yaml"
     )
     taxonomy_data = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
-    assert taxonomy_data["schema_version"] == "1.3"
+    assert taxonomy_data["schema_version"] == "1.4"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`
@@ -667,6 +670,9 @@ def test_schema_version_bumps_non_regression() -> None:
         "bmad-core-version-mismatch",
         "claude-code-version-mismatch",
         "playwright-mcp-init-unreachable",
+        # Story 9.3 mobile-mcp activation (ADR-007) — additional
+        # sub_classification appended under env-setup-failed.
+        "mobile-mcp-init-unreachable",
     }
     assert new_subs.issubset(set(env_entry["sub_classifications"]))
 

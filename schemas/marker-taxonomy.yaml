@@ -73,8 +73,14 @@
 #                            playwright-mcp-init-unreachable) per the file's
 #                            documented PATCH-bump rule (adding a
 #                            sub_classification under an existing class).
+#   1.3 → 1.4 (Story 9.3) — additive: appended `mobile-mcp-init-unreachable`
+#                            sub_classification under env-setup-failed for
+#                            Phase 1.5 mobile-mcp activation (ADR-007). The
+#                            top-level 27-class closed-set is preserved; no
+#                            MAJOR bump per epics-phase-1.5.md line 120.
 
-schema_version: "1.3"
+# schema MINOR bump for Story 9.3 mobile-mcp-init-unreachable sub-classification
+schema_version: "1.4"
 
 markers:
 
@@ -136,6 +142,7 @@ markers:
       - bmad-core-version-mismatch
       - claude-code-version-mismatch
       - playwright-mcp-init-unreachable
+      - mobile-mcp-init-unreachable
 
   - marker_class: plan-drift-detected
     diagnostic_pointer: |

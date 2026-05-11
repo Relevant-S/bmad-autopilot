@@ -933,3 +933,175 @@ def test_step_file_env_provisioning_md_exists_with_required_sections(
         "surface_env_setup_failure",
     ):
         assert symbol in text, f"step file missing primitive: {symbol}"
+
+
+# --------------------------------------------------------------------------- #
+# Story 9.3 — TestMobileProvisioning: mobile env kind + MobileMcpProvisioner  #
+# routing through provision_env's env-setup-failed.mobile-mcp-init-unreachable #
+# sub-cause path.                                                              #
+# --------------------------------------------------------------------------- #
+
+
+class TestMobileProvisioning:
+    """Story 9.3 AC-7 — `ProvisionedEnv` accepts `env_kind="mobile"`;
+    `MobileMcpProvisioner` provisioning and teardown paths route correctly
+    through Story 4.3's `provision_env` machinery.
+    """
+
+    def test_provisioned_env_accepts_mobile_env_kind(self) -> None:
+        """`ProvisionedEnv(env_kind="mobile", port=0, pid=0, ...)`
+        instantiates without raising; `model_dump()["env_kind"] == "mobile"`.
+        Witness of the Story 9.3 EnvKind widening + port/pid constraint
+        relaxation."""
+        pe = ProvisionedEnv(
+            env_kind="mobile",
+            port=0,
+            pid=0,
+            started_at=datetime(2026, 5, 11, 10, 0, 0, tzinfo=timezone.utc),
+            health_url=None,
+        )
+        assert pe.model_dump()["env_kind"] == "mobile"
+        assert pe.port == 0
+        assert pe.pid == 0
+        assert pe.health_url is None
+
+    def test_mobile_provisioner_returns_zero_port_pid_health_none(self) -> None:
+        """`MobileMcpProvisioner(probe=NoOpMobileMcpAvailabilityProbe()).provision()`
+        returns a `ProvisionedEnv` with `port=0`, `pid=0`, `health_url=None`,
+        `env_kind="mobile"`."""
+        from loud_fail_harness.mobile_driver import (
+            MobileMcpProvisioner,
+            NoOpMobileMcpAvailabilityProbe,
+        )
+
+        provisioner = MobileMcpProvisioner(
+            probe=NoOpMobileMcpAvailabilityProbe()
+        )
+        pe = provisioner.provision()
+
+        assert pe.env_kind == "mobile"
+        assert pe.port == 0
+        assert pe.pid == 0
+        assert pe.health_url is None
+
+    def test_mobile_provisioner_probe_false_raises_launch_failed(self) -> None:
+        """`MobileMcpProvisioner(probe=...returns_false=True).provision()`
+        raises `MobileMcpLaunchFailed` whose `failure_step` ==
+        `"mobile-mcp-init-unreachable"` byte-for-byte (Story 9.3 AC-6
+        + AC-7)."""
+        from loud_fail_harness.mobile_driver import (
+            MobileMcpLaunchFailed,
+            MobileMcpProvisioner,
+            NoOpMobileMcpAvailabilityProbe,
+        )
+
+        provisioner = MobileMcpProvisioner(
+            probe=NoOpMobileMcpAvailabilityProbe(returns_false=True)
+        )
+        with pytest.raises(MobileMcpLaunchFailed) as exc_info:
+            provisioner.provision()
+        assert exc_info.value.failure_step == "mobile-mcp-init-unreachable"
+
+    def test_provision_env_routes_mobile_failure_to_env_setup_failed(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """`provision_env(MobileMcpProvisioner(probe=...returns_false), ...)`
+        catches the `MobileMcpLaunchFailed` exception, calls
+        `surface_env_setup_failure(sub_cause="mobile-mcp-init-unreachable")`,
+        and the returned emission carries the marker-class
+        `"env-setup-failed"` plus the sub-classification
+        `"mobile-mcp-init-unreachable"`."""
+        from loud_fail_harness.mobile_driver import (
+            MobileMcpProvisioner,
+            NoOpMobileMcpAvailabilityProbe,
+        )
+
+        run_state_path = tmp_path / "run-state.yaml"
+        _seed_run_state(run_state_path)
+        provisioner = MobileMcpProvisioner(
+            probe=NoOpMobileMcpAvailabilityProbe(returns_false=True)
+        )
+        _, appender = _make_collector_appender()
+
+        with pytest.raises(EnvProvisioningFailed) as exc_info:
+            provision_env(
+                story_id="story-9-3",
+                project_type="mobile",
+                provisioner=provisioner,
+                port=51000,
+                run_state_path=run_state_path,
+                registry=_canonical_env_setup_failed_registry(),
+                event_appender=appender,
+            )
+
+        emission = exc_info.value.emission
+        assert emission.marker_record.marker_class == "env-setup-failed"
+        assert emission.marker_record.sub_cause == "mobile-mcp-init-unreachable"
+        assert (
+            emission.diagnostic.failure_step == "mobile-mcp-init-unreachable"
+        )
+
+
+    def test_provision_env_mobile_happy_path(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """provision_env with MobileMcpProvisioner(probe=True) succeeds and
+        emits an ``env-provisioned`` event with ``env_kind="mobile"``.
+
+        Regression guard for the orchestrator-event.yaml ``env_kind`` enum
+        widening (both ``env-provisioned`` and ``env-torn-down`` branches must
+        admit ``"mobile"`` or ``make_env_provisioned_event`` raises
+        ``ValueError`` — Story 9.3 review patch F-01).
+        """
+        from loud_fail_harness.mobile_driver import (
+            MobileMcpProvisioner,
+            NoOpMobileMcpAvailabilityProbe,
+        )
+
+        run_state_path = tmp_path / "run-state.yaml"
+        _seed_run_state(run_state_path)
+        provisioner = MobileMcpProvisioner(
+            probe=NoOpMobileMcpAvailabilityProbe()
+        )
+        collector, appender = _make_collector_appender()
+
+        pe = provision_env(
+            story_id="story-9-3",
+            project_type="mobile",
+            provisioner=provisioner,
+            port=51000,
+            run_state_path=run_state_path,
+            registry=_canonical_env_setup_failed_registry(),
+            event_appender=appender,
+        )
+
+        assert pe.env_kind == "mobile"
+        assert pe.port == 0
+        assert pe.pid == 0
+        assert pe.health_url is None
+        # The env-provisioned event must carry env_kind="mobile"; confirms the
+        # schema enum now admits the mobile branch without ValueError.
+        env_provisioned = [
+            e
+            for e in collector
+            if e.get("event_class") == "env-provisioned"
+        ]
+        assert len(env_provisioned) == 1
+        assert env_provisioned[0]["env_kind"] == "mobile"
+
+    def test_mobile_teardown_is_noop(self) -> None:
+        """`MobileMcpTeardown().teardown(provisioned_env)` returns `None`
+        without raising; no side-effects (no process kill, no file
+        deletion — Mobile MCP is Claude-Code-managed)."""
+        from loud_fail_harness.mobile_driver import MobileMcpTeardown
+
+        pe = ProvisionedEnv(
+            env_kind="mobile",
+            port=0,
+            pid=0,
+            started_at=datetime(2026, 5, 11, 10, 0, 0, tzinfo=timezone.utc),
+            health_url=None,
+        )
+        teardown = MobileMcpTeardown()
+        result = teardown.teardown(pe)
+        assert result is None

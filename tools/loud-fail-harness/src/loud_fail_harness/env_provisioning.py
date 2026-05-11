@@ -277,18 +277,22 @@ _PROVISIONED_ENV_FIELD: str = "provisioned_env"
 #: ``schemas/orchestrator-event.yaml`` lines 318 + 343's
 #: ``env_kind`` enum byte-for-byte. Kebab-case identifiers per
 #: Pattern 1's identifier boundary (architecture.md lines 932-935).
-EnvKind = Literal["web", "api"]
+EnvKind = Literal["web", "api", "mobile"]
 
 
 #: Closed enum for :class:`MarkerEmissionRecord.sub_cause` when
 #: ``marker_class == "env-setup-failed"``. Mirrors
-#: ``schemas/marker-taxonomy.yaml`` lines 110-113's
+#: ``schemas/marker-taxonomy.yaml``'s
 #: ``env-setup-failed.sub_classifications`` enum byte-for-byte;
-#: kebab-case identifiers per Pattern 1.
+#: kebab-case identifiers per Pattern 1. Story 9.3 appended
+#: ``mobile-mcp-init-unreachable`` (Phase 1.5 mobile-mcp activation
+#: per ADR-007); see :exc:`MobileMcpLaunchFailed` in
+#: :mod:`loud_fail_harness.mobile_driver`.
 EnvSetupFailureSubCause = Literal[
     "port-bind-failed",
     "playwright-launch-failed",
     "dev-server-not-ready",
+    "mobile-mcp-init-unreachable",
 ]
 
 
@@ -327,27 +331,41 @@ class ProvisionedEnv(BaseModel):
     ``model_dump_json()`` output.
 
     Field semantics:
-        * ``env_kind`` — one of ``web | api`` mirroring the
+        * ``env_kind`` — one of ``web | api | mobile`` mirroring the
           orchestrator-event schema's existing ``env_kind`` enum at
-          ``orchestrator-event.yaml`` lines 318 + 343 byte-for-byte.
+          ``orchestrator-event.yaml`` lines 318 + 343. Widened
+          to include ``mobile`` by Story 9.3 per ADR-007.
         * ``port`` — the integer ephemeral TCP port the dev/API
           server is bound to. Matches the event schema's ``port``
-          field at line 320; integer in ``[1, 65535]``.
+          field at line 320; integer in ``[0, 65535]``. Story 9.3
+          relaxed the lower bound from ``1`` to ``0`` to admit the
+          not-applicable sentinel value used for the mobile env
+          (``MobileMcpProvisioner`` emits ``port=0`` because the
+          mobile MCP is an npx-stdio process Claude Code manages,
+          not an Automator-spawned listener).
         * ``pid`` — the integer process ID of the dev/API server
           spawned by the project-type-specific provisioner.
           Matches the event schema's ``pid`` field at line 322.
+          Story 9.3 relaxed the lower bound from ``1`` to ``0`` for
+          the same not-applicable-sentinel rationale.
         * ``started_at`` — ISO-8601 timestamp marking when
           provisioning completed. Mirrors the orchestrator-event
           schema's ``timestamp`` field's ``format: date-time``
           discipline at line 110.
+        * ``health_url`` — optional HTTP health-endpoint URL the
+          orchestrator can poll for project-type-specific liveness.
+          :data:`None` when the project type exposes no HTTP health
+          endpoint (mobile per Story 9.3); :data:`None` is also the
+          default for web/api envs that do not surface one.
     """
 
     model_config = ConfigDict(frozen=True)
 
     env_kind: EnvKind
-    port: int = Field(ge=1, le=65535)
-    pid: int = Field(ge=1)
+    port: int = Field(ge=0, le=65535)
+    pid: int = Field(ge=0)
     started_at: datetime
+    health_url: str | None = None
 
 
 class EnvSetupFailureDiagnostic(BaseModel):
@@ -904,8 +922,9 @@ def make_env_provisioned_event(
         story_id: BMAD story identifier; bound to the event's
             ``story_id`` field per the orchestrator-event schema's
             top-level required fields.
-        env_kind: ``web`` or ``api`` per the schema's ``env_kind``
-            enum at orchestrator-event.yaml line 318.
+        env_kind: ``web``, ``api``, or ``mobile`` per the schema's
+            ``env_kind`` enum at orchestrator-event.yaml lines 318
+            and 343 (Story 9.3 widened both branches).
         port: The integer ephemeral TCP port the dev/API server is
             bound to.
         pid: The integer process ID of the spawned server.
@@ -1110,6 +1129,7 @@ def provision_env(
             "port-bind-failed",
             "playwright-launch-failed",
             "dev-server-not-ready",
+            "mobile-mcp-init-unreachable",
         ):
             failure_step = cast(EnvSetupFailureSubCause, raw_failure_step)
         else:

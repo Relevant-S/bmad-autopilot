@@ -315,7 +315,7 @@ oneOf:
       story_id: { type: string, minLength: 1 }
       env_kind:
         type: string
-        enum: [web, api]
+        enum: [web, api, mobile]
       port:
         type: integer
       pid:
@@ -340,7 +340,7 @@ oneOf:
       story_id: { type: string, minLength: 1 }
       env_kind:
         type: string
-        enum: [web, api]
+        enum: [web, api, mobile]
       outcome:
         type: string
         enum: [clean, orphan-process-cleanup]

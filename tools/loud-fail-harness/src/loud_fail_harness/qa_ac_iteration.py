@@ -155,6 +155,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from loud_fail_harness.http_driver import verify_ac as _http_verify_ac
+from loud_fail_harness.http_driver import ApiDriver
+# Story 9.3 — mobile project type dispatch
+from loud_fail_harness.mobile_driver import MobileDriver
+from loud_fail_harness.mobile_driver import verify_ac as _mobile_verify_ac
 from loud_fail_harness.playwright_driver import (
     AcResult,
     EvidenceCapturer,
@@ -162,7 +166,6 @@ from loud_fail_harness.playwright_driver import (
     WebDriver,
 )
 from loud_fail_harness.playwright_driver import verify_ac as _playwright_verify_ac
-from loud_fail_harness.http_driver import ApiDriver
 from loud_fail_harness.qa_behavioral_plan import AcEntry, QABehavioralPlan
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
@@ -180,11 +183,11 @@ SMOKE_FIRST_ABORT_MARKER: Literal["smoke-first-abort"] = "smoke-first-abort"
 
 #: The supported project-type literal alias mirroring the dispatch
 #: payload's ``project_type`` enum at
-#: ``schemas/tea-handoff-contract.yaml`` lines 133-141 minus
-#: ``mobile`` (mobile is opt-in-skip at MVP per the dispatch schema
-#: enum comment; the iteration framework rejects ``mobile`` with a
-#: clear ``ValueError`` diagnostic).
-ProjectType = Literal["web", "api"]
+#: ``schemas/tea-handoff-contract.yaml`` lines 133-141 byte-for-byte.
+#: Story 9.3 widened the literal to include ``mobile``: mobile
+#: dispatch is wired to :func:`loud_fail_harness.mobile_driver.verify_ac`
+#: per Story 9.3 + ADR-007 (Phase 1.5 mobile-mcp activation).
+ProjectType = Literal["web", "api", "mobile"]
 
 
 class SmokeFirstAbortDiagnosticContext(BaseModel):
@@ -448,6 +451,7 @@ def iterate_acs(
     *,
     web_driver: WebDriver | None = None,
     api_driver: ApiDriver | None = None,
+    mobile_driver: MobileDriver | None = None,
     evidence_capturer: EvidenceCapturer,
     masked_selectors: MaskedSelectorPolicy,
 ) -> AcIterationResult:
@@ -467,8 +471,10 @@ def iterate_acs(
 
             - ``project_type="web"`` with ``web_driver=None``;
             - ``project_type="api"`` with ``api_driver=None``;
-            - ``project_type`` not in ``{"web", "api"}`` (rejects
-              ``"mobile"`` and any other string).
+            - ``project_type="mobile"`` with ``mobile_driver=None``
+              (Story 9.3 Phase 1.5 mobile-mcp activation);
+            - ``project_type`` not in ``{"web", "api", "mobile"}``
+              (any other string).
 
         * **Step 2 — plan-absent / plan-ac-list-mismatch
           detection** (AC-5). Raises
@@ -512,9 +518,10 @@ def iterate_acs(
             :class:`AcEntry`. Must align 1-1 with ``plan.entries``
             by ``ac_id`` (else :exc:`PlanAbsentForIteration`).
         project_type: ``"web"`` (dispatch via
-            :mod:`playwright_driver`) or ``"api"`` (dispatch via
-            :mod:`http_driver`). Any other value raises
-            :exc:`ValueError`.
+            :mod:`playwright_driver`), ``"api"`` (dispatch via
+            :mod:`http_driver`), or ``"mobile"`` (dispatch via
+            :mod:`mobile_driver` — Story 9.3 Phase 1.5 mobile-mcp
+            activation). Any other value raises :exc:`ValueError`.
         story_id: The BMAD story identifier; threaded into the
             smoke-first-abort diagnostic context on AC-1 failure.
         registry: The runtime :class:`MarkerClassRegistry`. Must
@@ -525,6 +532,9 @@ def iterate_acs(
         api_driver: The :class:`ApiDriver` Protocol implementation
             for ``project_type="api"``; required (else
             :exc:`ValueError`).
+        mobile_driver: The :class:`MobileDriver` Protocol
+            implementation for ``project_type="mobile"``; required
+            for that branch (else :exc:`ValueError`). Story 9.3.
         evidence_capturer: The :class:`EvidenceCapturer` Protocol
             implementation; threaded into every
             :func:`verify_ac` call.
@@ -552,17 +562,26 @@ def iterate_acs(
         :exc:`loud_fail_harness.http_driver.ApiServiceBroken`:
             re-raised UNCHANGED on mid-run service-broken for
             ``project_type="api"``.
+        :exc:`loud_fail_harness.mobile_driver.MobileMcpUnavailable`:
+            re-raised UNCHANGED on mid-run mobile-MCP unavailability
+            for ``project_type="mobile"`` — parallel to
+            ``PlaywrightMcpUnavailable`` for web. The QA wrapper
+            catches and routes through
+            :func:`loud_fail_harness.mobile_driver.surface_mobile_mcp_unavailable`.
     """
     # Step 1 — argument validation (AC-6). Order matters: validate
     # project_type's driver-presence pair BEFORE rejecting unknown
     # project_types so the practitioner sees the most-specific
-    # diagnostic.
+    # diagnostic. Story 9.3 added the ``mobile`` branch.
     if project_type == "web":
         if web_driver is None:
             raise ValueError("project_type='web' requires web_driver")
     elif project_type == "api":
         if api_driver is None:
             raise ValueError("project_type='api' requires api_driver")
+    elif project_type == "mobile":
+        if mobile_driver is None:
+            raise ValueError("project_type='mobile' requires mobile_driver")
     else:
         raise ValueError(f"unsupported project_type: {project_type!r}")
 
@@ -599,8 +618,8 @@ def iterate_acs(
                 evidence_capturer=evidence_capturer,
                 masked_selectors=masked_selectors,
             )
-        else:  # project_type == "api" — narrowed by AC-6 guard above
-            assert api_driver is not None
+        elif project_type == "api":
+            assert api_driver is not None  # narrowed by AC-6 guard above
             ac_result = _http_verify_ac(
                 ac_id=entry.ac_id,
                 ac_text=ac_text_by_id[entry.ac_id],
@@ -608,6 +627,16 @@ def iterate_acs(
                 driver=api_driver,
                 evidence_capturer=evidence_capturer,
                 masked_selectors=masked_selectors,
+            )
+        else:  # project_type == "mobile" — Story 9.3; narrowed by AC-6 guard above
+            assert mobile_driver is not None
+            ac_result = _mobile_verify_ac(
+                entry.ac_id,
+                ac_text_by_id[entry.ac_id],
+                entry,
+                mobile_driver,
+                evidence_capturer,
+                masked_selectors,
             )
         collected.append(ac_result)
 
@@ -636,6 +665,7 @@ def iterate_acs(
 __all__ = [
     "SMOKE_FIRST_ABORT_MARKER",
     "AcIterationResult",
+    "MobileDriver",
     "PlanAbsentForIteration",
     "ProjectType",
     "SmokeFirstAbortDiagnosticContext",

@@ -45,14 +45,15 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_3(taxonomy_data: dict) -> None:
-    """Story 7.3 bumps schema_version from ``"1.2"`` to ``"1.3"`` per
-    the file's own PATCH-bump rule (additive: four new sub_classifications
-    appended under ``env-setup-failed`` for init-phase precondition
-    failures — tea-module-missing, bmad-core-version-mismatch,
-    claude-code-version-mismatch, playwright-mcp-init-unreachable).
+def test_taxonomy_schema_version_is_1_4(taxonomy_data: dict) -> None:
+    """Story 9.3 bumps schema_version from ``"1.3"`` to ``"1.4"`` per
+    the file's own PATCH-bump rule (additive: one new sub_classification
+    ``mobile-mcp-init-unreachable`` appended under ``env-setup-failed``
+    for Phase 1.5 mobile-mcp activation per ADR-007). The top-level
+    27-class closed-set is preserved; no MAJOR bump per
+    ``epics-phase-1.5.md`` line 120.
     """
-    assert taxonomy_data.get("schema_version") == "1.3"
+    assert taxonomy_data.get("schema_version") == "1.4"
 
 
 def test_every_marker_has_non_empty_diagnostic_pointer(
