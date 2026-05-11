@@ -106,7 +106,7 @@ The driver substrate references ONLY `loud_fail_harness.playwright_driver` (for 
 
 ## Forward consumers
 
-- **Story 9.4 — mobile exploratory heuristics (three MVP-parity heuristics with `heuristic-skipped` emission)** composes against THIS story's `mobile_driver` substrate landing at AC-iteration time; the heuristic dispatcher composes the same three Phase-1 heuristics (empty-state, error-state, auth-boundary) AS-IS, with the addition of mobile-specific applicability gating.
+- **Story 9.4 (LANDED) — mobile exploratory heuristics (three MVP-parity heuristics with `heuristic-skipped` emission)** composes against THIS story's `mobile_driver` substrate landing at AC-iteration time per the mobile-specific scenario rebinding at `skills/bmad-automation/steps/qa-mobile-heuristics.md` (Story 9.4). The `HeuristicKind` Literal is reused AS-IS; marker taxonomy v1 closed-set is preserved.
 - **Story 9.5 — init-time + mid-run `mobile-blocked` paths** consumes the structured `MobileMcpUnavailableEmission` produced by `surface_mobile_mcp_unavailable` AND lands the init-time emission path (when `init_preconditions` cannot reach the mobile MCP at run-start). The diagnostic-pointer destination is `docs/mobile-mcp-setup.md`, authored by Story 9.5 (referenced by the init-time marker's `diagnostic` text per ADR-007 Consequence 4).
 - **Story 9.6 — reference mobile-project fixture end-to-end run** composes against THIS step's protocol end-to-end, exercising the full ten-method MobileDriver Protocol against a reference mobile project (the QA wrapper's procedural-composition end-to-end).
 - **Epic 11 — Phase 1.5 completion evidence** references THIS step as the FR-P1.5-2 evidence in `phase-1.5-completion-evidence.md` (Story 11.1's deliverable).

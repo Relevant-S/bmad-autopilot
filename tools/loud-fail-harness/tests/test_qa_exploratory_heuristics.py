@@ -43,6 +43,11 @@ evaluate_heuristic_applicability decision matrix:
 
 LF line endings (optional):
     23. test_qa_exploratory_heuristics_module_has_lf_line_endings
+
+Mobile-project-type composability (Story 9.4):
+    24. test_evaluate_heuristic_applicability_unchanged_for_mobile_plan
+    25. test_surface_heuristic_skipped_unchanged_for_mobile_story_id
+    26. test_tag_heuristic_finding_unchanged_for_mobile_finding
 """
 
 from __future__ import annotations
@@ -390,3 +395,66 @@ def test_qa_exploratory_heuristics_module_has_lf_line_endings() -> None:
     )
     raw = pathlib.Path(module_path).read_bytes()
     assert b"\r" not in raw
+
+
+# --------------------------------------------------------------------------- #
+# 7. Mobile-project-type composability (Story 9.4)                            #
+#                                                                             #
+# Witnesses that Story 4.9's substrate is project-type-agnostic by design —   #
+# the same primitives compose against mobile plans / story-ids / findings    #
+# without behavioral divergence.                                              #
+# --------------------------------------------------------------------------- #
+
+
+def test_evaluate_heuristic_applicability_unchanged_for_mobile_plan() -> None:
+    """Plan whose entries declare ``heuristic_applicability=("empty-state",)``
+    on AC-1 + ``()`` on AC-2 yields the same per-kind decisions on a
+    mobile-project plan as on a web/api plan — the function reads ONLY
+    ``plan.entries[*].heuristic_applicability`` (no project-type input)."""
+    plan = _make_plan([("empty-state",), ()])
+    assert evaluate_heuristic_applicability(plan, "empty-state") is True
+    assert evaluate_heuristic_applicability(plan, "error-state") is False
+    assert evaluate_heuristic_applicability(plan, "auth-boundary") is False
+
+
+def test_surface_heuristic_skipped_unchanged_for_mobile_story_id() -> None:
+    """A mobile-style story_id flows through ``surface_heuristic_skipped``
+    AS-IS — no mobile-specific suffix or sub-classification is introduced
+    (taxonomy v1 closed-set witness)."""
+    registry = _make_registry()
+    emission = surface_heuristic_skipped(
+        story_id="mobile-auto-001",
+        heuristic_kind="error-state",
+        registry=registry,
+    )
+    assert emission.marker_record.marker_class == "heuristic-skipped"
+    assert emission.marker_record.sub_classification == "error-state"
+    assert emission.diagnostic_context.story_id == "mobile-auto-001"
+    assert emission.diagnostic_context.heuristic_kind == "error-state"
+
+
+def test_tag_heuristic_finding_unchanged_for_mobile_finding() -> None:
+    """Mobile-specific evidence_refs (a11y-tree JSON path + PNG
+    screenshot path) flow through ``tag_heuristic_finding`` AS-IS — the
+    function is project-type-agnostic; only the
+    ``verification_mode`` discriminator is stamped."""
+    finding = {
+        "id": "f-mobile-1",
+        "source": "qa",
+        "title": "empty-list state lacks accessible label",
+        "detail": "the empty-list UI surfaces no a11y label",
+        "location": "_bmad-output/qa-evidence/mobile-auto-001/run-1/a11y.json",
+        "bucket": "decision_needed",
+        "severity": "MED",
+        "evidence_refs": (
+            "_bmad-output/qa-evidence/mobile-auto-001/run-1/a11y.json",
+            "_bmad-output/qa-evidence/mobile-auto-001/run-1/empty-list.png",
+        ),
+    }
+    snapshot = dict(finding)
+    result = tag_heuristic_finding(finding)
+    assert finding == snapshot
+    assert result is not finding
+    assert result["verification_mode"] == "exploratory-heuristic"
+    for k, v in finding.items():
+        assert result[k] == v
