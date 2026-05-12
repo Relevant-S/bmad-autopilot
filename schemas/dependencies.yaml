@@ -64,9 +64,14 @@
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
 # (mobile-mcp, lad).
 
-schema_version: "1.2"
+schema_version: "1.3"
 # schema_version 1.1 → 1.2: mobile-mcp activated from phase: "1.5" gate;
 # version_floor pinned to 0.0.54 per ADR-007 (Story 9.1, 2026-05-11).
+# schema_version 1.2 → 1.3: mobile-mcp init + runtime profiles declare
+#                           sub_classification fields (init-unavailable +
+#                           mid-run-unavailable respectively) per Story 9.5
+#                           to make the init-time vs mid-run emission paths
+#                           distinct in the PR bundle.
 
 dependencies:
   claude-code:
@@ -139,9 +144,11 @@ dependencies:
             profile: total-block
             diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
             marker_class: mobile-blocked
+            sub_classification: init-unavailable
           runtime:
             profile: graceful-degrade
             marker_class: mobile-blocked
+            sub_classification: mid-run-unavailable
             diagnostic_pointer: "Mobile MCP unavailable mid-run; mobile QA phase skipped."
       web:
         profiles:

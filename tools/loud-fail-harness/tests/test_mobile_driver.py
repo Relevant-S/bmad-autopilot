@@ -42,6 +42,7 @@ import yaml
 from loud_fail_harness import mobile_driver, playwright_driver
 from loud_fail_harness.mobile_driver import (
     MOBILE_BLOCKED_MARKER,
+    MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION,
     MaskedSelectorPolicy,
     MobileDriver,
     MobileDriverAssertion,
@@ -59,6 +60,8 @@ from loud_fail_harness.playwright_driver import (
     NoOpEvidenceCapturer,
 )
 from loud_fail_harness.qa_behavioral_plan import QABehavioralPlanEntry
+from loud_fail_harness.marker_wiring import record_marker_with_context
+from loud_fail_harness.run_state import CostToDateBySpecialist, RunState
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     UnknownMarkerClass,
@@ -103,6 +106,22 @@ def _load_taxonomy() -> dict[str, Any]:
         / "marker-taxonomy.yaml"
     )
     return yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
+
+
+def _make_run_state() -> RunState:
+    return RunState(
+        schema_version="1.3",
+        story_id="9-5-test",
+        run_id="run-001",
+        current_state="in-progress",
+        branch_name="bmad-automation/story/9-5-test",
+        dispatched_specialist=None,
+        last_envelope=None,
+        pending_qa_dispatch_payload=None,
+        retry_history=(),
+        active_markers=(),
+        cost_to_date_by_specialist=CostToDateBySpecialist(),
+    )
 
 
 # Ten canonical MobileDriver Protocol method names per AC-2.
@@ -513,7 +532,9 @@ def test_surface_mobile_mcp_unavailable_returns_emission_with_diagnostic() -> No
     )
 
     assert emission.marker_record.marker_class == MOBILE_BLOCKED_MARKER
-    assert emission.marker_record.sub_cause is None
+    # Story 9.5: surface_mobile_mcp_unavailable now stamps the mid-run
+    # sub_classification (was None pre-Story-9.5).
+    assert emission.marker_record.sub_cause == "mid-run-unavailable"
     assert emission.diagnostic.story_id == "story-001"
     assert emission.diagnostic.action_kind == "screenshot"
     assert emission.diagnostic.prior_evidence_refs == (
@@ -597,15 +618,20 @@ def test_evidence_capturer_no_redaction_when_policy_empty() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# 17 — `mobile-blocked` marker class linkage: empty sub_classifications.      #
+# 17 — `mobile-blocked` marker class closed-set: two sub_classifications.     #
 # --------------------------------------------------------------------------- #
 
 
-def test_mobile_blocked_marker_has_empty_sub_classifications() -> None:
-    """Taxonomy invariant: the `mobile-blocked` entry's `sub_classifications`
-    is an empty list (the marker carries no sub-classifications). Drift
-    against this constraint would invalidate `surface_mobile_mcp_unavailable`'s
-    `sub_cause=None` contract.
+def test_mobile_blocked_marker_sub_classifications_closed_set() -> None:
+    """Story 9.5 taxonomy invariant: the `mobile-blocked` entry's
+    `sub_classifications` is the closed two-member set
+    ``[init-unavailable, mid-run-unavailable]`` (the marker-taxonomy
+    1.4 → 1.5 bump per Story 9.5 added both members; the init-time
+    path threads ``init-unavailable`` via
+    ``dependencies.yaml`` → ``_dispatch_total_block``, and the mid-run
+    path threads ``mid-run-unavailable`` via
+    ``surface_mobile_mcp_unavailable``). Drift against this closed set
+    breaks the test loudly — future additions trigger a taxonomy bump.
     """
     taxonomy = _load_taxonomy()
     entry = next(
@@ -619,7 +645,10 @@ def test_mobile_blocked_marker_has_empty_sub_classifications() -> None:
     assert entry is not None, (
         "marker-taxonomy.yaml is missing the `mobile-blocked` entry"
     )
-    assert entry.get("sub_classifications", []) == []
+    assert entry.get("sub_classifications", []) == [
+        "init-unavailable",
+        "mid-run-unavailable",
+    ]
 
 
 # --------------------------------------------------------------------------- #
@@ -723,3 +752,103 @@ def test_no_op_evidence_capturer_satisfies_evidence_capturer_protocol() -> None:
     """NoOpEvidenceCapturer (re-exported from `playwright_driver`) is a
     structurally-compatible `EvidenceCapturer` Protocol implementation."""
     assert isinstance(NoOpEvidenceCapturer(), EvidenceCapturer)
+
+
+# --------------------------------------------------------------------------- #
+# Mid-run `mobile-blocked` mid-run-unavailable sub-classification (Story 9.5):#
+#   * AC-8 test 1: surface_mobile_mcp_unavailable stamps the                  #
+#     ``"mid-run-unavailable"`` sub_cause + preserves context projection.    #
+#   * AC-8 test 2: ``MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION`` constant is  #
+#     byte-identical to the taxonomy 1.5 closed-set member.                   #
+#   * AC-8 test 3: ``mobile-blocked.sub_classifications`` closed-set is       #
+#     exactly two members (drift catcher).                                    #
+# --------------------------------------------------------------------------- #
+
+
+def test_surface_mobile_mcp_unavailable_emits_mid_run_unavailable_sub_classification() -> None:
+    """Story 9.5 AC-8 #1: ``surface_mobile_mcp_unavailable`` stamps
+    ``sub_cause="mid-run-unavailable"`` (post-Story-9.5 AC-3 narrowing
+    of the pre-edit ``sub_cause=None``). The diagnostic-context
+    projection is preserved verbatim (story_id, action_kind,
+    prior_evidence_refs).
+    """
+    registry = _canonical_mobile_blocked_registry()
+
+    emission = surface_mobile_mcp_unavailable(
+        story_id="mobile-auto-005",
+        registry=registry,
+        action_kind="tap_at_coordinates",
+        prior_evidence_refs=("evidence/screenshot-1.png",),
+    )
+
+    assert emission.marker_record.marker_class == "mobile-blocked"
+    assert emission.marker_record.sub_cause == "mid-run-unavailable"
+    assert emission.marker_record.context["story_id"] == "mobile-auto-005"
+    assert emission.marker_record.context["action_kind"] == "tap_at_coordinates"
+    assert emission.marker_record.context["prior_evidence_refs"] == [
+        "evidence/screenshot-1.png"
+    ]
+
+
+def test_mobile_blocked_mid_run_sub_classification_constant_byte_identical_to_taxonomy() -> None:
+    """Story 9.5 AC-8 #2: the
+    ``MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION`` constant is
+    byte-identical to ``"mid-run-unavailable"`` AND IS enumerated in
+    ``schemas/marker-taxonomy.yaml``'s
+    ``mobile-blocked.sub_classifications`` closed-set. Drift catcher
+    between the Python constant and the YAML taxonomy enumeration —
+    renaming one without the other fails this test loudly.
+    """
+    assert MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION == "mid-run-unavailable"
+    taxonomy = _load_taxonomy()
+    entry = next(
+        marker
+        for marker in taxonomy["markers"]
+        if marker["marker_class"] == "mobile-blocked"
+    )
+    assert (
+        MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION
+        in entry["sub_classifications"]
+    )
+
+
+# --------------------------------------------------------------------------- #
+# E1 patch — surface_mobile_mcp_unavailable → active_markers wiring           #
+# --------------------------------------------------------------------------- #
+
+
+def test_surface_mobile_mcp_unavailable_sub_cause_wires_to_active_markers() -> None:
+    """Story 9.5 review patch (E1): verifies the end-to-end path from
+    ``surface_mobile_mcp_unavailable`` to ``active_markers``.
+
+    ``surface_mobile_mcp_unavailable`` returns a
+    ``MobileMcpUnavailableEmission`` whose
+    ``marker_record.sub_cause == "mid-run-unavailable"``. The
+    orchestrator is expected to call
+    ``record_marker_with_context(sub_classification=emission.marker_record.sub_cause)``
+    to register the marker. This test verifies that calling
+    ``record_marker_with_context`` with the emission's ``sub_cause``
+    produces ``"mobile-blocked: mid-run-unavailable"`` in
+    ``active_markers`` — confirming the substrate wiring is correct and
+    the ``sub_classification`` parameter name (``marker_wiring.py``)
+    accepts the ``sub_cause`` value from ``env_provisioning.py`` without
+    silent information loss.
+    """
+    registry = _canonical_mobile_blocked_registry()
+    rs = _make_run_state()
+
+    emission = surface_mobile_mcp_unavailable(
+        story_id="9-5-e1-test",
+        registry=registry,
+        action_kind="screenshot",
+        prior_evidence_refs=(),
+    )
+
+    new_rs = record_marker_with_context(
+        run_state=rs,
+        marker_class=emission.marker_record.marker_class,
+        sub_classification=emission.marker_record.sub_cause,
+    )
+
+    assert "mobile-blocked: mid-run-unavailable" in new_rs.active_markers
+    assert emission.marker_record.sub_cause == "mid-run-unavailable"

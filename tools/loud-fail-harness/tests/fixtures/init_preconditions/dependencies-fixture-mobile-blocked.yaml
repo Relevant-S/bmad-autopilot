@@ -1,0 +1,42 @@
+# Story 9.5 test fixture — minimal dependencies.yaml shape exercising the
+# `mobile-blocked: init-unavailable` total-block emission path on a
+# `project_type: mobile` project. Mirrors the canonical
+# `schemas/dependencies.yaml` mobile-mcp entry (post-Story-9.5 AC-2 schema
+# bump 1.2 → 1.3 with the new `sub_classification: init-unavailable` field).
+#
+# The fixture omits non-mobile-mcp dependencies (claude-code, bmad-core,
+# tea-module, playwright-mcp, lad) because the dispatcher walks declaration
+# order and dispatches per profile; a missing probe in the registry records
+# `outcome="silent"` per the AC-7 missing-probe branch, so the dispatcher
+# can be exercised against this minimal shape without crashing.
+
+schema_version: "1.3"
+
+dependencies:
+  mobile-mcp:
+    version_floor: "0.0.54"
+    by_project_type:
+      mobile:
+        profiles:
+          init:
+            profile: total-block
+            diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
+            marker_class: mobile-blocked
+            sub_classification: init-unavailable
+          runtime:
+            profile: graceful-degrade
+            marker_class: mobile-blocked
+            sub_classification: mid-run-unavailable
+            diagnostic_pointer: "Mobile MCP unavailable mid-run; mobile QA phase skipped."
+      web:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip
+      api:
+        profiles:
+          init:
+            profile: opt-in-skip
+          runtime:
+            profile: opt-in-skip

@@ -45,15 +45,18 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_4(taxonomy_data: dict) -> None:
-    """Story 9.3 bumps schema_version from ``"1.3"`` to ``"1.4"`` per
-    the file's own PATCH-bump rule (additive: one new sub_classification
-    ``mobile-mcp-init-unreachable`` appended under ``env-setup-failed``
-    for Phase 1.5 mobile-mcp activation per ADR-007). The top-level
-    27-class closed-set is preserved; no MAJOR bump per
-    ``epics-phase-1.5.md`` line 120.
+def test_taxonomy_schema_version_is_1_5(taxonomy_data: dict) -> None:
+    """Story 9.5 bumps schema_version from ``"1.4"`` to ``"1.5"`` per
+    the file's own PATCH-bump rule (additive: two new sub_classifications
+    ``init-unavailable`` + ``mid-run-unavailable`` appended under
+    ``mobile-blocked`` to make the init-time vs mid-run emission paths
+    distinct in the PR bundle + status command per the verbatim epic
+    AC at ``epics-phase-1.5.md`` lines 197-204). Prior Story 9.3 bumped
+    1.3 → 1.4 for the ``mobile-mcp-init-unreachable`` sub_classification
+    under ``env-setup-failed``. The top-level 27-class closed-set is
+    preserved; no MAJOR bump per ``epics-phase-1.5.md`` line 120.
     """
-    assert taxonomy_data.get("schema_version") == "1.4"
+    assert taxonomy_data.get("schema_version") == "1.5"
 
 
 def test_every_marker_has_non_empty_diagnostic_pointer(

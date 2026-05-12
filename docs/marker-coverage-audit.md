@@ -26,8 +26,8 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 406
-- Emitted: 37
-- Not-applicable: 369
+- Emitted: 39
+- Not-applicable: 367
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -217,20 +217,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | init-would-destroy-existing-artifact | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
 | init-would-destroy-existing-artifact | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
 | init-would-destroy-existing-artifact | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR41 / FR42 init guard fires only at orchestrator-state-machine init; this surface has no init path. |
-| mobile-blocked | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | hook-stop | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
-| mobile-blocked | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Phase 1.5 capability per SDN-001 / FR29 (MVP excludes mobile-mcp QA path); no MVP surface emits this marker. |
+| mobile-blocked | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | hook-stop | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/init_preconditions.py:560` | 2026-05-12 |  |
+| mobile-blocked | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
+| mobile-blocked | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/mobile_driver.py:1027` | 2026-05-12 |  |
+| mobile-blocked | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Mobile-mcp marker emitted only by the init-preconditions substrate (`init_preconditions._dispatch_total_block`) + the QA specialist's mobile substrate (`mobile_driver.surface_mobile_mcp_unavailable`); this surface has no code path that produces this skip-event. |
 | orphan-process-cleanup | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | orphan-process-cleanup | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | orphan-process-cleanup | hook-session-start | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |

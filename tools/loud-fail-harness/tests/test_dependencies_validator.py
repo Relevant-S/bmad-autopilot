@@ -894,7 +894,7 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.2"
+    assert raw["schema_version"] == "1.3"
     deps = raw["dependencies"]
     # Story 9.1: mobile-mcp activated — phase: "1.5" removed; lad retains
     # phase: "1.5" (Epic 10 deferred). The four MVP entries remain phase-free.

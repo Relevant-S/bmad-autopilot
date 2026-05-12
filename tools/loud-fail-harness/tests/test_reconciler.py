@@ -378,9 +378,11 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_4(taxonomy_data: dict) -> None:
-    # Story 9.3 bumps 1.3 → 1.4 (additive sub_classification per ADR-007).
-    assert taxonomy_data.get("schema_version") == "1.4"
+def test_taxonomy_declares_schema_version_1_5(taxonomy_data: dict) -> None:
+    # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
+    # Story 9.5 bumps 1.4 → 1.5 (additive: two new sub_classifications under
+    # mobile-blocked — init-unavailable + mid-run-unavailable).
+    assert taxonomy_data.get("schema_version") == "1.5"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:

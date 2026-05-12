@@ -98,6 +98,6 @@ THIS step's procedure is invoked AFTER `iterate_acs` returns from step 6 — i.e
 
 ## Forward consumers
 
-- **Story 9.5 — init-time + mid-run `mobile-blocked` paths.** Consumes the `MobileMcpUnavailableEmission` surfaced when a heuristic's driver invocation fails mid-run. The diagnostic-pointer destination at `docs/mobile-mcp-setup.md` is Story 9.5's deliverable (referenced by the init-time marker's `diagnostic` text per ADR-007 Consequence 4).
+- **Story 9.5 (LANDED) — init-time + mid-run `mobile-blocked` paths.** Consumes the `MobileMcpUnavailableEmission` surfaced when a heuristic's driver invocation fails mid-run (the emission carries `sub_cause="mid-run-unavailable"` per the marker-taxonomy 1.5 closed-set). The diagnostic-pointer destination at `docs/mobile-mcp-setup.md` is now landed.
 - **Story 9.6 — reference mobile-project fixture end-to-end run.** Composes against THIS step's three-heuristic protocol end-to-end on a real reference mobile project; exercises the full per-kind driving procedure against the running app.
 - **Epic 11 — Phase 1.5 completion evidence.** References THIS step as the FR-P1.5-2 + FR22 mobile-extension evidence in `phase-1.5-completion-evidence.md` (Story 11.1's deliverable).

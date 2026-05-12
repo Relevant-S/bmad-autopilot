@@ -2179,6 +2179,58 @@ def test_render_loud_fail_block_multiple_markers_render_in_alphabetical_order(
     )
 
 
+# --------------------------------------------------------------------------- #
+# Mobile-blocked marker rendering (Story 9.5):                                #
+#   * AC-9 test 1: init-unavailable sub_classification renders distinctly.    #
+#   * AC-9 test 2: mid-run-unavailable sub_classification renders distinctly. #
+# --------------------------------------------------------------------------- #
+
+
+def test_bundle_renders_mobile_blocked_init_unavailable_marker(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 9.5 AC-9 #1: the loud-fail block renders the
+    ``mobile-blocked: init-unavailable`` marker as an H3 entry with
+    sub_classification visible AND the taxonomy diagnostic_pointer
+    prose (post-Story-9.5 bump). The practitioner reading the bundle
+    can distinguish init-time failure from mid-run failure mechanically.
+    """
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("mobile-blocked: init-unavailable",),
+        marker_registry=runtime_marker_registry,
+    )
+    assert rendered.startswith("## ⚠️ Loud-Fail Markers")
+    assert "### mobile-blocked" in rendered
+    assert "- Sub-classification: init-unavailable" in rendered
+    # The diagnostic_pointer prose names the init-time vs mid-run
+    # distinction + the docs/mobile-mcp-setup.md remediation pointer
+    # (post-Story-9.5 rewritten prose at marker-taxonomy.yaml AC-1).
+    assert "docs/mobile-mcp-setup.md" in rendered
+    assert "init-unavailable" in rendered
+
+
+def test_bundle_renders_mobile_blocked_mid_run_unavailable_marker(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 9.5 AC-9 #2: the loud-fail block renders the
+    ``mobile-blocked: mid-run-unavailable`` marker as a distinct entry
+    from the init-unavailable case. Both sub_classifications carry the
+    same parent class but render with different ``Sub-classification:``
+    lines.
+    """
+    rendered = bundle_assembly._render_loud_fail_block(
+        ("mobile-blocked: mid-run-unavailable",),
+        marker_registry=runtime_marker_registry,
+    )
+    assert rendered.startswith("## ⚠️ Loud-Fail Markers")
+    assert "### mobile-blocked" in rendered
+    assert "- Sub-classification: mid-run-unavailable" in rendered
+    # Same diagnostic_pointer prose (single block in the taxonomy
+    # covering both sub_classifications) — references both init-time
+    # and mid-run.
+    assert "mid-run-unavailable" in rendered
+
+
 def test_render_loud_fail_block_unknown_marker_class_raises_per_pattern_5(
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:

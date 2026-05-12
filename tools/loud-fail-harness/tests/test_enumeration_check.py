@@ -1305,3 +1305,70 @@ def test_dependencies_absent_AND_escalation_bundles_absent_clean_skip(
     assert (
         "schemas/escalation-bundles/ not present; deferred to story 4.10" in out
     )
+
+
+# --------------------------------------------------------------------------- #
+# Mobile-blocked sub_classification cross-schema equivalence (Story 9.5):     #
+#   * AC-13 test: dependencies.yaml mobile-mcp sub_classifications ⊆          #
+#     marker-taxonomy.yaml mobile-blocked.sub_classifications closed-set.     #
+# --------------------------------------------------------------------------- #
+
+
+def test_dependencies_yaml_mobile_mcp_sub_classifications_subset_of_taxonomy_sub_classifications() -> None:
+    """Story 9.5 AC-13 — cross-schema equivalence at the
+    sub_classification axis.
+
+    Every ``sub_classification`` value declared under
+    ``dependencies.yaml``'s
+    ``mobile-mcp.by_project_type.mobile.profiles.{init,runtime}`` MUST
+    be enumerated in ``schemas/marker-taxonomy.yaml``'s
+    ``mobile-blocked.sub_classifications`` closed-set. Drift catcher —
+    adding a ``sub_classification`` value to ``dependencies.yaml``
+    without updating ``marker-taxonomy.yaml`` fails this test loudly.
+
+    Conservative subset (rather than equality): the taxonomy MAY
+    declare values that no dependency currently emits (future story
+    expansion); but any value the schema emits MUST be enumerated in
+    the taxonomy. Substrate-component-4 axis at the test level
+    (architecture.md line 799 — the third enumeration-equivalence
+    axis ADR-003 documents at the dependencies-schema layer; THIS
+    test extends the axis to sub_classification granularity).
+    """
+    import yaml
+
+    repo_root = pathlib.Path(__file__).resolve().parents[3]
+    deps_data = yaml.safe_load(
+        (repo_root / "schemas" / "dependencies.yaml").read_text(encoding="utf-8")
+    )
+    taxonomy_data = yaml.safe_load(
+        (repo_root / "schemas" / "marker-taxonomy.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+
+    mobile_mcp_profiles = (
+        deps_data["dependencies"]["mobile-mcp"]["by_project_type"]["mobile"][
+            "profiles"
+        ]
+    )
+    schema_sub_classifications = {
+        sc
+        for profile in mobile_mcp_profiles.values()
+        if (sc := profile.get("sub_classification")) is not None
+    }
+
+    mobile_blocked_entry = next(
+        e
+        for e in taxonomy_data["markers"]
+        if e["marker_class"] == "mobile-blocked"
+    )
+    taxonomy_sub_classifications = set(
+        mobile_blocked_entry["sub_classifications"]
+    )
+
+    assert schema_sub_classifications.issubset(taxonomy_sub_classifications), (
+        f"dependencies.yaml mobile-mcp sub_classifications "
+        f"{schema_sub_classifications} are not all enumerated in "
+        f"marker-taxonomy.yaml mobile-blocked.sub_classifications "
+        f"{taxonomy_sub_classifications}"
+    )

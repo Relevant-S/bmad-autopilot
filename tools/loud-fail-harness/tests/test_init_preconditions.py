@@ -628,12 +628,16 @@ def test_load_dependencies_sdn001_failure_propagates_unchanged(
 
 def test_schema_version_bumps_non_regression() -> None:
     """AC-9 case 15: the on-disk canonical schemas at HEAD parse with
-    schema_version "1.2" (dependencies.yaml — Story 9.1 mobile-mcp
-    activation bumped 1.1 → 1.2 per ADR-007) AND "1.4"
-    (marker-taxonomy.yaml — Story 9.3 bumped 1.3 → 1.4 for the
-    ``mobile-mcp-init-unreachable`` sub-classification addition per
-    ADR-007 / Phase 1.5 mobile-mcp activation). Verifies the Story 7.3
-    + Story 9.3 schema bumps and the Story 9.1 activation bump landed
+    schema_version "1.3" (dependencies.yaml — Story 9.5 bumped 1.2 → 1.3
+    to declare the two ``sub_classification`` fields on the mobile-mcp
+    init + runtime profiles per ADR-007 / epics-phase-1.5.md Story 9.5
+    AC-2; prior Story 9.1 had bumped 1.1 → 1.2 for the mobile-mcp
+    activation) AND "1.5" (marker-taxonomy.yaml — Story 9.5 bumped 1.4 →
+    1.5 for the two new ``mobile-blocked.sub_classifications``
+    [init-unavailable, mid-run-unavailable] per Story 9.5 AC-1; prior
+    Story 9.3 had bumped 1.3 → 1.4 for the ``mobile-mcp-init-unreachable``
+    sub-classification addition). Verifies the Story 7.3 + Story 9.3 +
+    Story 9.5 schema bumps and the Story 9.1 activation bump landed
     AND the existing enumeration_check substrate-component-4 gate
     continues to pass.
     """
@@ -643,7 +647,7 @@ def test_schema_version_bumps_non_regression() -> None:
     from loud_fail_harness.reconciler import load_marker_taxonomy
 
     raw = load_dependencies()
-    assert raw["schema_version"] == "1.2"
+    assert raw["schema_version"] == "1.3"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field
@@ -656,7 +660,7 @@ def test_schema_version_bumps_non_regression() -> None:
         / "marker-taxonomy.yaml"
     )
     taxonomy_data = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
-    assert taxonomy_data["schema_version"] == "1.4"
+    assert taxonomy_data["schema_version"] == "1.5"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`
@@ -855,3 +859,204 @@ def test_dispatch_graceful_degrade_version_below_floor_warn(
     assert result.marker_class == "env-setup-failed"
     assert new_run_state is not None
     assert "env-setup-failed: bmad-core-version-mismatch" in new_run_state.active_markers
+
+
+def test_dispatch_graceful_degrade_mobile_blocked_mid_run_unavailable(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 9.5 supplement — _dispatch_graceful_degrade wires
+    ``mobile-blocked: mid-run-unavailable`` into active_markers.
+
+    Verifies that a graceful-degrade profile spec with
+    ``marker_class="mobile-blocked"`` and
+    ``sub_classification="mid-run-unavailable"`` (the runtime profile
+    declared in ``dependencies.yaml`` after Story 9.5) produces
+    ``outcome="warn"``, sets ``PreconditionResult.sub_classification``
+    correctly, and registers ``"mobile-blocked: mid-run-unavailable"``
+    in ``active_markers``. Completes the Story 9.5 patch for
+    B3+B4+E4 (runtime-profile path previously untested at this layer).
+    """
+    taxonomy_entries = _load_marker_taxonomy_entries()
+    rs = _make_run_state()
+    profile_spec: dict = {
+        "profile": "graceful-degrade",
+        "diagnostic": "Mobile MCP unavailable mid-run; degrade and continue.",
+        "marker_class": "mobile-blocked",
+        "sub_classification": "mid-run-unavailable",
+    }
+    entry: dict = {}
+    probe_result = PreconditionProbeResult(available=False)
+
+    result, new_run_state = _dispatch_graceful_degrade(
+        dependency="mobile-mcp",
+        entry=entry,
+        profile_spec=profile_spec,
+        project_type="mobile",
+        probe_result=probe_result,
+        run_state=rs,
+        marker_registry=runtime_marker_registry,
+        taxonomy_entries=taxonomy_entries,
+    )
+
+    assert result.outcome == "warn"
+    assert result.marker_class == "mobile-blocked"
+    assert result.sub_classification == "mid-run-unavailable"
+    assert new_run_state is not None
+    assert "mobile-blocked: mid-run-unavailable" in new_run_state.active_markers
+
+
+# --------------------------------------------------------------------------- #
+# Mobile-mcp init-time `mobile-blocked` emission (Story 9.5):                 #
+#   * AC-7 test 1: total-block emission on mobile project type fires          #
+#     `mobile-blocked: init-unavailable` with the verbatim diagnostic         #
+#     literal (architecture.md line 625 / dependencies.yaml line 140).        #
+#   * AC-7 test 2/3: silence-unless-configured on web/api project types       #
+#     (NFR-I3 witness; the mobile-mcp dep is opt-in-skip on non-mobile        #
+#     project types per dependencies.yaml).                                   #
+#   * AC-7 test 4: cross-schema enumeration-equivalence — the                 #
+#     dependencies-schema-declared sub_classification "init-unavailable"      #
+#     IS enumerated under marker-taxonomy.yaml's                              #
+#     mobile-blocked.sub_classifications closed-set (substrate component      #
+#     4 axis at the test level).                                              #
+# --------------------------------------------------------------------------- #
+
+
+_MOBILE_BLOCKED_INIT_FIXTURE = (
+    _FIXTURE_DIR / "dependencies-fixture-mobile-blocked.yaml"
+)
+
+
+def test_run_init_preconditions_emits_mobile_blocked_init_unavailable_when_mobile_mcp_unreachable_on_mobile_project(  # noqa: E501
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 9.5 AC-7 #1 — init-time emission witness end-to-end.
+
+    Construct probes where every canonical dep passes EXCEPT
+    ``mobile-mcp`` (probe returns ``available=False``). Call
+    ``run_init_preconditions`` with ``project_type="mobile"``;
+    assert: (i) the run halted; (ii) the mobile-mcp result halts with
+    ``marker_class="mobile-blocked"`` AND
+    ``sub_classification="init-unavailable"`` AND
+    ``diagnostic_text == "Mobile MCP required for mobile projects. See
+    docs/mobile-mcp-setup.md."`` (BYTE-FOR-BYTE — the
+    architecture.md line 625 verbatim literal); (iii)
+    ``run_state.active_markers`` contains
+    ``"mobile-blocked: init-unavailable"``.
+    """
+    rs = _make_run_state()
+    probes = _failing_for("mobile_mcp")
+    # Use the minimal fixture (mobile-mcp only) to exercise the
+    # init-time emission path in isolation — non-mobile-mcp deps are
+    # `outcome="silent"` per the missing-probe / missing-entry branch.
+    run = run_init_preconditions(
+        probes,
+        project_type="mobile",
+        dependencies_path=_MOBILE_BLOCKED_INIT_FIXTURE,
+        marker_registry=runtime_marker_registry,
+        run_state=rs,
+    )
+
+    assert run.halted is True
+    mobile_mcp_results = [r for r in run.results if r.dependency == "mobile-mcp"]
+    assert len(mobile_mcp_results) == 1
+    mobile_mcp_result = mobile_mcp_results[0]
+    assert mobile_mcp_result.outcome == "halt"
+    assert mobile_mcp_result.marker_class == "mobile-blocked"
+    assert mobile_mcp_result.sub_classification == "init-unavailable"
+    assert (
+        mobile_mcp_result.diagnostic_text
+        == "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
+    )
+    assert run.run_state is not None
+    assert "mobile-blocked: init-unavailable" in run.run_state.active_markers
+
+
+def test_run_init_preconditions_silent_for_mobile_mcp_on_web_project(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 9.5 AC-7 #2 — web-project silence witness.
+
+    Even when the mobile-mcp probe returns ``available=False``, a web
+    project's run does NOT emit ``mobile-blocked`` because
+    ``mobile-mcp.by_project_type.web.profiles.init`` is
+    ``opt-in-skip`` (no ``marker_class``). Silence-unless-configured
+    per NFR-I3.
+    """
+    rs = _make_run_state()
+    probes = _failing_for("mobile_mcp")
+    run = run_init_preconditions(
+        probes,
+        project_type="web",
+        marker_registry=runtime_marker_registry,
+        run_state=rs,
+    )
+
+    # Run may halt (playwright-mcp web init is total-block — but here
+    # playwright passes); mobile-mcp result MUST NOT halt and MUST NOT
+    # carry a mobile-blocked marker.
+    mobile_mcp_results = [r for r in run.results if r.dependency == "mobile-mcp"]
+    assert len(mobile_mcp_results) == 1
+    mobile_mcp_result = mobile_mcp_results[0]
+    assert mobile_mcp_result.outcome == "silent"
+    assert mobile_mcp_result.marker_class is None
+    # NFR-I3 — silence-unless-configured: no mobile-blocked marker class
+    # in active_markers post-dispatch.
+    assert run.run_state is not None
+    assert not any(
+        m.startswith("mobile-blocked") for m in run.run_state.active_markers
+    )
+
+
+def test_run_init_preconditions_silent_for_mobile_mcp_on_api_project(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 9.5 AC-7 #3 — api-project silence witness (symmetry with
+    test #2). Confirms the silence rule holds across both non-mobile
+    project types.
+    """
+    rs = _make_run_state()
+    probes = _failing_for("mobile_mcp")
+    run = run_init_preconditions(
+        probes,
+        project_type="api",
+        marker_registry=runtime_marker_registry,
+        run_state=rs,
+    )
+
+    mobile_mcp_results = [r for r in run.results if r.dependency == "mobile-mcp"]
+    assert len(mobile_mcp_results) == 1
+    mobile_mcp_result = mobile_mcp_results[0]
+    assert mobile_mcp_result.outcome == "silent"
+    assert mobile_mcp_result.marker_class is None
+    assert run.run_state is not None
+    assert not any(
+        m.startswith("mobile-blocked") for m in run.run_state.active_markers
+    )
+
+
+def test_run_init_preconditions_emits_init_unavailable_sub_classification_byte_identical_to_taxonomy() -> None:  # noqa: E501
+    """Story 9.5 AC-7 #4 — cross-schema enumeration-equivalence witness.
+
+    The ``sub_classification`` value the dispatch path threads
+    (``"init-unavailable"`` from ``dependencies.yaml``'s mobile-mcp
+    mobile-init declaration) MUST be enumerated under
+    ``schemas/marker-taxonomy.yaml``'s ``mobile-blocked.sub_classifications``
+    closed-set. Drift catcher between the two schemas at the test
+    level (substrate component 4 enforces the same at CI time per
+    AC-13 / ``test_enumeration_check`` extension).
+    """
+    import yaml
+
+    taxonomy_path = (
+        pathlib.Path(__file__).resolve().parents[3]
+        / "schemas"
+        / "marker-taxonomy.yaml"
+    )
+    taxonomy_data = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
+    mobile_blocked_entry = next(
+        e
+        for e in taxonomy_data["markers"]
+        if e["marker_class"] == "mobile-blocked"
+    )
+    assert "init-unavailable" in mobile_blocked_entry["sub_classifications"]
+    assert "mid-run-unavailable" in mobile_blocked_entry["sub_classifications"]

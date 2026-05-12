@@ -78,9 +78,17 @@
 #                            Phase 1.5 mobile-mcp activation (ADR-007). The
 #                            top-level 27-class closed-set is preserved; no
 #                            MAJOR bump per epics-phase-1.5.md line 120.
+#   1.4 → 1.5 (Story 9.5) — additive: appended two new sub_classifications
+#                            under mobile-blocked (`init-unavailable`,
+#                            `mid-run-unavailable`) to make the init-time
+#                            vs mid-run emission paths distinct in the PR
+#                            bundle + status command per the verbatim epic
+#                            AC at epics-phase-1.5.md lines 197-204. The
+#                            top-level 27-class closed-set is preserved;
+#                            no MAJOR bump per epics-phase-1.5.md line 120.
 
-# schema MINOR bump for Story 9.3 mobile-mcp-init-unreachable sub-classification
-schema_version: "1.4"
+# schema PATCH bump for Story 9.5 mobile-blocked init-unavailable + mid-run-unavailable sub-classifications
+schema_version: "1.5"
 
 markers:
 
@@ -119,12 +127,24 @@ markers:
 
   - marker_class: mobile-blocked
     diagnostic_pointer: |
-      Mobile QA is a Phase 1.5 capability (see SDN-001 mobile-mcp + dependency
-      profile). At MVP, requesting QA on a mobile project surfaces this
-      marker and halts the QA phase. Remediation: wait for Phase 1.5 OR mark
-      the AC as web/api/manual.
+      Mobile QA driving the running mobile app via the mobile MCP (ADR-007 /
+      Phase 1.5). Emitted distinctly at init-time (`init-unavailable` — the
+      mobile MCP could not be reached when `init_preconditions` probed it on
+      a `project_type: mobile` project; total-block init halt per
+      `dependencies.yaml`'s `mobile-mcp.by_project_type.mobile.init`
+      declaration) and mid-run (`mid-run-unavailable` — the MCP crashed or
+      became unreachable during the QA wrapper's AC iteration;
+      graceful-degrade skip-the-mobile-QA-phase per
+      `dependencies.yaml`'s `mobile-mcp.by_project_type.mobile.runtime`
+      declaration). Remediation: at init-time, follow
+      `docs/mobile-mcp-setup.md` to install the mobile MCP and connect a
+      device; at mid-run, the loop continues to PR-bundle assembly with the
+      mobile-QA phase skipped — re-run `/bmad-automation run <story-id>`
+      once the device is reconnected.
     pointer_context_fields: []
-    sub_classifications: []
+    sub_classifications:
+      - init-unavailable
+      - mid-run-unavailable
 
   - marker_class: env-setup-failed
     diagnostic_pointer: |

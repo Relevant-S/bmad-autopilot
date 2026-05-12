@@ -959,6 +959,35 @@ def test_story_inspection_payload_supports_8_5_projection_shape() -> None:
 # --------------------------------------------------------------------------- #
 
 
+# --------------------------------------------------------------------------- #
+# Mobile-blocked marker surfacing in `bmad-automation status` (Story 9.5):    #
+#   * AC-9 test: render_story_inspection_human surfaces the mobile-blocked    #
+#     marker in the "Active loud-fail markers" section so the practitioner    #
+#     reading `status` can see the first-honest-failure moment immediately.   #
+# --------------------------------------------------------------------------- #
+
+
+def test_status_command_surfaces_mobile_blocked_marker() -> None:
+    """Story 9.5 AC-9: the status command's human renderer surfaces the
+    ``mobile-blocked`` marker in the "Active loud-fail markers"
+    section. Both sub_classifications (``init-unavailable`` +
+    ``mid-run-unavailable``) are rendered when present in
+    ``active_markers`` per the marker-record-projection convention
+    ``"<marker_class>: <sub_classification>"``.
+    """
+    inspection = _make_inspection(
+        story_id="9-5-mobile-blocked-surfacing",
+        active_markers=(
+            "mobile-blocked: init-unavailable",
+            "mobile-blocked: mid-run-unavailable",
+        ),
+    )
+    rendered = render_story_inspection_human(inspection)
+    assert "## Active loud-fail markers" in rendered
+    assert "mobile-blocked: init-unavailable" in rendered
+    assert "mobile-blocked: mid-run-unavailable" in rendered
+
+
 def test_find_repo_root_not_at_module_collection_time() -> None:
     """The test module's TOP-LEVEL imports do NOT call find_repo_root.
 

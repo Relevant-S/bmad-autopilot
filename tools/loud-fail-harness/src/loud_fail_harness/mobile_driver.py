@@ -126,7 +126,7 @@ Pluggability invariant (FR62 + Story 1.10a gate):
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Literal, Protocol, runtime_checkable
+from typing import Final, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -158,6 +158,23 @@ from loud_fail_harness.specialist_dispatch import (
 #: line 114 — Phase 1 taxonomy v1 closed-set member). Mirrors Story
 #: 4.4's :data:`PLAYWRIGHT_MCP_UNAVAILABLE_MARKER` constant pattern.
 MOBILE_BLOCKED_MARKER: Literal["mobile-blocked"] = "mobile-blocked"
+
+#: The ``sub_classification`` value stamped onto the mid-run
+#: ``mobile-blocked`` emission by
+#: :func:`surface_mobile_mcp_unavailable` (Story 9.5 — narrows the
+#: pre-edit ``sub_cause=None`` to the taxonomy 1.5 closed-set member
+#: ``"mid-run-unavailable"``). Co-versioned with
+#: ``schemas/marker-taxonomy.yaml``'s
+#: ``mobile-blocked.sub_classifications`` enumeration (1.4 → 1.5 bump
+#: per Story 9.5 added BOTH this value AND ``"init-unavailable"``).
+#: The init-time counterpart (``"init-unavailable"``) is consumed by
+#: :mod:`loud_fail_harness.init_preconditions` via the
+#: ``dependencies.yaml`` ``sub_classification`` declaration on
+#: ``mobile-mcp.by_project_type.mobile.profiles.init``, NOT exported
+#: here (init-precondition substrate owns its own value resolution
+#: via the schema-driven dispatch contract at
+#: ``init_preconditions._dispatch_total_block``).
+MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION: Final[str] = "mid-run-unavailable"
 
 #: The ``failure_step`` value mirroring the
 #: ``env-setup-failed.sub_classifications`` enum member at
@@ -330,9 +347,10 @@ class MobileMcpUnavailableEmission(BaseModel):
         * ``marker_record`` — the
           :class:`loud_fail_harness.env_provisioning.MarkerEmissionRecord`
           carrying ``marker_class="mobile-blocked"`` +
-          ``sub_cause=None`` (the marker has empty
-          ``sub_classifications: []`` per
-          ``schemas/marker-taxonomy.yaml``) + the
+          ``sub_cause=MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION``
+          (``"mid-run-unavailable"`` per taxonomy v1.5 — Story 9.5
+          closed ``mobile-blocked.sub_classifications`` to
+          ``[init-unavailable, mid-run-unavailable]``) + the
           diagnostic-projected ``context``.
         * ``diagnostic`` — the
           :class:`MobileMcpUnavailableDiagnostic` carrying the
@@ -966,9 +984,11 @@ def surface_mobile_mcp_unavailable(
           the three required fields ``(story_id, action_kind,
           prior_evidence_refs)``.
         * **Step 3 — Construct the marker emission record** with
-          ``marker_class="mobile-blocked"``, ``sub_cause=None`` (the
-          marker has empty ``sub_classifications: []`` per
-          ``schemas/marker-taxonomy.yaml`` line 121), and the
+          ``marker_class="mobile-blocked"``,
+          ``sub_cause=MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION``
+          (``"mid-run-unavailable"`` per taxonomy v1.5; Story 9.5
+          closed ``mobile-blocked.sub_classifications`` to
+          ``[init-unavailable, mid-run-unavailable]``), and the
           diagnostic-projected ``context``.
         * **Step 4 — Return the** :class:`MobileMcpUnavailableEmission`
           carrying both projections.
@@ -1007,7 +1027,7 @@ def surface_mobile_mcp_unavailable(
     )
     marker_record = MarkerEmissionRecord(
         marker_class=MOBILE_BLOCKED_MARKER,
-        sub_cause=None,
+        sub_cause=MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION,
         context=diagnostic.model_dump(mode="json"),
     )
     return MobileMcpUnavailableEmission(
@@ -1019,6 +1039,7 @@ def surface_mobile_mcp_unavailable(
 __all__ = [
     "MASKED_REDACTION_SENTINEL",
     "MOBILE_BLOCKED_MARKER",
+    "MOBILE_BLOCKED_MID_RUN_SUB_CLASSIFICATION",
     "AcResult",
     "EvidenceCapturer",
     "MaskedSelectorPolicy",
