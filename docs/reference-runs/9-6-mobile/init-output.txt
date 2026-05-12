@@ -1,0 +1,36 @@
+$ /bmad-automation init
+
+bmad-automation init: precondition checks (Story 7.3 / FR37 / FR38)
+  ✓ claude-code: available, version 2.1.32 (>=2.0.0 required)
+  ✓ bmad-core: available, version 6.2.2 (>=6.0 required)
+  ✓ tea-module: available (total-block dependency satisfied)
+  ✓ git: available, working tree clean
+  ✓ python: available, 3.12.5 (>=3.12 required)
+  ✓ node: available, 22.4.1 (>=22 required for mobile-mcp)
+  ✓ mobile-mcp: available (probe via mobile_get_screen_size → 393×852)
+
+bmad-automation init: project-type detection (Story 9.2 / FR-P1.5-2)
+  ✓ detected project_type=mobile via top-level-only precedence
+    (ios/ + android/ directories present at project root; React Native
+    peer-dep `react-native` declared in package.json)
+  ✓ wrote project_type: mobile to _bmad/automation/config.yaml
+    (write_detected_project_type via Pattern 4 atomic tempfile+os.replace)
+
+bmad-automation init: scaffolding sample story (Story 7.4 / FR39)
+  ✓ wrote _bmad-output/implementation-artifacts/sample-auto-mobile-001.md
+    (proceed-fresh; no existing file; mobile-equivalent of sample-auto-001)
+
+bmad-automation init: scaffolding config + qa-runbook stubs (Story 7.5 / FR40)
+  ✓ wrote _bmad/automation/config.yaml with documented defaults
+  ✓ wrote _bmad/automation/qa-runbook.yaml with documented defaults
+    + mobile_app_package_name field (Story 9.3 AC-8 — required for mobile;
+      practitioner set value: com.example.bmad.greeter)
+  ✓ FR41 non-destructive guard: no existing user config overwritten
+
+bmad-automation init: TEA-boundary first-run orientation (Story 7.8 / FR34)
+  → TEA validates per-AC behavioral plans; the Automator exercises the running
+    product against acceptance criteria. The two are complementary, not
+    redundant. See docs/tea-vs-automator.md for the full boundary contract.
+
+bmad-automation init: complete. Run `/bmad-automation run sample-auto-mobile-001`
+to exercise your first end-to-end mobile loop.

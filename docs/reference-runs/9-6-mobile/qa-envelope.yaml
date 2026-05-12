@@ -1,0 +1,38 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13 → Story 9.3; FR55)
+# Mobile dispatch branch — driver=mobile per Story 9.3 qa_ac_iteration.py dispatch.
+status: pass
+specialist: qa
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "GreeterScreen renders accessible label \"hello mobile\""
+      - "mobile_list_elements_on_screen returns element with label substring-matching \"hello mobile\""
+    evidence_refs:
+      - "_bmad-output/qa-evidence/sample-auto-mobile-001/run-001/ac-1/elements-on-screen.json"
+      - "_bmad-output/qa-evidence/sample-auto-mobile-001/run-001/ac-1/ac-1-hello-mobile.png"
+    semantic_verification: "not_required"
+behavioral_plan_status: human-reviewed
+exploratory_heuristics:
+  - heuristic: empty-state
+    status: skipped
+    rationale: "Plan declares inapplicable — single-screen greeter has no list surface (per FR22 plan-driven applicability; heuristic-skipped marker emitted via surface_heuristic_skipped)."
+  - heuristic: error-state
+    status: pass
+    assertions:
+      - "Network-error UI surfaces accessible label \"Unable to load\" when device is offline (out-of-band toggle via xcrun simctl status_bar override)"
+    evidence_refs:
+      - "_bmad-output/qa-evidence/sample-auto-mobile-001/run-001/heuristics/error-state/network-error-screen.png"
+  - heuristic: auth-boundary
+    status: skipped
+    rationale: "Plan declares inapplicable — greeter screen has no auth gate (per FR22 plan-driven applicability; heuristic-skipped marker emitted via surface_heuristic_skipped)."
+findings: []
+heuristic_skipped_emissions:
+  - marker_class: "heuristic-skipped"
+    sub_classification: "empty-state"
+    story_id: "sample-auto-mobile-001"
+  - marker_class: "heuristic-skipped"
+    sub_classification: "auth-boundary"
+    story_id: "sample-auto-mobile-001"
+marker_emissions: []
+rationale: "All ACs pass via mobile-driver dispatch (Story 9.3); Tier-1 (element-present) + Tier-2 (screenshot) evidence captured per FR19 evidence-triple invariant; one applicable heuristic (error-state) passed; two heuristics skipped per plan-driven applicability with marker emissions per FR22 loud-fail-on-skip discipline (Story 4.9 substrate)."

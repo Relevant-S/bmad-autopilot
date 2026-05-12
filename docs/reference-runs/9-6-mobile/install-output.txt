@@ -1,0 +1,25 @@
+$ # Pre-existing install reused on the dev machine — Story 7.2 install path
+$ # was resolved at the Phase 1 / Story 8.7 commit (git-clone-symlink fallback
+$ # chosen per Story 7.1 spike outcome). install_method recorded in
+$ # _bmad/automation/config.yaml; FR42 non-destructive guard preserved
+$ # user customizations on re-install.
+
+install_path: git-clone-symlink
+install_root: /Users/dev/.claude/skills/bmad-automation
+install_method_recorded_at: _bmad/automation/config.yaml
+install_path_first_recorded_at: 2026-05-10 (Story 8.7 dev-completion)
+
+$ # Mobile MCP registration for the mobile reference run — performed once on
+$ # the dev machine per ADR-007 + docs/mobile-mcp-setup.md (Story 9.5). The
+$ # registration is Claude-Code-managed (npx-stdio process); the Automator
+$ # does NOT spawn it as a dev-server subprocess (ADR-007 Consequence 6).
+
+$ claude mcp add mobile-mcp -- npx -y @mobilenext/mobile-mcp@latest
+Added stdio MCP server mobile-mcp with command: npx -y @mobilenext/mobile-mcp@latest
+
+$ # Verify reachability via the canonical smoke probe (the same probe
+$ # MobileMcpAvailabilityProbe.is_available() runs at init time per
+$ # skills/bmad-automation/steps/qa-driver-mobile.md line 45).
+
+$ # (invoked from a Claude Code session — mobile_get_screen_size tool call)
+mobile_get_screen_size → {width: 393, height: 852}   # iPhone 15 Simulator (booted)

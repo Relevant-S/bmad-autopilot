@@ -1,0 +1,52 @@
+$ /bmad-automation run sample-auto-mobile-001
+
+[orchestrator] Story sample-auto-mobile-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-auto-mobile-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+[orchestrator] project_type=mobile read from _bmad/automation/config.yaml (Story 9.2)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: implementing AC-1 (mobile greeter screen — "hello mobile" label)
+[stream] Dev: writing GreeterScreen + a11y-label assertion test
+[seam: dev-return] Dev returned status=pass; envelope persisted
+[hook: SubagentStop] Commit created: "Story sample-auto-mobile-001: implement greeter"
+[orchestrator] proposed_commit_message captured (FR50 / NFR-O6)
+[orchestrator] Lifecycle: in-progress → review (Story 2.4 / FR5)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — clean
+[seam: review-return] Review-BMAD returned status=pass; failed_layers=[]
+
+[seam: env-provision] Provisioning QA env (Story 4.3 + Story 9.3 / FR7)
+[stream] MobileMcpAvailabilityProbe.is_available() → True
+[stream] MobileMcpProvisioner.provision → ProvisionedEnv(env_kind=mobile, port=0, pid=0, health_url=None)
+[stream] No dev-server subprocess spawned (mobile MCP is npx-stdio-managed per ADR-007)
+
+[seam: qa-dispatch] Dispatching QA specialist (mobile dispatch branch — Story 9.3)
+[stream] QA: BPlan generation (Story 4.1 / FR23) — created from AC list
+[stream] QA: AC-1 verification — MobileDriver dispatch
+[stream]   → launch_app(com.example.bmad.greeter) via mobile_launch_app
+[stream]   → list_elements_on_screen via mobile_list_elements_on_screen
+[stream]   → assert_element_present("hello mobile") via mobile_list_elements_on_screen + substring-match
+[stream]   → screenshot("ac-1-hello-mobile") via mobile_take_screenshot
+[stream]   ✓ AC-1 pass: Tier-1 (element present) + Tier-2 (screenshot captured)
+[stream] QA: heuristic dispatch (Story 9.4 — three MVP-parity heuristics)
+[stream]   → empty-state (empty-list state) — plan declares inapplicable for this single-screen greeter (no list surface)
+[stream]   → emit heuristic-skipped: empty-state (FR22 plan-driven applicability; surface_heuristic_skipped per Story 4.9)
+[stream]   → error-state (network-error state) — plan declares applicable; drive via launch_app + tap + screenshot
+[stream]   ✓ error-state heuristic: no finding (network-error UI surfaces accessible label)
+[stream]   → auth-boundary (session-expiry boundary) — plan declares inapplicable for greeter; emit heuristic-skipped: auth-boundary
+[stream]   → emit heuristic-skipped: auth-boundary
+[seam: qa-return] QA returned status=pass; ac_results all pass; 2 heuristic-skipped emissions
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-auto-mobile-001/run-001.md
+[stream] Loud-fail block: 2 markers (heuristic-skipped: empty-state, heuristic-skipped: auth-boundary)
+[stream] Cost telemetry: $1.47 (within NFR-P1 $3 target)
+[stream] Run duration: 07:32 (NFR-P3 5-min budget EXCEEDED by 02:32 — mobile-MCP cold-start + iOS Simulator boot overhead; H3 housekeeping surfaced per AC-7(c))
+
+run sample-auto-mobile-001: complete; merge-ready bundle written.
