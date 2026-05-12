@@ -239,16 +239,16 @@ def test_four_specialists_no_violations(tmp_path: pathlib.Path) -> None:
             "dev-wrapper.md": "# Dev Wrapper\nWraps bmad-dev-story.\n",
             "review-bmad-wrapper.md": "# Review-BMAD Wrapper\nWraps bmad-code-review.\n",
             "qa.md": "# QA\nFR16-FR25 behavioral verification.\n",
-            "lad-wrapper.md": "# LAD Wrapper\nPhase 1.5 external review.\n",
+            "review-lad-wrapper.md": "# LAD Wrapper\nPhase 1.5 external review.\n",
         },
     )
     result = run_pluggability_gate(agents_dir)
     assert len(result.passing) == 4
     assert [r.specialist_slug for r in result.passing] == [
         "dev-wrapper",
-        "lad-wrapper",
         "qa",
         "review-bmad-wrapper",
+        "review-lad-wrapper",
     ]
     assert result.cross_reference_violation == []
 
@@ -683,11 +683,11 @@ def test_both_rules_fire_on_same_offending_file(
         tmp_path,
         specialists={
             "dev-wrapper.md": "# Dev\n",
-            "lad-wrapper.md": "# LAD\n",
+            "review-lad-wrapper.md": "# LAD\n",
             "qa.md": (
                 "# QA\n"
                 "Path-form: agents/dev-wrapper.md.\n"
-                "Slug-form: lad-wrapper handles external review.\n"
+                "Slug-form: review-lad-wrapper handles external review.\n"
             ),
         },
     )
@@ -698,7 +698,7 @@ def test_both_rules_fire_on_same_offending_file(
     referenced = {
         f.referenced_specialist for f in result.cross_reference_violation
     }
-    assert referenced == {"dev-wrapper", "lad-wrapper"}
+    assert referenced == {"dev-wrapper", "review-lad-wrapper"}
 
 
 # ---------------------------------------------------------------------------
@@ -821,9 +821,9 @@ def test_determinism_repeated_invocation(tmp_path: pathlib.Path) -> None:
             "qa.md": (
                 "# QA\n"
                 "References agents/dev-wrapper.md.\n"
-                "Also lad-wrapper integration.\n"
+                "Also review-lad-wrapper integration.\n"
             ),
-            "lad-wrapper.md": "# LAD\n",
+            "review-lad-wrapper.md": "# LAD\n",
         },
     )
     first = run_pluggability_gate(agents_dir)

@@ -230,7 +230,7 @@ def test_dev_wrapper_no_cross_specialist_references(dev_wrapper_text: str) -> No
         "agents/review-bmad-wrapper.md",
         "agents/qa.md",
         "agents/lad.md",
-        "agents/review-lad.md",
+        "agents/review-lad-wrapper.md",
     )
     # AC-4: zero substring matches anywhere in the file. The wrapper's
     # FR62 prohibition prose names sibling specialists by human-readable

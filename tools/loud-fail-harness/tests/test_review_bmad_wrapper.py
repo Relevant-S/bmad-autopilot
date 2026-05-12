@@ -486,7 +486,7 @@ def test_review_bmad_wrapper_no_cross_specialist_references(
         "agents/dev-wrapper.md",
         "agents/qa.md",
         "agents/lad.md",
-        "agents/review-lad.md",
+        "agents/review-lad-wrapper.md",
     )
     for name in forbidden_paths:
         assert name not in review_wrapper_text, (
@@ -499,7 +499,7 @@ def test_review_bmad_wrapper_no_cross_specialist_references(
     # from Rule 2 checking — the gate targets multi-hyphen slugs only; the
     # wrapper's `lad` occurrences are in schema-enum documentation context
     # ([blind, edge, auditor, lad]), not specialist references.
-    forbidden_slugs = ("dev-wrapper", "review-lad")
+    forbidden_slugs = ("dev-wrapper", "review-lad-wrapper")
     for slug in forbidden_slugs:
         assert not re.search(r"\b" + re.escape(slug) + r"\b", review_wrapper_text), (
             f"review-bmad-wrapper.md must not reference slug {slug!r} "

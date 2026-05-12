@@ -35,7 +35,7 @@ Story 4.13 AC-1 wrapper-thickening completion):
     [x] qa.md has AC-8 seam-contract + Tier-1 evidence prose       → test_qa_wrapper_documents_ac1_only_rationale
 
 Directory shape (Story 2.10 AC-1):
-    [x] agents/ contains exactly three specialists                → test_agents_directory_contains_three_specialists
+    [x] agents/ contains exactly four specialists                 → test_agents_directory_contains_four_specialists
     [x] qa.md uses LF line endings                                → test_qa_wrapper_has_lf_line_endings
 """
 
@@ -285,7 +285,7 @@ def test_qa_wrapper_no_cross_specialist_references(qa_wrapper_text: str) -> None
         "agents/dev-wrapper.md",
         "agents/review-bmad-wrapper.md",
         "agents/lad.md",
-        "agents/review-lad.md",
+        "agents/review-lad-wrapper.md",
     )
     for name in forbidden_paths:
         assert name not in qa_wrapper_text, (
@@ -299,7 +299,7 @@ def test_qa_wrapper_no_cross_specialist_references(qa_wrapper_text: str) -> None
         "dev-wrapper",
         "review-bmad-wrapper",
         "lad",
-        "review-lad",
+        "review-lad-wrapper",
     )
     for slug in forbidden_slugs:
         assert not re.search(r"\b" + re.escape(slug) + r"\b", qa_wrapper_text), (
@@ -353,18 +353,27 @@ def test_qa_wrapper_documents_ac1_only_rationale(qa_wrapper_text: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_agents_directory_contains_three_specialists(
+def test_agents_directory_contains_four_specialists(
     agents_dir: pathlib.Path,
 ) -> None:
+    # Story-2.10 era pinned the agents/ shape at three specialists
+    # (dev-wrapper, review-bmad-wrapper, qa). Story 10.2 lands the
+    # opt-in 4th specialist (Review-LAD) per epics-phase-1.5.md line 56
+    # ("Review-LAD wrapper subagent definition lives at
+    # `bmad-autopilot/agents/review-lad-wrapper.md`"); the exact-set
+    # assertion is extended to admit it, preserving the "no unexpected
+    # files at the top level" invariant.
     assert agents_dir.is_dir(), "agents/ directory must exist"
     md_files = sorted(p.name for p in agents_dir.glob("*.md"))
     assert set(md_files) == {
         "dev-wrapper.md",
         "review-bmad-wrapper.md",
         "qa.md",
+        "review-lad-wrapper.md",
     }, (
         "agents/ top-level must contain exactly dev-wrapper.md, "
-        f"review-bmad-wrapper.md, and qa.md; found {md_files}"
+        "review-bmad-wrapper.md, qa.md, and review-lad-wrapper.md; "
+        f"found {md_files}"
     )
     subdirs = [p for p in agents_dir.iterdir() if p.is_dir()]
     assert subdirs == [], f"agents/ must have no subdirectories; found {subdirs}"
