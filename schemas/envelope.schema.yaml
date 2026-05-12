@@ -25,6 +25,14 @@
 #     error-state / auth-boundary — with `verification_mode: exploratory-heuristic`
 #     discriminator field added to $defs/finding; sibling of the `meta` field
 #     precedent from Story 3.3, single-responsibility per discriminator)
+#   - ADR-008 (Story 10.3: LAD MCP server selection — `Shelpuk-AI-Technology-Consulting/lad_mcp_server`,
+#     version_floor `bb47e9e`; Phase-1.5 activation of Review-LAD as the 4th
+#     specialist envelope source — uniform FR51 four-field shape, findings
+#     carry `source: "lad"` per the Phase-1-reserved `$defs/finding.source`
+#     enum; ZERO top-level shape extension at this story — LAD-specific
+#     extensions are deferred to Story 10.4 IF THEY EMERGE per Epic 10
+#     (Review-LAD as Opt-In 4th Parallel Reviewer) +
+#     `_bmad-output/planning-artifacts/epics-phase-1.5.md` lines 257-270)
 #   - Pattern 1 (snake_case fields; identifier values follow PRD-canonical literals)
 #
 # This file encodes a contract validated by CI; modify with care.
@@ -37,9 +45,12 @@ $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://bmad-autopilot.local/schemas/envelope.schema.yaml"
 title: "Specialist Envelope"
 description: >-
-  Uniform return envelope every BMAD specialist (Dev, Review-BMAD, QA, future LAD)
+  Uniform return envelope every BMAD specialist (Dev, Review-BMAD, QA, Review-LAD)
   emits. The orchestrator parses this shape; flow-policy decisions are the
   orchestrator's job, never the specialist's (sensor-not-advisor invariant).
+  Review-LAD is the Phase-1.5-activated opt-in 4th specialist (Epic 10 +
+  ADR-008 + Story 10.2's `agents/review-lad-wrapper.md` scaffold); its
+  findings carry `source: "lad"` per the `$defs/finding.source` enum.
 
 type: object
 required:

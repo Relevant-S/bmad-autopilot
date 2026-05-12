@@ -29,6 +29,7 @@ Positive-path — specialist extension shapes:
     [x] Dev: ``proposed_commit_message`` + ``scope_expanded_to`` → test_specialist_extension_dev
     [x] QA: ``ac_results`` with one full-shape AC entry          → test_specialist_extension_qa
     [x] Review-BMAD: ``failed_layers`` with enum members         → test_specialist_extension_review_bmad
+    [x] Review-LAD: ``source: "lad"`` finding accepted           → test_specialist_source_lad
 
 Negative-path — Pattern 1 / closed-enumeration discipline:
     [x] ``status`` value ``Pass`` (capitalized) rejected         → test_enum_violation_status_capitalized
@@ -40,7 +41,12 @@ Schema self-check:
     [x] schemas/envelope.schema.yaml meta-validates              → test_schema_meta_validates
 
 Canonical positive envelope (AC-3 dependency):
-    [x] examples/envelopes/dev-pass.yaml validates clean         → test_canonical_dev_pass_envelope_validates
+    [x] examples/envelopes/dev-pass.yaml validates clean             → test_canonical_dev_pass_envelope_validates
+    [x] examples/envelopes/review-lad-pass.yaml validates clean      → test_canonical_lad_pass_envelope_validates
+
+Canonical negative envelope (Phase 1.5 / Story 10.3):
+    [x] examples/envelopes/review-lad-fail-shape.yaml rejected (bucket enum) → test_canonical_lad_fail_shape_envelope_rejected
+    [x] CLI exit 1 on review-lad-fail-shape.yaml                             → test_cli_lad_fail_shape_envelope_exits_one
 
 CLI / harness behavior:
     [x] empty argv → exit 0 (gate is no-op on empty set)         → test_cli_no_envelopes_returns_zero
@@ -123,6 +129,10 @@ from loud_fail_harness.envelope_validator import (
 REPO_ROOT = find_repo_root()
 SCHEMA_PATH = REPO_ROOT / "schemas" / "envelope.schema.yaml"
 DEV_PASS_ENVELOPE_PATH = REPO_ROOT / "examples" / "envelopes" / "dev-pass.yaml"
+LAD_PASS_ENVELOPE_PATH = REPO_ROOT / "examples" / "envelopes" / "review-lad-pass.yaml"
+LAD_FAIL_SHAPE_ENVELOPE_PATH = (
+    REPO_ROOT / "examples" / "envelopes" / "review-lad-fail-shape.yaml"
+)
 
 
 @pytest.fixture(scope="module")
@@ -205,6 +215,11 @@ def test_schema_meta_validates() -> None:
 
 def test_canonical_dev_pass_envelope_validates(schema: dict) -> None:
     errors = validate_file(DEV_PASS_ENVELOPE_PATH, schema)
+    assert errors == [], format_errors(errors)
+
+
+def test_canonical_lad_pass_envelope_validates(schema: dict) -> None:
+    errors = validate_file(LAD_PASS_ENVELOPE_PATH, schema)
     assert errors == [], format_errors(errors)
 
 
@@ -320,6 +335,15 @@ def test_specialist_extension_review_bmad(schema: dict) -> None:
     envelope = _minimal_valid_envelope() | {
         "failed_layers": ["blind", "edge"],
     }
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_specialist_source_lad(schema: dict) -> None:
+    """Defense-in-depth: confirm the `$defs/finding.source` enum genuinely
+    admits `lad` at runtime (Phase 1 reserved the value; Story 10.3 confirms
+    reservation is honoured)."""
+    finding = _minimal_finding(source="lad")
+    envelope = _minimal_valid_envelope() | {"findings": [finding]}
     assert validate_envelope(envelope, schema) == []
 
 
@@ -1240,3 +1264,43 @@ def test_existing_corpus_qa_fixtures_validate_clean_post_bump(schema: dict) -> N
             f"fixture {fixture.name} regressed under Story 4.9 schema bump: "
             f"{format_errors(errors)}"
         )
+
+
+# --------------------------------------------------------------------------- #
+# Canonical negative envelope — Phase 1.5 / Story 10.3                        #
+# (per-source-agnostic shape-rule enforcement against a Review-LAD envelope)  #
+# --------------------------------------------------------------------------- #
+
+
+def test_canonical_lad_fail_shape_envelope_rejected(schema: dict) -> None:
+    """The failing-shape Review-LAD fixture is rejected with a single
+    enum-violation at ``findings[0]/bucket`` (Story 10.3 AC-4). The
+    `bucket` enum violation is the per-source-agnostic shape rule the
+    fixture exercises; the test asserts the validator's per-source-
+    agnostic discipline extends to LAD envelopes the same way it
+    extends to Dev / QA / Review-BMAD envelopes."""
+    errors = validate_file(LAD_FAIL_SHAPE_ENVELOPE_PATH, schema)
+    assert errors, (
+        "expected the failing-shape Review-LAD fixture to be rejected; "
+        "got an empty error list"
+    )
+    bucket_enum_errors = [
+        e
+        for e in errors
+        if e.validator == "enum"
+        and tuple(e.absolute_path) == ("findings", 0, "bucket")
+    ]
+    assert bucket_enum_errors, (
+        f"expected an enum violation at findings[0]/bucket; got: "
+        f"{[(e.validator, list(e.absolute_path)) for e in errors]}"
+    )
+
+
+def test_cli_lad_fail_shape_envelope_exits_one() -> None:
+    """CLI returns exit 1 when invoked on the failing-shape Review-LAD
+    fixture — proves the CI-runtime gate fails the build at the same
+    boundary the Python-API surfaces."""
+    rc = main(["--schema", str(SCHEMA_PATH), str(LAD_FAIL_SHAPE_ENVELOPE_PATH)])
+    assert rc == 1, (
+        f"expected exit 1 on review-lad-fail-shape.yaml; got {rc}"
+    )

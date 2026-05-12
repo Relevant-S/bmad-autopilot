@@ -1,0 +1,70 @@
+# Review-LAD specialist envelope — status=pass, Phase-1.5 4th-reviewer happy path.
+#
+# Source list: PRD Reference Artifacts (line 653) names canonical envelope shapes;
+# ADR-008 (`_bmad-output/planning-artifacts/architecture.md` lines 661-724) names
+# the chosen LAD MCP server (`Shelpuk-AI-Technology-Consulting/lad_mcp_server`,
+# version_floor `bb47e9e`) and the dual-reviewer parallelism property; Story 10.3
+# anchor (this fixture's introducing story) extends the Story 1.2 + Stories
+# 2.8/2.9/2.10 + Story 3.1 corpus with the Phase-1.5 Review-LAD happy-path shape.
+# The wrapper that emits this envelope at runtime is Story 10.2's
+# `agents/review-lad-wrapper.md`; findings here use `source: "lad"` per the
+# Phase-1-reserved `$defs/finding.source` enum at `schemas/envelope.schema.yaml`
+# line 151.
+# Downstream consumers: Story 10.4 (`bmad-code-review` 4-layer integration —
+# merges this envelope's findings alongside the existing three review-BMAD
+# layers); Story 10.6 (pluggability gate scope extension + cost-observability
+# partition extension consumes the `source: lad` finding cohort); Story 10.7
+# (reference LAD-enabled end-to-end run fixture). Validated against
+# `schemas/envelope.schema.yaml` by the harness CI gate (envelope-validator).
+
+status: pass
+artifacts: []
+findings:
+  - id: lad-001
+    source: lad
+    title: Dual-reviewer parallelism surfaced no contract violations
+    detail: >-
+      Both OpenRouter reviewers (per ADR-008's dual-reviewer architecture —
+      `OPENROUTER_PRIMARY_REVIEWER_MODEL` default `moonshotai/kimi-k2.5` and
+      `OPENROUTER_SECONDARY_REVIEWER_MODEL` default `minimax/minimax-m2.7`)
+      independently inspected the implementation diff via the `code_review`
+      MCP tool and produced no HIGH-severity findings; one informational
+      observation about prose density was logged and routed to the defer
+      bucket because the change passes the existing FR62 pluggability gate.
+    location: bmad-autopilot/agents/review-lad-wrapper.md:1
+    bucket: defer
+    severity: LOW
+  - id: lad-002
+    source: lad
+    title: Closed-allowlist invariant preserved across optional extensions
+    detail: >-
+      The two reviewers agreed that the closed-by-default
+      `additionalProperties: false` invariant at the top level and on
+      `$defs/finding` is preserved by the changeset; the rationale prose
+      cited Pattern 5 loud-fail doctrine verbatim. A LOW-severity nit was
+      raised about anchor-comment line wrapping and routed to `patch` for
+      consideration without blocking the verdict.
+    location: bmad-autopilot/schemas/envelope.schema.yaml:1
+    bucket: patch
+    severity: LOW
+  - id: lad-003
+    source: lad
+    title: AC traceability anchored against verbatim epic source
+    detail: >-
+      Both reviewers confirmed that the Acceptance Criteria are anchored
+      against the verbatim epic source at
+      `_bmad-output/planning-artifacts/epics-phase-1.5.md` lines 257-270;
+      a MED-severity observation about the volume of inline citations was
+      filed under defer (informational) because the citation discipline is
+      the load-bearing prose convention established at Story 1.2 and
+      extended at Stories 4.2 / 4.7 / 4.8 / 4.9.
+    location: bmad-autopilot/_bmad-output/implementation-artifacts/10-3-lad-envelope-schema-extension-contract-pair-schema-validator-fixture.md:1
+    bucket: defer
+    severity: MED
+rationale: >-
+  Both OpenRouter reviewers (per ADR-008 dual-reviewer parallelism) ran the
+  `code_review` MCP tool against the implementation diff and converged on a
+  pass verdict; no HIGH-severity patch-bucket findings drove the verdict.
+  Findings preserve `source: "lad"` attribution per the Phase-1-reserved
+  enum at `$defs/finding.source`; bucket × severity passthrough discipline
+  is parallel in shape to Story 3.2's Review-BMAD codification.

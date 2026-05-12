@@ -1,0 +1,38 @@
+# Failing-shape Review-LAD envelope fixture — Phase-1.5 negative-shape exemplar.
+#
+# Shape violation exercised: the `bucket` closed-enum violation against a
+# `source: lad` finding. By construction this fixture FAILS validation against
+# `schemas/envelope.schema.yaml`; the validator emits exactly one
+# enum-violation error at `findings[0]/bucket` against the closed enum
+# `[decision_needed, patch, defer, dismiss]` (schema lines 161-163).
+#
+# Bucket-enum violation chosen as the per-source-agnostic shape exemplar
+# (Story 10.3 AC-4; parallel to `test_enum_violation_bucket_unknown` line ~350).
+#
+# Downstream consumers: Story 10.4 (4-layer integration runtime — surfaces
+# `failed_layers: [..., lad]` when wrapper output fails validation); Story
+# 10.6 (pluggability + cost-observability extension); Story 10.7 (reference
+# LAD-enabled end-to-end run negative-path coverage). Validated as REJECTED
+# against `schemas/envelope.schema.yaml` by the harness CI gate
+# (envelope-validator) — this fixture FAILS validation by design and is the
+# AC-4 deliverable proving per-source-agnostic shape enforcement.
+
+status: pass
+artifacts: []
+findings:
+  - id: lad-001
+    source: lad
+    title: Closed-allowlist invariant preserved across optional extensions
+    detail: >-
+      Synthetic finding emitted by the failing-shape fixture exclusively to
+      exercise the `bucket` closed-enum violation path. All other finding
+      fields are well-formed; the only intentional defect is the unknown
+      bucket value below.
+    location: bmad-autopilot/schemas/envelope.schema.yaml:50
+    bucket: suggest
+    severity: LOW
+rationale: >-
+  Synthetic rationale for the failing-shape LAD fixture; all envelope-level
+  fields are otherwise well-formed so the validator emits a single targeted
+  enum-violation diagnostic at `findings[0]/bucket` rather than masking the
+  intended defect under unrelated structural errors.
