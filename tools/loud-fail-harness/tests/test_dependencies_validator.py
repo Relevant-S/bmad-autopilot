@@ -829,6 +829,10 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     #                        plan-drift-detected ×1, smoke-first-abort ×1,
     #                        retry-budget-exhausted ×1,
     #                        scope-assertion-violation ×1 = 6 refs
+    # Story 10.1 activated the `lad` block (phase: "1.5" gate removed) —
+    # the LAD-skipped ×2 references above were already discovered by
+    # enumeration_check pre-activation (emits_marker references are not
+    # filtered by the phase field); count unchanged at 15/0/20.
     # If a future story adds markers to marker-taxonomy.yaml or new
     # marker_class references to dependencies.yaml or to schemas/escalation-
     # bundles/*.yaml, update this count accordingly.
@@ -894,18 +898,39 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.3"
+    assert raw["schema_version"] == "1.4"
     deps = raw["dependencies"]
-    # Story 9.1: mobile-mcp activated — phase: "1.5" removed; lad retains
-    # phase: "1.5" (Epic 10 deferred). The four MVP entries remain phase-free.
+    # Story 10.1: lad activated — phase: "1.5" removed; all six dependencies
+    # are now phase-free (mobile-mcp activated by Story 9.1; lad by Story 10.1).
     assert "phase" not in deps["claude-code"]
     assert "phase" not in deps["bmad-core"]
     assert "phase" not in deps["tea-module"]
     assert "phase" not in deps["playwright-mcp"]
     assert "phase" not in deps["mobile-mcp"]
-    assert deps["lad"]["phase"] == "1.5"
+    assert "phase" not in deps["lad"]
     # Story 9.1 AC-6: version_floor pinned to the concrete value per ADR-007.
     assert deps["mobile-mcp"]["version_floor"] == "0.0.54"
+    # Story 10.1 AC-1: version_floor pinned to the resolved upstream short
+    # commit SHA per ADR-008.
+    assert deps["lad"]["version_floor"] == "bb47e9e"
+    # Story 10.1 AC-6: env-var-name correction witnesses on the init
+    # diagnostic_pointer prose — placeholder LAD_API_KEY removed; chosen
+    # MCP server's actual env var OPENROUTER_API_KEY present.
+    lad_init_dp = deps["lad"]["profiles"]["init"]["sub_classifications"][0][
+        "diagnostic_pointer"
+    ]
+    assert "OPENROUTER_API_KEY" in lad_init_dp
+    assert "LAD_API_KEY" not in lad_init_dp
+    # Story 10.1 AC-2 / AC-3: runtime configured-but-api-key-missing
+    # sub_classification gains a diagnostic_pointer (analog to
+    # mobile-mcp.runtime's existing diagnostic_pointer).
+    lad_runtime_sc = deps["lad"]["profiles"]["runtime"]["sub_classifications"][0]
+    assert lad_runtime_sc["condition"] == "configured-but-api-key-missing"
+    assert lad_runtime_sc["emits_marker"] == "LAD-skipped"
+    assert (
+        lad_runtime_sc["diagnostic_pointer"]
+        == "LAD MCP unavailable mid-run; 4th-layer review skipped."
+    )
     # Per AC-4: per-lifecycle-phase variance verifiable on playwright-mcp + mobile-mcp.
     assert (
         deps["playwright-mcp"]["by_project_type"]["web"]["profiles"]["init"]["profile"]
@@ -961,6 +986,58 @@ def test_extended_fixture_mobile_mcp_activated_state() -> None:
     assert mobile_profiles["init"]["profile"] == "total-block"
     assert mobile_profiles["runtime"]["profile"] == "graceful-degrade"
     assert mobile_profiles["runtime"]["marker_class"] == "mobile-blocked"
+
+
+def test_extended_fixture_lad_activated_state() -> None:
+    """Story 10.1 AC-7 — activated-lad fixture witness.
+
+    Loads the Story 7.3 extended fixture (which now includes a Story 10.1
+    activated-state ``lad`` entry) and verifies the activated shape:
+    ``phase`` field absent, ``version_floor`` pinned to the resolved upstream
+    short SHA per ADR-008, both init + runtime ``opt-in-skip`` profiles
+    intact, both ``LAD-skipped`` ``emits_marker`` references present, init
+    ``diagnostic_pointer`` carries the corrected ``OPENROUTER_API_KEY`` env
+    var (no ``LAD_API_KEY`` placeholder), and the runtime
+    ``configured-but-api-key-missing`` sub_classification carries the new
+    ``diagnostic_pointer`` analog to ``mobile-mcp.runtime``. Ensures the
+    activated-lad fixture row is structurally valid; substrate component 5
+    (fixture-coverage) gains coverage of ``LAD-skipped`` reachability in the
+    Phase 1.5 steady-state configuration.
+    """
+    fixture_path = (
+        pathlib.Path(__file__).resolve().parent
+        / "fixtures"
+        / "init_preconditions"
+        / "dependencies-fixture-extended.yaml"
+    )
+    raw = load_dependencies(fixture_path)
+    assert validate_dependencies(raw, str(fixture_path)) == []
+    deps = raw["dependencies"]
+    assert "lad" in deps
+    assert "phase" not in deps["lad"]
+    assert deps["lad"]["version_floor"] == "bb47e9e"
+
+    init_profile = deps["lad"]["profiles"]["init"]
+    assert init_profile["profile"] == "opt-in-skip"
+    init_sc = init_profile["sub_classifications"]
+    assert init_sc[0]["condition"] == "configured-but-api-key-missing"
+    assert init_sc[0]["emits_marker"] == "LAD-skipped"
+    assert "OPENROUTER_API_KEY" in init_sc[0]["diagnostic_pointer"]
+    assert "LAD_API_KEY" not in init_sc[0]["diagnostic_pointer"]
+    assert init_sc[1]["condition"] == "unconfigured"
+    assert init_sc[1]["silent"] is True
+
+    runtime_profile = deps["lad"]["profiles"]["runtime"]
+    assert runtime_profile["profile"] == "opt-in-skip"
+    runtime_sc = runtime_profile["sub_classifications"]
+    assert runtime_sc[0]["condition"] == "configured-but-api-key-missing"
+    assert runtime_sc[0]["emits_marker"] == "LAD-skipped"
+    assert (
+        runtime_sc[0]["diagnostic_pointer"]
+        == "LAD MCP unavailable mid-run; 4th-layer review skipped."
+    )
+    assert runtime_sc[1]["condition"] == "unconfigured"
+    assert runtime_sc[1]["silent"] is True
 
 
 def test_load_dependencies_raises_on_invalid_shape(tmp_path: pathlib.Path) -> None:

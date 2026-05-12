@@ -628,18 +628,19 @@ def test_load_dependencies_sdn001_failure_propagates_unchanged(
 
 def test_schema_version_bumps_non_regression() -> None:
     """AC-9 case 15: the on-disk canonical schemas at HEAD parse with
-    schema_version "1.3" (dependencies.yaml — Story 9.5 bumped 1.2 → 1.3
-    to declare the two ``sub_classification`` fields on the mobile-mcp
-    init + runtime profiles per ADR-007 / epics-phase-1.5.md Story 9.5
-    AC-2; prior Story 9.1 had bumped 1.1 → 1.2 for the mobile-mcp
-    activation) AND "1.5" (marker-taxonomy.yaml — Story 9.5 bumped 1.4 →
-    1.5 for the two new ``mobile-blocked.sub_classifications``
-    [init-unavailable, mid-run-unavailable] per Story 9.5 AC-1; prior
-    Story 9.3 had bumped 1.3 → 1.4 for the ``mobile-mcp-init-unreachable``
-    sub-classification addition). Verifies the Story 7.3 + Story 9.3 +
-    Story 9.5 schema bumps and the Story 9.1 activation bump landed
-    AND the existing enumeration_check substrate-component-4 gate
-    continues to pass.
+    schema_version "1.4" (dependencies.yaml — Story 10.1 bumped 1.3 → 1.4
+    for the ``lad`` activation per ADR-008 / epics-phase-1.5.md Story 10.1
+    AC-3; lineage 1.0 (Story 1.6 base) → 1.1 (Story 7.3) → 1.2 (Story 9.1
+    mobile-mcp activation) → 1.3 (Story 9.5 mobile-mcp sub_classification
+    fields) → 1.4 (Story 10.1 lad activation)) AND "1.5" (marker-taxonomy.yaml
+    — Story 9.5 bumped 1.4 → 1.5 for the two new
+    ``mobile-blocked.sub_classifications`` [init-unavailable,
+    mid-run-unavailable] per Story 9.5 AC-1; prior Story 9.3 had bumped 1.3
+    → 1.4 for the ``mobile-mcp-init-unreachable`` sub-classification
+    addition; Story 10.1 introduces no marker-taxonomy bump per AC-9 closed-set
+    discipline). Verifies the Story 7.3 + Story 9.3 + Story 9.5 schema bumps,
+    the Story 9.1 + Story 10.1 activation bumps landed AND the existing
+    enumeration_check substrate-component-4 gate continues to pass.
     """
     import subprocess
 
@@ -647,7 +648,7 @@ def test_schema_version_bumps_non_regression() -> None:
     from loud_fail_harness.reconciler import load_marker_taxonomy
 
     raw = load_dependencies()
-    assert raw["schema_version"] == "1.3"
+    assert raw["schema_version"] == "1.4"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field

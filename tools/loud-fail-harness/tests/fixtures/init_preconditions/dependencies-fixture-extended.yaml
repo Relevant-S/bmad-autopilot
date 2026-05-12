@@ -5,7 +5,7 @@
 #   * `by_project_type` with a missing project-type key (per AC-7 — the
 #     dispatcher records `outcome="silent"` rather than crashing).
 
-schema_version: "1.2"
+schema_version: "1.4"
 
 dependencies:
   claude-code:
@@ -55,9 +55,11 @@ dependencies:
             profile: total-block
             diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
             marker_class: mobile-blocked
+            sub_classification: init-unavailable
           runtime:
             profile: graceful-degrade
             marker_class: mobile-blocked
+            sub_classification: mid-run-unavailable
             diagnostic_pointer: "Mobile MCP unavailable mid-run; mobile QA phase skipped."
       web:
         profiles:
@@ -86,6 +88,33 @@ dependencies:
         profile: graceful-degrade
         marker_class: env-setup-failed
         diagnostic_pointer: "Synthetic dependency unavailable mid-run."
+
+  # Story 10.1: lad activated — phase: "1.5" gate removed, version_floor
+  # pinned to upstream short SHA, init diagnostic_pointer corrected to
+  # OPENROUTER_API_KEY, runtime configured-but-api-key-missing
+  # sub_classification gains a diagnostic_pointer (steady-state Phase 1.5
+  # shape per ADR-008). Exercises substrate component 5 fixture-coverage on
+  # the activated 4th-layer-review dependency: LAD-skipped marker class
+  # reachable from the parsed shape on both init + runtime profiles.
+  lad:
+    version_floor: "bb47e9e"
+    profiles:
+      init:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: configured-but-api-key-missing
+            emits_marker: LAD-skipped
+            diagnostic_pointer: "LAD configured but `OPENROUTER_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
+          - condition: unconfigured
+            silent: true
+      runtime:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: configured-but-api-key-missing
+            emits_marker: LAD-skipped
+            diagnostic_pointer: "LAD MCP unavailable mid-run; 4th-layer review skipped."
+          - condition: unconfigured
+            silent: true
 
   # `by_project_type` with NO `mobile` key — exercises AC-7 missing-key path.
   partial-project-type:

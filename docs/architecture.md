@@ -709,15 +709,14 @@ dependencies:
             profile: opt-in-skip
 
   lad:
-    phase: "1.5"
-    version_floor: "latest-at-phase-1.5-design-time"
+    version_floor: "bb47e9e"
     profiles:
       init:
         profile: opt-in-skip
         sub_classifications:
           - condition: configured-but-api-key-missing
             emits_marker: LAD-skipped
-            diagnostic_pointer: "LAD configured but `LAD_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
+            diagnostic_pointer: "LAD configured but `OPENROUTER_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
           - condition: unconfigured
             silent: true
       runtime:
@@ -725,6 +724,7 @@ dependencies:
         sub_classifications:
           - condition: configured-but-api-key-missing
             emits_marker: LAD-skipped
+            diagnostic_pointer: "LAD MCP unavailable mid-run; 4th-layer review skipped."
           - condition: unconfigured
             silent: true
 ```

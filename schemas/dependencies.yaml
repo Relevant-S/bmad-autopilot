@@ -64,7 +64,7 @@
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
 # (mobile-mcp, lad).
 
-schema_version: "1.3"
+schema_version: "1.4"
 # schema_version 1.1 → 1.2: mobile-mcp activated from phase: "1.5" gate;
 # version_floor pinned to 0.0.54 per ADR-007 (Story 9.1, 2026-05-11).
 # schema_version 1.2 → 1.3: mobile-mcp init + runtime profiles declare
@@ -72,6 +72,16 @@ schema_version: "1.3"
 #                           mid-run-unavailable respectively) per Story 9.5
 #                           to make the init-time vs mid-run emission paths
 #                           distinct in the PR bundle.
+# schema_version 1.3 → 1.4: lad activated from phase: "1.5" gate;
+#                           version_floor pinned to bb47e9e (resolved short
+#                           SHA of Shelpuk-AI-Technology-Consulting/
+#                           lad_mcp_server HEAD at implementation time per
+#                           ADR-008); API-key env var corrected from
+#                           LAD_API_KEY to OPENROUTER_API_KEY in the init
+#                           diagnostic_pointer prose; runtime
+#                           configured-but-api-key-missing sub_classification
+#                           gains a diagnostic_pointer field analog to
+#                           mobile-mcp.runtime (Story 10.1, 2026-05-12).
 
 dependencies:
   claude-code:
@@ -164,15 +174,14 @@ dependencies:
             profile: opt-in-skip
 
   lad:
-    phase: "1.5"
-    version_floor: "latest-at-phase-1.5-design-time"
+    version_floor: "bb47e9e"
     profiles:
       init:
         profile: opt-in-skip
         sub_classifications:
           - condition: configured-but-api-key-missing
             emits_marker: LAD-skipped
-            diagnostic_pointer: "LAD configured but `LAD_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
+            diagnostic_pointer: "LAD configured but `OPENROUTER_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
           - condition: unconfigured
             silent: true
       runtime:
@@ -180,5 +189,6 @@ dependencies:
         sub_classifications:
           - condition: configured-but-api-key-missing
             emits_marker: LAD-skipped
+            diagnostic_pointer: "LAD MCP unavailable mid-run; 4th-layer review skipped."
           - condition: unconfigured
             silent: true
