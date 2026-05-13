@@ -86,7 +86,8 @@ _REQUIRED_CONFIG_KEYS_AND_VALUES: Final[dict[str, int]] = {
 
 #: Required FR/NFR identifiers in the config ``# Source:`` cross-references
 #: per AC-1 / AC-7 case 4. The five core defaults' source identifiers,
-#: extended by Story 9.2 (FR-P1.5-2) for the project_type discriminator.
+#: extended by Story 9.2 (FR-P1.5-2) for the project_type discriminator
+#: and by Story 10.4 (FR-P1.5-1) for the review_lad opt-in block.
 _REQUIRED_CONFIG_SOURCE_IDENTIFIERS: Final[tuple[str, ...]] = (
     "FR8",
     "NFR-P2",
@@ -94,6 +95,7 @@ _REQUIRED_CONFIG_SOURCE_IDENTIFIERS: Final[tuple[str, ...]] = (
     "NFR-P6",
     "FR43",
     "FR-P1.5-2",
+    "FR-P1.5-1",
 )
 
 #: Required ``Story <N>`` cross-references in the qa-runbook canonical
@@ -658,3 +660,118 @@ def test_canonical_constants_match_documentation() -> None:
     assert QA_RUNBOOK_TARGET_FILENAME == "qa-runbook.yaml"
     assert CONFIG_TEMPLATE_RESOURCE == "_data/config.yaml.template"
     assert QA_RUNBOOK_TEMPLATE_RESOURCE == "_data/qa-runbook.yaml.template"
+
+
+# --------------------------------------------------------------------------- #
+# Story 10.4 AC-1 — `review_lad` block (Phase-1.5 opt-in 4th reviewer gate).   #
+# --------------------------------------------------------------------------- #
+
+
+def test_config_review_lad_enabled_accepted() -> None:
+    """Story 10.4 AC-1 (positive-path): the canonical config template
+    contains a `review_lad` block carrying the opt-in defaults per the
+    FR-P1.5-1 contract: `enabled: false` (default-off opt-in posture)
+    + `api_key_env_var: "OPENROUTER_API_KEY"` (canonical env-var name
+    per ADR-008 line 692).
+
+    Validates that the YAML template parses as a structured mapping
+    matching the contract `review_lad: {enabled: bool, api_key_env_var:
+    str}` shape; mirrors Story 9.2's `test_config_project_type_accepted`
+    precedent (the per-key validation site uses `yaml.safe_load`
+    against the packaged template).
+
+    The ``enabled`` field accepts a bool value (either ``True`` or
+    ``False`` are valid at the type level); the canonical template
+    scaffolds the default-off posture (``False``). This assertion is
+    the positive-path acceptance check — the field type is ``bool``,
+    not a string or int.
+    """
+    parsed = yaml.safe_load(load_config_template())
+    assert isinstance(parsed, dict)
+    assert "review_lad" in parsed, (
+        "Story 10.4 AC-1: canonical config template MUST scaffold a "
+        "`review_lad` block at the top level per the FR-P1.5-1 opt-in "
+        "posture"
+    )
+    review_lad = parsed["review_lad"]
+    assert isinstance(review_lad, dict), (
+        "review_lad block MUST parse as a YAML mapping; got "
+        f"{type(review_lad).__name__}"
+    )
+    assert type(review_lad.get("enabled")) is bool, (
+        "Story 10.4 AC-1: review_lad.enabled MUST be a bool (YAML "
+        "true/false literal accepted); got "
+        f"{type(review_lad.get('enabled')).__name__}"
+    )
+    assert review_lad.get("enabled") is False, (
+        "Story 10.4 AC-1: review_lad.enabled MUST default to False per "
+        "the FR-P1.5-1 opt-in posture; observed "
+        f"{review_lad.get('enabled')!r}"
+    )
+    assert review_lad.get("api_key_env_var") == "OPENROUTER_API_KEY", (
+        "Story 10.4 AC-1: review_lad.api_key_env_var MUST default to "
+        "the canonical OPENROUTER_API_KEY per ADR-008 line 692; observed "
+        f"{review_lad.get('api_key_env_var')!r}"
+    )
+
+
+def test_config_review_lad_invalid_type() -> None:
+    """Story 10.4 AC-1 (negative-path): a synthesized `review_lad`
+    block carrying a string for `enabled` (instead of a bool) is NOT
+    the canonical shape — the YAML parse succeeds (PyYAML is permissive)
+    but the substrate's consumer-side check would reject it; THIS test
+    documents that the canonical template's `enabled` field is a bool,
+    NOT a string-coerced bool.
+
+    Mirrors Story 9.2's `test_config_invalid_type` precedent — asserts
+    the canonical template ships with strictly-typed defaults so any
+    operator-supplied string value (`"yes"` / `"true"`) is structurally
+    distinguishable from the canonical bool at the consumer.
+    """
+    parsed = yaml.safe_load(load_config_template())
+    review_lad = parsed["review_lad"]
+    # The canonical template's `enabled` field is a Python bool (not a
+    # string-coerced value); consumers may rely on this type-strictness.
+    assert type(review_lad["enabled"]) is bool, (
+        "Story 10.4 AC-1: canonical review_lad.enabled MUST be a bool "
+        "(YAML true / false literal), NOT a string-quoted value; "
+        f"observed type {type(review_lad['enabled']).__name__}"
+    )
+    # Sanity: a synthesized invalid-typed value is detectably different.
+    synthesized_invalid = yaml.safe_load(
+        'review_lad:\n  enabled: "yes"\n  api_key_env_var: "OPENROUTER_API_KEY"\n'
+    )
+    assert type(synthesized_invalid["review_lad"]["enabled"]) is str, (
+        "synthesized `enabled: \"yes\"` value should parse as str — "
+        "this asserts the contrast against the canonical bool shape"
+    )
+
+
+def test_config_review_lad_omitted_defaults_disabled() -> None:
+    """Story 10.4 AC-1 (default-handling): a config dict missing the
+    `review_lad` block is treated as `enabled=False` — the consumer-
+    side discipline reads the block with a safe default.
+
+    THIS test documents the consumer-side dict-access pattern the
+    orchestrator skill at `steps/run.md` step (f) uses when reading
+    the config. The substrate does not provide a config-loader at MVP;
+    this test asserts the documented dict-access pattern returns False
+    for the absent-block case (matching the FR-P1.5-1 opt-in default).
+    """
+    # Synthesize a config dict with NO review_lad block (the "operator
+    # has not yet edited init's scaffolded config" case OR the
+    # "operator deleted the review_lad block to silence the feature"
+    # case — both should resolve to enabled=False).
+    config_without_review_lad = {
+        "retry_budget": 2,
+        "specialist_timeout_minutes": 15,
+    }
+    # Document the canonical consumer-side dict-access pattern.
+    lad_enabled = bool(
+        config_without_review_lad.get("review_lad", {}).get("enabled", False)
+    )
+    assert lad_enabled is False, (
+        "Story 10.4 AC-1: omitted-key case MUST resolve to enabled=False "
+        "per the documented consumer-side default-handling pattern; "
+        f"observed lad_enabled={lad_enabled!r}"
+    )

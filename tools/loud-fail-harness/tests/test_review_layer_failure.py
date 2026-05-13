@@ -23,6 +23,14 @@ Registry validation invariant (Story 3.3 AC-8 item 5):
 
 Post-emission schema-conformance invariant (Story 3.3 AC-8 item 6):
     [x] post-emission envelope round-trips schema validation → test_surface_failed_layers_post_emission_envelope_validates_against_schema
+
+Phase 1.5 LAD-layer admission (Story 10.4 AC-3 — FIRST runtime consumer-via-`lad`):
+    [x] `lad` admitted as a layer_ids member; all three channels project
+        the lad identifier per the Story 3.3 docstring reservation
+        (substrate already accepted `lad` per its docstring + the
+        schema's `failed_layers` items enum — Story 10.4 exercises it
+        at runtime as the FIRST runtime consumer of the value)
+        → test_surface_failed_layers_admits_lad_layer
 """
 
 from __future__ import annotations
@@ -105,6 +113,56 @@ def test_surface_failed_layers_zero_failures_silent_at_channels_two_and_three() 
     assert envelope["failed_layers"] == []
     # Channel 3 must be silent — pre-existing finding unmodified, no append.
     assert envelope["findings"] == pre_call_findings_snapshot
+
+
+def test_surface_failed_layers_admits_lad_layer() -> None:
+    """Story 10.4 AC-3: the function admits ``lad`` as a member of
+    ``layer_ids`` per the existing docstring reservation at line 244
+    ("each from ``{\"blind\", \"edge\", \"auditor\", \"lad\"}`` per the
+    schema's ``failed_layers`` enum"). THIS test is the FIRST runtime
+    consumer-via-``lad`` site — Story 3.3 reserved the value; Story
+    10.4 exercises it. All three channels project the ``lad``
+    identifier atomically; the surface_failed_layers substrate is
+    unchanged at Story 10.4 — only the runtime consumer surface
+    expands.
+
+    Channel 1: ``envelope["failed_layers"] == ["lad"]`` (sorted; the
+    single-layer case sorts to itself).
+
+    Channel 2: returned tuple is a single MarkerEmissionRecord with
+    ``marker_class`` set to the canonical constant and ``failed_layer``
+    set to ``"lad"``.
+
+    Channel 3: ``envelope["findings"]`` ends with one synthetic
+    decision_needed:HIGH meta-finding carrying ``id:
+    review-layer-failed-lad``, ``source: merged``, ``bucket:
+    decision_needed``, ``severity: HIGH``, ``meta`` set to the
+    META_REVIEW_COMPLETENESS constant.
+    """
+    envelope = _minimal_envelope()
+    registry = _make_canonical_registry()
+
+    emissions = surface_failed_layers(envelope, ["lad"], registry)
+
+    # Channel 1.
+    assert envelope["failed_layers"] == ["lad"]
+    # Channel 2.
+    assert len(emissions) == 1
+    assert emissions[0] == MarkerEmissionRecord(
+        marker_class=REVIEW_LAYER_FAILED_MARKER,
+        failed_layer="lad",
+    )
+    # Channel 3.
+    assert len(envelope["findings"]) == 1
+    finding = envelope["findings"][0]
+    assert finding["id"] == "review-layer-failed-lad"
+    assert finding["source"] == "merged"
+    assert finding["bucket"] == "decision_needed"
+    assert finding["severity"] == "HIGH"
+    assert finding["meta"] == META_REVIEW_COMPLETENESS
+    assert "lad" in finding["title"]
+    assert "lad" in finding["detail"]
+    assert "lad" in finding["location"]
 
 
 def test_surface_failed_layers_one_failure_emits_all_three_channels_atomically() -> None:
