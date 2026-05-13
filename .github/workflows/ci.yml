@@ -33,7 +33,13 @@ jobs:
         run: uv run pytest
 
       - name: Envelope schema gate (substrate component 1)
-        run: uv run envelope-validator $(git ls-files '../../examples/envelopes/*.yaml')
+        # Negative-shape fixtures (Story 10.3 AC-4 band: *-fail-shape*.yaml)
+        # are excluded from this bulk-validation gate — they fail by
+        # construction. Their rejection is CI-enforced via the pytest gate's
+        # test_canonical_lad_fail_shape_envelope_rejected +
+        # test_cli_lad_fail_shape_envelope_exits_one (run in the prior
+        # "Test (pytest)" step).
+        run: uv run envelope-validator $(git ls-files '../../examples/envelopes/*.yaml' | grep -v -- '-fail-shape')
 
       - name: Orchestrator-event schema gate (substrate component 2)
         # ../../ walks up from tools/loud-fail-harness/ (the workflow's
