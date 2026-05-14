@@ -1,0 +1,70 @@
+$ /bmad-automation run sample-auto-001
+
+[orchestrator] Story sample-auto-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-auto-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+[orchestrator] project_type=web read from _bmad/automation/config.yaml (Story 9.2)
+[orchestrator] review_lad.enabled=true read from _bmad/automation/config.yaml (Story 10.4 AC-1)
+[orchestrator] review_lad.api_key_env_var=OPENROUTER_API_KEY (Story 10.5 NAME-only)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: implementing AC-1 (Phase 1.5 substrate — four_layer_review_dispatch.py + lad_mcp_unavailable.py)
+[stream] Dev: writing four_layer_review_dispatch.py (900 lines; FourLayerReviewResult + dispatch_four_layer_review + merge_review_envelopes + _dedup_findings_by_id_source + _shallow_clone_envelope)
+[stream] Dev: writing lad_mcp_unavailable.py (379 lines; surface_lad_unavailable + lifecycle_phase mapping)
+[stream] Dev: writing test_four_layer_review_dispatch.py + test_lad_mcp_unavailable.py
+[seam: dev-return] Dev returned status=pass; envelope persisted (1279 lines of substrate code + tests; non-trivial complexity per AC-1(f))
+[hook: SubagentStop] Commit created: "Stories 10.4 + 10.5: four-layer dispatch + LAD-skipped emission"
+[orchestrator] proposed_commit_message captured (FR50 / NFR-O6)
+[orchestrator] Lifecycle: in-progress → review (Story 2.4 / FR5)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist (4-layer parallel pass per Story 10.4)
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean (AC-coverage gap analysis pass)
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean (boundary-condition analysis pass)
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — clean (rationale-vs-AC pass)
+[stream] Review-BMAD: layer-4 (LAD — Review-LAD wrapper) — dispatched via mcp__lad__code_review
+[stream]   → paths=[four_layer_review_dispatch.py, lad_mcp_unavailable.py]
+[stream]   → OPENROUTER_API_KEY env-var presence check: present (Procedure step 2.a per agents/review-lad-wrapper.md)
+[stream]   → mcp__lad__code_review invoked; dual-reviewer parallel pass starts
+[stream]   → primary reviewer (moonshotai/kimi-k2-thinking) reports 12 findings
+[stream]   → secondary reviewer (minimax/minimax-m2.7) — OpenRouter request timed out after 295s
+[stream]   → single-reviewer-mode synthesis per ADR-008 (OPENROUTER_SECONDARY_REVIEWER_MODEL escape; the dispatcher treats the secondary timeout as a graceful single-reviewer fallback)
+[stream] Review-BMAD: layer-4 (LAD) — 12 findings returned (2 HIGH/patch, 4 MED, 6 LOW)
+[seam: review-return] Review-BMAD returned status=fail; findings include source=lad with HIGH/patch buckets
+  failed_layers: []  (LAD layer COMPLETED — single-reviewer mode is not a layer failure)
+[orchestrator] Bucket routing: 4 patch-bucket findings; 1 decision_needed; 6 defer; 1 dismiss
+[orchestrator] Triage: documenting findings in pr-bundle.md review section per Story 10.4 AC-3
+
+[seam: env-provision] Provisioning QA env (Story 4.3 / FR7)
+[stream] PlaywrightMcpAvailabilityProbe.is_available() → True
+[stream] Web env provisioned: env_kind=web, port=auto, health_url=…
+
+[seam: qa-dispatch] Dispatching QA specialist (web dispatch branch — Story 4.4)
+[stream] QA: BPlan generation (Story 4.1 / FR23) — created from AC list
+[stream] QA: AC-1 verification — PlaywrightDriver dispatch
+[stream]   → navigate("about:blank") via mcp__playwright__browser_navigate
+[stream]   → snapshot via mcp__playwright__browser_snapshot — substrate-rendered structural witness
+[stream]   → tier-2 screenshot capture via mcp__playwright__browser_take_screenshot
+[stream]   ✓ AC-1 pass: Tier-1 (substrate evidence) + Tier-2 (screenshot captured)
+[stream] QA: heuristic dispatch (Story 4.9 — three exploratory heuristics)
+[stream]   → empty-state — plan declares inapplicable for synthetic substrate-fixture greeter; emit heuristic-skipped: empty-state
+[stream]   → error-state — plan declares inapplicable; emit heuristic-skipped: error-state
+[stream]   → auth-boundary — plan declares inapplicable; emit heuristic-skipped: auth-boundary
+[seam: qa-return] QA returned status=pass; ac_results all pass; 3 heuristic-skipped emissions
+
+[orchestrator] Lifecycle: review → qa → done (with non-empty review findings rendered for the practitioner)
+[hook: Stop] Bundle assembly: merge-ready (Story 10.4 AC-3 — LAD-source findings render through existing triage taxonomy without bespoke branches)
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-auto-001/run-001.md
+[stream] Loud-fail block: 3 markers (heuristic-skipped: empty-state, error-state, auth-boundary)
+[stream] Cost telemetry: $1.92 (within NFR-P1 $3 target; per-specialist partition includes Review-LAD row per NFR-P5 + Story 10.6)
+  | dev          | $0.48 |  -    | $0.48 |
+  | lad          | $0.45 |  -    | $0.45 |
+  | qa           | $0.65 |  -    | $0.65 |
+  | review-bmad  | $0.34 |  -    | $0.34 |
+  | **Total**    | **$1.92** |
+[stream] Run duration: 05:24 (NFR-P3 5-min budget EXCEEDED by 00:24 — secondary-reviewer OpenRouter timeout dominates; uvx cold-start a likely sub-contributor; H3 housekeeping surfaced per AC-7(c))
+
+run sample-auto-001: complete; merge-ready bundle written with non-empty review section
+(4 patch-bucket LAD findings rendered for practitioner triage; per Story 10.4
+ AC-3 LAD findings flow through the existing decision_needed | patch | defer |
+ dismiss triage taxonomy without bespoke LAD-only branches).

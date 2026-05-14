@@ -1,0 +1,38 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13; FR55)
+# Web dispatch branch — driver=playwright per Story 4.4 qa_ac_iteration.py dispatch.
+status: pass
+specialist: qa
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "Phase 1.5 Stories 10.4 + 10.5 substrate added: four_layer_review_dispatch.py + lad_mcp_unavailable.py + tests"
+      - "Module imports clean; substrate-component count remains FIVE per ADR-003 Consequence 1"
+    evidence_refs:
+      - "_bmad-output/qa-evidence/sample-auto-001/run-001/ac-1/substrate-import-witness.json"
+      - "_bmad-output/qa-evidence/sample-auto-001/run-001/ac-1/ac-1-substrate-screenshot.png"
+    semantic_verification: "not_required"
+behavioral_plan_status: human-reviewed
+exploratory_heuristics:
+  - heuristic: empty-state
+    status: skipped
+    rationale: "Plan declares inapplicable — substrate-level fixture with no end-user list surface (per FR22 plan-driven applicability; heuristic-skipped marker emitted via surface_heuristic_skipped)."
+  - heuristic: error-state
+    status: skipped
+    rationale: "Plan declares inapplicable — synthetic Phase-1.5-substrate fixture has no user-visible error surface (per FR22; heuristic-skipped marker emitted)."
+  - heuristic: auth-boundary
+    status: skipped
+    rationale: "Plan declares inapplicable — substrate fixture has no auth gate (per FR22; heuristic-skipped marker emitted)."
+findings: []
+heuristic_skipped_emissions:
+  - marker_class: "heuristic-skipped"
+    sub_classification: "empty-state"
+    story_id: "sample-auto-001"
+  - marker_class: "heuristic-skipped"
+    sub_classification: "error-state"
+    story_id: "sample-auto-001"
+  - marker_class: "heuristic-skipped"
+    sub_classification: "auth-boundary"
+    story_id: "sample-auto-001"
+marker_emissions: []
+rationale: "All ACs pass via playwright-driver dispatch (Story 4.4); Tier-1 (substrate import witness) + Tier-2 (screenshot) evidence captured per FR19 evidence-triple invariant; three heuristics skipped per plan-driven applicability with marker emissions per FR22 loud-fail-on-skip discipline (Story 4.9 substrate)."

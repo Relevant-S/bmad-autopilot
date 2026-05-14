@@ -1,0 +1,113 @@
+# Review-BMAD specialist return envelope — 4-layer parallel pass per Story 10.4
+# (Story 2.9 + Story 3.1 + Story 10.4; FR26 + FR56)
+# LAD layer dispatched per agents/review-lad-wrapper.md (Story 10.2 / 10.5);
+# upstream `mcp__lad__code_review` (Shelpuk-AI-Technology-Consulting/lad_mcp_server
+# version_floor `bb47e9e` per ADR-008); OpenRouter-backed dual-reviewer pass.
+# Secondary reviewer (minimax/minimax-m2.7) timed out after 295s; LAD verdict
+# synthesized in single-reviewer mode per ADR-008 escape (the layer COMPLETED;
+# failed_layers stays empty — single-reviewer-mode is not a layer failure).
+status: fail
+specialist: review-bmad
+layer_results:
+  - layer: blind-hunter
+    status: pass
+    findings: []
+  - layer: edge-case-hunter
+    status: pass
+    findings: []
+  - layer: acceptance-auditor
+    status: pass
+    findings: []
+    rationale_validated: true
+  - layer: lad
+    status: fail
+    primary_model: "moonshotai/kimi-k2-thinking"
+    secondary_model: "minimax/minimax-m2.7"
+    secondary_outcome: "OpenRouter request timed out after 295s; single-reviewer-mode synthesis per ADR-008 dual-reviewer-fallback contract."
+failed_layers: []
+findings:
+  - id: "lad-001"
+    source: lad
+    title: "Potential data loss in finding deduplication"
+    detail: "_dedup_findings_by_id_source uses (source, id) as a composite key. If wrapper implementations ever generate colliding IDs within the same source (e.g., two distinct findings both with id=\"1\" from source=\"lad\"), one finding is silently discarded. Violates the loud-fail doctrine. No validation enforces ID uniqueness."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:_dedup_findings_by_id_source"
+    bucket: patch
+    severity: HIGH
+  - id: "lad-002"
+    source: lad
+    title: "Missing catch-all exception handling violates loud-fail"
+    detail: "Only SpecialistTimeoutExceeded, EnvelopeValidationFailed, UnknownMarkerClass are caught for LAD dispatch graceful degradation. Any other exception (OSError, ValueError, substrate bugs) propagates uncaught, aborting the entire review without emitting any marker for the LAD layer failure. Per Pattern 5, every degrade must surface an explicit marker — unexpected failures are no exception."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:dispatch_four_layer_review"
+    bucket: patch
+    severity: HIGH
+  - id: "lad-003"
+    source: lad
+    title: "Brittle API key detection via substring matching"
+    detail: "API-key-missing is detected by substring matching against a hardcoded literal (_LAD_API_KEY_MISSING_RATIONALE_SUBSTRING). If the wrapper's rationale prose deviates even slightly (punctuation, wording), detection fails and misclassifies the failure as generic MCP-unavailable. Wrapper prose changes require synchronized updates here with no CI enforcement."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:dispatch_four_layer_review"
+    bucket: patch
+    severity: MED
+  - id: "lad-004"
+    source: lad
+    title: "Shallow clone creates mutation hazards"
+    detail: "_shallow_clone_envelope only shallow-copies finding dicts, not their nested values (e.g., a finding's meta dict is shared between input and clone). The docstring acknowledges and trusts \"no current substrate code mutates those sub-structures.\" A latent bug — future code changes could violate the invariant, causing subtle data corruption."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:_shallow_clone_envelope"
+    bucket: patch
+    severity: MED
+  - id: "lad-005"
+    source: lad
+    title: "Sequential dispatch creates temporal coupling and head-of-line blocking"
+    detail: "BMAD and LAD are dispatched sequentially (BMAD first). If BMAD hangs or fails slowly, LAD is blocked. The docstring claims \"conceptually parallel\" but execution is strictly serial. Is the ordering intentional? Concurrent dispatch (asyncio.gather) would avoid head-of-line blocking."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:dispatch_four_layer_review"
+    bucket: decision_needed
+    severity: MED
+  - id: "lad-006"
+    source: lad
+    title: "Resource leak on dispatch timeout"
+    detail: "When SpecialistTimeoutExceeded is caught, lad_envelope=None is set, but no cleanup of partial dispatch state (temp files, subprocess handles) occurs. If the dispatch_callback allocates resources, they may leak. No finally clause or explicit cleanup."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:dispatch_four_layer_review"
+    bucket: defer
+    severity: MED
+  - id: "lad-007"
+    source: lad
+    title: "Documentation drift from hardcoded line numbers"
+    detail: "Extensive docstrings reference specific line numbers in wrapper files (e.g., \"agents/review-bmad-wrapper.md line 40\"). These desynchronize immediately on any wrapper edit, producing misleading documentation."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py"
+    bucket: defer
+    severity: LOW
+  - id: "lad-008"
+    source: lad
+    title: "Hardcoded lifecycle phase mapping"
+    detail: "lifecycle_phase derivation is an inline conditional. Adding new sub_cause values requires editing this logic, violating open/closed. Extract sub_cause → lifecycle_phase mapping to configuration or a module-level constant."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/lad_mcp_unavailable.py:surface_lad_unavailable"
+    bucket: defer
+    severity: LOW
+  - id: "lad-009"
+    source: lad
+    title: "Loss of type safety with dict[str, Any] envelopes"
+    detail: "Envelope shapes are untyped dictionaries. Pydantic models would provide compile-time schema validation and prevent silent field misspellings — particularly valuable in the merge/dedup paths."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py"
+    bucket: defer
+    severity: LOW
+  - id: "lad-010"
+    source: lad
+    title: "No validation of diagnostic_pointer format"
+    detail: "surface_lad_unavailable accepts any string for diagnostic_pointer. Malformed pointers from schemas/dependencies.yaml would only be caught downstream during actionable-pointer interpolation, delaying failure detection."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/lad_mcp_unavailable.py:surface_lad_unavailable"
+    bucket: defer
+    severity: LOW
+  - id: "lad-011"
+    source: lad
+    title: "Mutable default parameter style"
+    detail: "lad_skipped_emissions: tuple[MarkerEmissionRecord, ...] = () is technically safe (tuple immutability) but violates the general default-parameter anti-pattern. Use field(default_factory=tuple) for consistency."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:FourLayerReviewResult"
+    bucket: dismiss
+    severity: LOW
+  - id: "lad-012"
+    source: lad
+    title: "Opaque error on schema load failure"
+    detail: "When load_dependencies() fails, the raised RuntimeError does not chain the original YAML parsing error, hindering debugging. Use `raise RuntimeError(...) from exc` to preserve the cause chain."
+    location: "tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py:_load_lad_runtime_diagnostic_pointer"
+    bucket: defer
+    severity: LOW
+rationale: "4-layer adversarial pass: three BMAD layers (blind/edge/auditor) clean; LAD layer returned 12 findings (2 HIGH/patch, 4 MED [2 patch, 1 decision_needed, 1 defer], 6 LOW [5 defer, 1 dismiss]). LAD source enumerated per envelope schema $defs/finding.source. Single-reviewer-mode synthesis (secondary minimax timed out at OpenRouter; primary kimi-k2-thinking verdict-of-record per ADR-008 dual-reviewer-fallback). Failed_layers empty — LAD layer COMPLETED in single-reviewer-mode, not a failure."

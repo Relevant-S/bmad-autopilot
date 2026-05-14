@@ -1,0 +1,24 @@
+# Dev specialist return envelope (Story 2.8; FR51 + FR54)
+# Schema: bmad-autopilot/schemas/envelope.schema.yaml (Story 1.2)
+status: pass
+specialist: dev
+artifacts:
+  - path: tools/loud-fail-harness/src/loud_fail_harness/four_layer_review_dispatch.py
+    role: implementation
+  - path: tools/loud-fail-harness/src/loud_fail_harness/lad_mcp_unavailable.py
+    role: implementation
+  - path: tools/loud-fail-harness/tests/test_four_layer_review_dispatch.py
+    role: test
+  - path: tools/loud-fail-harness/tests/test_lad_mcp_unavailable.py
+    role: test
+findings: []
+rationale: "Phase 1.5 Stories 10.4 + 10.5 substrate implemented; four_layer_review_dispatch.py composes BMAD+LAD via dispatch_four_layer_review with merge_review_envelopes + _dedup_findings_by_id_source + LAD-skipped emission paths; lad_mcp_unavailable.py supplies surface_lad_unavailable + lifecycle_phase mapping per Story 10.5 AC-3+AC-4. Test corpus exercises happy + degraded paths (API-key missing, MCP unavailable, dispatch-callback timeout). Non-trivial diff (1279 lines + tests; multiple control-flow decision points per AC-1(f))."
+proposed_commit_message: |
+  Stories 10.4 + 10.5: four-layer dispatch + LAD-skipped emission
+
+  Add four_layer_review_dispatch.py composing BMAD + LAD into the
+  4-layer parallel-pass review surface (Story 10.4 AC-2 / AC-3 / AC-4);
+  add lad_mcp_unavailable.py emitting LAD-skipped marker for the
+  init-time + mid-run paths (Story 10.5 AC-3 / AC-4).
+scope_expanded_to: []
+retry_mode: null
