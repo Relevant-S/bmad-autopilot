@@ -19,7 +19,13 @@ LAD + mobile rows) the reference-run record captured by Story 10.7 /
 Story 9.6. Story 11.2 will not need to flip any `partial → delivered`
 transition; if a future correct-course adds a Phase-1.5-touched FR or
 NFR, this artifact's regeneration discipline (see below) will pick
-it up.
+it up. Story 11.2 (`epics-phase-1.5.md:357-370`) has landed: the
+`FR-P1.5-1` / `FR-P1.5-2` / `FR30-LAD-skipped` / `FR30-mobile-blocked`
+/ `NFR-S1` / `NFR-P5` rows' `Evidence` cells were enriched at 11.2
+landing time to cite the reference-run records
+(`docs/reference-runs/9-6-mobile/` + `docs/reference-runs/10-7-lad-web/`)
+alongside the story-doc pointers, completing the empirical-witness-pointer
+contract per `epics-phase-1.5.md:368`.
 
 Phase 1 sibling: `bmad-autopilot/docs/mvp-completion-evidence.md`
 (Story 8.7 — 102-row full-MVP-surface artifact). The two artifacts
@@ -118,13 +124,13 @@ enforce the `Findings > 0` invariant for `partial` rows AND the
 | FR-P1.5-1 | Review-LAD as opt-in 4th parallel reviewer layer (post-MVP traceability) | delivered | _bmad-output/implementation-artifacts/10-2-lad-wrapper-subagent-scaffold-pluggability-compliant.md, bmad-autopilot/docs/reference-runs/10-7-lad-web/ | 0 |
 | FR-P1.5-2 | Mobile QA via mobile MCP + mobile-specific exploratory heuristics (post-MVP traceability) | delivered | _bmad-output/implementation-artifacts/9-3-qa-wrapper-mobile-mcp-integration-mobile-appropriate-evidence.md, bmad-autopilot/docs/reference-runs/9-6-mobile/ | 0 |
 | FR29 | LAD as 4th parallel reviewer inside bmad-code-review (Phase 1.5 activation of the MVP FR) | delivered | _bmad-output/implementation-artifacts/10-2-lad-wrapper-subagent-scaffold-pluggability-compliant.md, _bmad-output/implementation-artifacts/10-4-failed-layers-enum-extension-bmad-code-review-4-layer-integration.md | 0 |
-| FR30-LAD-skipped | LAD-skipped marker class activation (Story 10.5 — API key env-var-only handling, marker emission when key unset) | delivered | _bmad-output/implementation-artifacts/10-5-api-key-env-var-handling-lad-skipped-marker-emission.md | 0 |
-| FR30-mobile-blocked | mobile-blocked marker class activation (Story 9.5 — init-time and mid-run paths) | delivered | _bmad-output/implementation-artifacts/9-5-mobile-blocked-marker-emission-init-time-and-mid-run-paths.md | 0 |
+| FR30-LAD-skipped | LAD-skipped marker class activation (Story 10.5 — API key env-var-only handling, marker emission when key unset) | delivered | _bmad-output/implementation-artifacts/10-5-api-key-env-var-handling-lad-skipped-marker-emission.md, bmad-autopilot/docs/reference-runs/10-7-lad-web/ | 0 |
+| FR30-mobile-blocked | mobile-blocked marker class activation (Story 9.5 — init-time and mid-run paths) | delivered | _bmad-output/implementation-artifacts/9-5-mobile-blocked-marker-emission-init-time-and-mid-run-paths.md, bmad-autopilot/docs/reference-runs/9-6-mobile/ | 0 |
 | FR51 | Specialist-envelope uniformity extends to Review-LAD (schema extension + contract pair + validator fixture) | delivered | _bmad-output/implementation-artifacts/10-3-lad-envelope-schema-extension-contract-pair-schema-validator-fixture.md | 0 |
 | FR56 | failed_layers enum extends from [blind, edge, auditor] to [blind, edge, auditor, lad] (bmad-code-review 4-layer integration) | delivered | _bmad-output/implementation-artifacts/10-4-failed-layers-enum-extension-bmad-code-review-4-layer-integration.md | 0 |
 | FR62 | Pluggability no-cross-references CI gate extends to Review-LAD specialist code (Story 10.6) | delivered | _bmad-output/implementation-artifacts/10-6-pluggability-ci-gate-extension-to-review-lad-cost-observability-partition-extension.md | 0 |
-| NFR-S1 | LAD API key env-var-only handling (no checked-in keys; LAD-skipped marker emitted when env var absent) | delivered | _bmad-output/implementation-artifacts/10-5-api-key-env-var-handling-lad-skipped-marker-emission.md | 0 |
-| NFR-P5 | Cost-partition extends to Review-LAD (per-specialist OTel partition includes the lad partition value) | delivered | _bmad-output/implementation-artifacts/10-6-pluggability-ci-gate-extension-to-review-lad-cost-observability-partition-extension.md | 0 |
+| NFR-S1 | LAD API key env-var-only handling (no checked-in keys; LAD-skipped marker emitted when env var absent) | delivered | _bmad-output/implementation-artifacts/10-5-api-key-env-var-handling-lad-skipped-marker-emission.md, bmad-autopilot/docs/reference-runs/10-7-lad-web/ | 0 |
+| NFR-P5 | Cost-partition extends to Review-LAD (per-specialist OTel partition includes the lad partition value) | delivered | _bmad-output/implementation-artifacts/10-6-pluggability-ci-gate-extension-to-review-lad-cost-observability-partition-extension.md, bmad-autopilot/docs/reference-runs/10-7-lad-web/ | 0 |
 | NFR-I3 | mobile-mcp + lad dependencies.yaml opt-in-skip activation (Stories 9.1 + 10.1 — ADR + dependencies.yaml entries) | delivered | _bmad-output/implementation-artifacts/9-1-mobile-mcp-server-selection-adr-dependencies-yaml-mobile-mcp-activation.md, _bmad-output/implementation-artifacts/10-1-lad-mcp-server-selection-adr-dependencies-yaml-lad-activation.md | 0 |
 <!-- phase-1-5-coverage-rows:end -->
 
@@ -155,8 +161,12 @@ enforce the `Findings > 0` invariant for `partial` rows AND the
   enumeration at `epics-phase-1.5.md:352-353`.
 - `_bmad-output/planning-artifacts/epics-phase-1.5.md:357-370` —
   Story 11.2 (mobile + LAD reference-project run records populated).
-  Forward consumer that will flip any `partial → delivered` if a
-  future correct-course introduces a `partial` row.
+  Forward consumer (LANDED 2026-05-14; commit `<sha7>`) that enriched
+  the `FR-P1.5-1` / `FR-P1.5-2` / `FR30-LAD-skipped` /
+  `FR30-mobile-blocked` / `NFR-S1` / `NFR-P5` rows' `Evidence` cells
+  with reference-run-record pointers; will additionally flip any
+  `partial → delivered` if a future correct-course introduces a
+  `partial` row.
 
 ## Regeneration
 

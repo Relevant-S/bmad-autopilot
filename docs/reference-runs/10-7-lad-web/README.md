@@ -24,7 +24,7 @@ Captured artifacts for the Phase 1.5 LAD-enabled reference run per Story 10.7 (`
 
 ## Forward consumers
 
-- **Story 11.2** (`_bmad-output/planning-artifacts/epics-phase-1.5.md` line 357 — "Mobile + LAD Reference-Project Run Records Populated"; lines 363–370 detail) reads THIS directory's `pr-bundle.md` + cost section + marker bundle + `review-bmad-envelope.yaml`'s LAD-source findings when populating the LAD-enabled row in `phase-1.5-completion-evidence.md`. Forward-pointer status: **(forthcoming)** — will be updated to "(LANDED — see `<commit-link>`)" at Story 11.2 landing time per the convention established in Stories 9.6 (mobile precedent) / 10.1 / 10.2 / 10.3 / 10.4 / 10.5 / 10.6.
+- **Story 11.2** (`_bmad-output/planning-artifacts/epics-phase-1.5.md` line 357 — "Mobile + LAD Reference-Project Run Records Populated"; lines 363–370 detail) reads THIS directory's `pr-bundle.md` + cost section + marker bundle + `review-bmad-envelope.yaml`'s LAD-source findings when populating the LAD-enabled row in `phase-1.5-completion-evidence.md`. Forward-pointer status: **(LANDED — see commit `<sha7>`)** at Story 11.2 landing (2026-05-14) per the convention established in Stories 9.6 / 10.1 / 10.2 / 10.3 / 10.4 / 10.5 / 10.6.
 
 ## NFR-S1 hygiene witness (AC-6(d))
 
