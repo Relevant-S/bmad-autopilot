@@ -79,6 +79,19 @@ marker-coverage-audit = "loud_fail_harness.marker_coverage_audit:main"
 # audit's posture per pyproject.toml lines 70-74 (audit-against-closed-
 # enumeration); placed AFTER marker-coverage-audit per Story 8.7 AC-8.
 mvp-completion-evidence = "loud_fail_harness.mvp_completion_evidence:main"
+# phase-1-5-completion-evidence (story 11.1; FR-P1.5-1/2 + Phase 1.5 NFR
+# extensions + Phase 1.5-touched MVP FRs + Pattern 5/6) is library-as-CLI-aid
+# invoked from .github/workflows/ci.yml as the Phase-1.5 release-readiness
+# gate per Story 11.1 AC-8 — the gate that blocks Epic 11's `done`
+# transition until Phase 1.5 gaps are remediated. Sibling, not replacement
+# of mvp-completion-evidence — both gates run side-by-side; this gate
+# enforces Phase-1.5-additive coverage (11 closed rows) while the Phase 1
+# gate continues to enforce MVP coverage (102 closed rows). Mirrors
+# mvp-completion-evidence byte-for-byte in shape (kebab name uses dashes
+# between major + minor version components; module path uses underscores
+# per Python identifier rules). Placed AFTER mvp-completion-evidence to
+# preserve the release-evidence locality grouping.
+phase-1-5-completion-evidence = "loud_fail_harness.phase_1_5_completion_evidence:main"
 # onboarding-benchmark (story 7.9; FR44 + NFR-P3) is library-as-CLI-aid invoked
 # from .github/workflows/release-benchmark.yml on release branches and tags
 # ONLY (NOT a per-PR CI gate per AC-5: release-cadence cost-vs-coverage

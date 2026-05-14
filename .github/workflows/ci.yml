@@ -382,6 +382,25 @@ jobs:
         # docs/mvp-completion-evidence.md from disk via find_repo_root.
         run: uv run mvp-completion-evidence
 
+      - name: Phase 1.5 completion evidence validator (story 11.1)
+        # Asserts docs/phase-1.5-completion-evidence.md has all eleven
+        # rows (the closed Phase 1.5 enumeration per
+        # epics-phase-1.5.md:352-353) populated with non-empty cells per
+        # Story 11.1 AC-2; mirrors the Story 8.7 mvp-completion-evidence
+        # gate at the prior step. Sibling, not replacement — Phase 1's
+        # 102-row gate continues to enforce MVP coverage; THIS gate
+        # enforces Phase-1.5-additive coverage.
+        # Exits non-zero on:
+        # (a) a Phase 1.5 row missing from the artifact (closed-set
+        #     enumeration violation);
+        # (b) an empty cell anywhere in the 55-cell matrix;
+        # (c) an invalid `Status` value (not in delivered|partial|not-shipped);
+        # (d) a `delivered` row with `Findings > 0` (integrity invariant);
+        # (e) anchor markers missing or out-of-order.
+        # The repo-root inference reuses loud_fail_harness._shared.find_repo_root
+        # so the gate is `cwd`-independent (mirrors Story 8.7 gate).
+        run: uv run phase-1-5-completion-evidence
+
       - name: Bundle-assembly-failure emission gate (story 6.9; FR59 + NFR-O5)
         # Story 6.9 AC-4: enforces the three-channel atomic-emission
         # code-structure invariant — surface_assembly_failure (at
