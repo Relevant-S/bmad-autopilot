@@ -533,6 +533,25 @@ class SpecialistDispatchPayload(BaseModel):
           :func:`build_dispatch_payload` and stored here so that both
           ``specialist-dispatched`` and ``specialist-returned`` events
           for the same dispatch carry the identical value.
+        * ``api_key_env_var`` — optional env-var NAME (NEVER the
+          value) the specialist wrapper is expected to read at
+          LLM-runtime for upstream MCP-server authentication. Story
+          10.5 AC-8 additive extension: populated for LAD dispatches
+          (sourced from
+          ``_bmad/automation/config.yaml#review_lad.api_key_env_var``
+          via the consumer-side dict-access pattern at
+          :func:`loud_fail_harness.four_layer_review_dispatch.dispatch_four_layer_review`;
+          default ``"OPENROUTER_API_KEY"`` per Story 10.4 AC-1);
+          ``None`` for non-LAD dispatches (Dev, Review-BMAD, QA). When
+          non-``None``, :func:`default_prompt_body_renderer` renders
+          a ``**API-key env-var name:** <value>`` line into the
+          prompt body so the wrapper can read the NAME at Procedure
+          step 2.a (per the Story 10.5 AC-6 wrapper-side env-var
+          presence check). NFR-S1 structural-vs-self-attestation
+          invariant: the field carries the env-var NAME only — the
+          substrate has no access to the env-var VALUE; the wrapper
+          at LLM-runtime has access to both via the env reading
+          primitive.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -545,6 +564,7 @@ class SpecialistDispatchPayload(BaseModel):
     prompt_body: str
     dispatch_timestamp: datetime
     prompt_id: str
+    api_key_env_var: str | None = None
 
 
 def _default_dispatch_timestamp_factory() -> datetime:
@@ -566,6 +586,7 @@ def build_dispatch_payload(
     agent_definition_path: pathlib.Path,
     prompt_body_renderer: PromptBodyRenderer,
     dispatch_timestamp_factory: DispatchTimestampFactory | None = None,
+    api_key_env_var: str | None = None,
 ) -> SpecialistDispatchPayload:
     """Construct the dispatch payload by composing the agent definition + story context.
 
@@ -575,7 +596,14 @@ def build_dispatch_payload(
            :meth:`pathlib.Path.read_text` (NEVER via ``import`` —
            FR62 + ADR-004's pluggability invariant).
         2. Render the prompt body via the caller-supplied
-           ``prompt_body_renderer``.
+           ``prompt_body_renderer``. When the renderer is
+           :func:`default_prompt_body_renderer`, the
+           ``api_key_env_var`` kwarg is threaded through so the
+           NFR-S1 ``**API-key env-var name:**`` line renders directly
+           in the canonical prompt body. For custom renderers, the
+           line is appended to the rendered output as a fallback
+           (preserving the AC-8 structural-witness guarantee
+           regardless of which renderer is used).
         3. Capture the dispatch timestamp via
            ``dispatch_timestamp_factory`` (or
            :func:`_default_dispatch_timestamp_factory` when ``None``).
@@ -585,11 +613,35 @@ def build_dispatch_payload(
     :exc:`FileNotFoundError` propagates unchanged (caller-contract;
     the orchestrator skill at runtime supplies the path it knows the
     file lives at — the substrate doesn't substitute defaults).
+
+    Args:
+        api_key_env_var: Story 10.5 AC-8 additive extension —
+            optional env-var NAME (NEVER the value) the specialist
+            wrapper is expected to read at LLM-runtime. Stored
+            verbatim on the returned payload's
+            :attr:`SpecialistDispatchPayload.api_key_env_var` field;
+            also rendered into the prompt body as a
+            ``**API-key env-var name:** <value>`` line when non-``None``.
+            Defaults to ``None`` (preserves Story 2.6 baseline for
+            non-LAD specialists).
     """
     agent_definition_text = agent_definition_path.read_text(encoding="utf-8")
-    prompt_body = prompt_body_renderer(
-        agent_definition_text, story_doc_resolution, attempt_number
-    )
+    if prompt_body_renderer is default_prompt_body_renderer:
+        prompt_body = default_prompt_body_renderer(
+            agent_definition_text,
+            story_doc_resolution,
+            attempt_number,
+            api_key_env_var=api_key_env_var,
+        )
+    else:
+        prompt_body = prompt_body_renderer(
+            agent_definition_text, story_doc_resolution, attempt_number
+        )
+        if api_key_env_var is not None:
+            prompt_body = (
+                prompt_body
+                + f"\n\n# API-key env-var (NFR-S1)\n\n**API-key env-var name:** {api_key_env_var}\n"
+            )
     factory = dispatch_timestamp_factory or _default_dispatch_timestamp_factory
     dispatch_timestamp = factory()
     assert dispatch_timestamp.tzinfo is not None, (
@@ -606,6 +658,7 @@ def build_dispatch_payload(
         prompt_body=prompt_body,
         dispatch_timestamp=dispatch_timestamp,
         prompt_id=prompt_id,
+        api_key_env_var=api_key_env_var,
     )
 
 
@@ -613,6 +666,8 @@ def default_prompt_body_renderer(
     agent_definition_text: str,
     story_doc_resolution: StoryDocResolution,
     attempt_number: int,
+    *,
+    api_key_env_var: str | None = None,
 ) -> str:
     """Canonical Task-tool-prompt renderer used by tests + smoke runs.
 
@@ -624,9 +679,32 @@ def default_prompt_body_renderer(
     introduce a richer renderer via the caller-injected
     ``prompt_body_renderer`` parameter on
     :func:`build_dispatch_payload`.
+
+    Args:
+        agent_definition_text: The agent-definition markdown text
+            read via :meth:`pathlib.Path.read_text`.
+        story_doc_resolution: The resolved story-doc shape.
+        attempt_number: Retry-attempt counter.
+        api_key_env_var: Optional env-var NAME (NEVER the value) the
+            specialist wrapper is expected to read at LLM-runtime for
+            upstream MCP-server authentication. Story 10.5 AC-8
+            additive extension: when non-``None``, the renderer
+            appends a ``**API-key env-var name:** <value>`` line to
+            the rendered prompt body so the wrapper can read the
+            NAME at Procedure step 2.a (per Story 10.5 AC-6).
+            Omitted when ``None``. The NFR-S1 structural-vs-self-
+            attestation invariant is preserved: the renderer
+            materializes the env-var NAME into the prompt body, but
+            NEVER materializes the env-var VALUE (which is
+            inaccessible to the substrate by construction).
     """
     ac_lines = "\n".join(
         f"{ac.ac_id}: {ac.text}" for ac in story_doc_resolution.acceptance_criteria
+    )
+    api_key_section = (
+        f"\n# API-key env-var (NFR-S1)\n\n**API-key env-var name:** {api_key_env_var}\n"
+        if api_key_env_var is not None
+        else ""
     )
     return (
         "# Specialist instructions (from agent definition)\n"
@@ -642,6 +720,7 @@ def default_prompt_body_renderer(
         "# Acceptance criteria\n"
         "\n"
         f"{ac_lines}\n"
+        f"{api_key_section}"
         "\n"
         "# Return contract\n"
         "\n"
@@ -1756,6 +1835,7 @@ def make_task_tool_dispatch_callback(
         run_state_path: pathlib.Path,
         story_doc_resolution: StoryDocResolution,
         event_log_appender: EventLogAppender,
+        api_key_env_var: str | None = None,
     ) -> DispatchCallbackResult:
         """Closed-over Task-tool-dispatch callback.
 

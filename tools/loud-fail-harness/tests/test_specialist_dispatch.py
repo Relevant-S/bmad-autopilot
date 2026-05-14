@@ -1430,6 +1430,7 @@ def test_make_task_tool_dispatch_callback_returned_callable_matches_dispatch_cal
         "run_state_path",
         "story_doc_resolution",
         "event_log_appender",
+        "api_key_env_var",
     }
     assert set(sig.parameters.keys()) == expected_kwargs
     for name, param in sig.parameters.items():
@@ -1978,3 +1979,120 @@ def test_handle_context_near_limit_true_signal_records_marker() -> None:
     )
     assert result is not rs
     assert "context-near-limit: dev" in result.active_markers
+
+
+# --------------------------------------------------------------------------- #
+# Story 10.5 AC-8 — SpecialistDispatchPayload.api_key_env_var extension       #
+# --------------------------------------------------------------------------- #
+
+
+def test_specialist_dispatch_payload_api_key_env_var_field(
+    story_doc_resolution: StoryDocResolution,
+    agent_definition_path: pathlib.Path,
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 10.5 AC-8: ``SpecialistDispatchPayload.api_key_env_var``
+    additive field — defaults to ``None``, accepts a non-empty string,
+    renders into the prompt body via ``default_prompt_body_renderer``
+    when non-``None``, omits the line when ``None``. The structural
+    witness for the NFR-S1 substrate-vs-wrapper boundary: the
+    substrate materializes the env-var NAME into the prompt body,
+    NEVER the env-var VALUE.
+    """
+    # Default value is None (backward-compatible — Story 2.6 baseline
+    # for non-LAD specialists).
+    default_payload = build_dispatch_payload(
+        specialist="dev",
+        story_id="10-5-test",
+        attempt_number=0,
+        story_doc_resolution=story_doc_resolution,
+        agent_definition_path=agent_definition_path,
+        prompt_body_renderer=default_prompt_body_renderer,
+        dispatch_timestamp_factory=lambda: fixed_timestamp,
+    )
+    assert default_payload.api_key_env_var is None
+    assert "**API-key env-var name:**" not in default_payload.prompt_body
+
+    # Accepts a non-empty string + renders into the prompt body via
+    # the default renderer.
+    populated_payload = build_dispatch_payload(
+        specialist="lad",
+        story_id="10-5-test",
+        attempt_number=0,
+        story_doc_resolution=story_doc_resolution,
+        agent_definition_path=agent_definition_path,
+        prompt_body_renderer=default_prompt_body_renderer,
+        dispatch_timestamp_factory=lambda: fixed_timestamp,
+        api_key_env_var="OPENROUTER_API_KEY",
+    )
+    assert populated_payload.api_key_env_var == "OPENROUTER_API_KEY"
+    assert "**API-key env-var name:** OPENROUTER_API_KEY" in populated_payload.prompt_body
+    # NFR-S1 structural witness: the renderer materializes the NAME,
+    # not the VALUE. No sentinel-key-shaped substring appears.
+    assert "sk-" not in populated_payload.prompt_body
+
+
+def test_default_prompt_body_renderer_omits_api_key_section_when_none(
+    story_doc_resolution: StoryDocResolution,
+) -> None:
+    """Story 10.5 AC-8: when ``api_key_env_var=None`` (the default),
+    ``default_prompt_body_renderer`` omits the
+    ``**API-key env-var name:**`` line entirely (no NFR-S1 leakage on
+    non-LAD specialists)."""
+    rendered = default_prompt_body_renderer(
+        "AGENT_TEXT", story_doc_resolution, attempt_number=0
+    )
+    assert "**API-key env-var name:**" not in rendered
+    assert "# API-key env-var (NFR-S1)" not in rendered
+
+
+def test_default_prompt_body_renderer_renders_api_key_section_when_provided(
+    story_doc_resolution: StoryDocResolution,
+) -> None:
+    """Story 10.5 AC-8: when ``api_key_env_var`` is non-``None``,
+    ``default_prompt_body_renderer`` renders the
+    ``**API-key env-var name:** <value>`` line in the prompt body —
+    the wrapper's Procedure step 2.a reads this line as the source
+    of the env-var NAME per Story 10.5 AC-6.
+    """
+    rendered = default_prompt_body_renderer(
+        "AGENT_TEXT",
+        story_doc_resolution,
+        attempt_number=0,
+        api_key_env_var="OPENROUTER_API_KEY",
+    )
+    assert "# API-key env-var (NFR-S1)" in rendered
+    assert "**API-key env-var name:** OPENROUTER_API_KEY" in rendered
+
+
+def test_build_dispatch_payload_renders_api_key_line_via_custom_renderer(
+    story_doc_resolution: StoryDocResolution,
+    agent_definition_path: pathlib.Path,
+    fixed_timestamp: datetime,
+) -> None:
+    """Story 10.5 AC-8 fallback path: for custom renderers (not the
+    canonical ``default_prompt_body_renderer``), ``build_dispatch_payload``
+    appends the ``**API-key env-var name:** <value>`` line to the
+    rendered output when ``api_key_env_var`` is non-``None``,
+    preserving the structural witness regardless of which renderer
+    is used.
+    """
+
+    def _custom(
+        text: str, resolution: StoryDocResolution, attempt: int
+    ) -> str:
+        return "CUSTOM_RENDERED_BODY"
+
+    payload = build_dispatch_payload(
+        specialist="lad",
+        story_id="10-5-test",
+        attempt_number=0,
+        story_doc_resolution=story_doc_resolution,
+        agent_definition_path=agent_definition_path,
+        prompt_body_renderer=_custom,
+        dispatch_timestamp_factory=lambda: fixed_timestamp,
+        api_key_env_var="OPENROUTER_API_KEY",
+    )
+    assert "CUSTOM_RENDERED_BODY" in payload.prompt_body
+    assert "**API-key env-var name:** OPENROUTER_API_KEY" in payload.prompt_body
+    assert payload.api_key_env_var == "OPENROUTER_API_KEY"
