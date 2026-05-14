@@ -2589,6 +2589,92 @@ def test_render_cost_breakdown_deterministic_byte_stable(
     assert r1.index("| dev | 1 |") < r1.index("| qa | 1 |") < r1.index("| review-bmad | 1 |")
 
 
+# --------------------------------------------------------------------------- #
+# Story 10.6 — _render_cost_breakdown LAD-partition tests (AC-6)              #
+# --------------------------------------------------------------------------- #
+
+
+def test_render_cost_breakdown_includes_lad_row_for_four_layer_run(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 10.6 AC-6: Phase-1.5 four-layer-review aggregation renders an
+    alphabetically-positioned `| lad |` row block.
+
+    With six events covering `(dev, 1/2)` + `(review-bmad, 1/2)` +
+    `(lad, 1/2)`, the rendered table contains per-attempt rows + the
+    per-specialist total row for LAD; the alphabetical-sort property at
+    `bundle_assembly.py:1473` lands `| lad |` rows between `| dev |` and
+    `| review-bmad |` blocks by construction.
+    """
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    aggregation = CostAggregation(
+        per_specialist_totals={"dev": 0.95, "review_bmad": 0.58, "lad": 0.78},
+        per_specialist_per_retry={
+            ("dev", 1): 0.50,
+            ("dev", 2): 0.45,
+            ("review-bmad", 1): 0.30,
+            ("review-bmad", 2): 0.28,
+            ("lad", 1): 0.40,
+            ("lad", 2): 0.38,
+        },
+    )
+    rendered = _render_cost_breakdown(
+        active_markers=(),
+        marker_contexts={},
+        cost_aggregation=aggregation,
+        marker_registry=runtime_marker_registry,
+    )
+    assert "## 💸 Cost Breakdown" in rendered
+    assert "| lad | 1 | 0.40 | 0.40 |" in rendered
+    assert "| lad | 2 | 0.38 | 0.78 |" in rendered
+    assert "| lad | total | — | 0.78 |" in rendered
+    # Alphabetical row ordering: dev → lad → review-bmad.
+    dev_idx = rendered.index("| dev | 1 |")
+    lad_idx = rendered.index("| lad | 1 |")
+    review_idx = rendered.index("| review-bmad | 1 |")
+    assert dev_idx < lad_idx < review_idx
+    # Per-specialist total row sits AFTER the specialist's retry rows but
+    # BEFORE the next specialist's first retry row.
+    lad_total_idx = rendered.index("| lad | total | — | 0.78 |")
+    assert lad_idx < lad_total_idx < review_idx
+
+
+def test_render_cost_breakdown_lad_disabled_no_lad_row(
+    runtime_marker_registry: MarkerClassRegistry,
+) -> None:
+    """Story 10.6 AC-6: LAD-disabled run renders zero `| lad |` rows.
+
+    Silence-unless-configured at the rendering surface: absence-of-events
+    drives absence-of-rows. The rendered table contains only the
+    Phase-1 baseline `| dev |` + `| review-bmad |` rows + their
+    per-specialist totals.
+    """
+    from loud_fail_harness.bundle_assembly import _render_cost_breakdown
+    from loud_fail_harness.cost_telemetry import CostAggregation
+
+    aggregation = CostAggregation(
+        per_specialist_totals={"dev": 0.95, "review_bmad": 0.58},
+        per_specialist_per_retry={
+            ("dev", 1): 0.50,
+            ("dev", 2): 0.45,
+            ("review-bmad", 1): 0.30,
+            ("review-bmad", 2): 0.28,
+        },
+    )
+    rendered = _render_cost_breakdown(
+        active_markers=(),
+        marker_contexts={},
+        cost_aggregation=aggregation,
+        marker_registry=runtime_marker_registry,
+    )
+    assert "## 💸 Cost Breakdown" in rendered
+    assert "| lad |" not in rendered
+    assert "| dev |" in rendered
+    assert "| review-bmad |" in rendered
+
+
 def test_load_cost_aggregation_returns_empty_when_pipeline_is_none() -> None:
     """Story 6.4 AC-3: _load_cost_aggregation(_, None) returns empty
     CostAggregation (the default backward-compat path)."""

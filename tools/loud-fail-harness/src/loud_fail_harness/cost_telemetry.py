@@ -14,6 +14,13 @@ enumeration_check, fixture_coverage); the count remains FIVE.
 - **NFR-P5** (PRD line 938) — Per-specialist × per-retry cost observability:
   the bundle's cost-breakdown section is partitioned by specialist AND by
   retry attempt within each specialist.
+- **Phase-1.5 cost-observability partition extension (Story 10.6)** — the
+  ``lad`` specialist enum value is mapped in
+  :data:`_SPECIALIST_TO_RUN_STATE_KEY` at this module's landing time per the
+  orchestrator-event schema ``specialist`` enum (which enumerates ``dev`` /
+  ``review-bmad`` / ``qa`` / ``lad``). Story 10.6 lands the explicit
+  structural-witness tests at ``test_cost_telemetry.py`` covering
+  per-attempt LAD aggregation + LAD-zero-events silence-unless-configured.
 - **NFR-O8** (PRD line 987) — In-flight cost observability at each
   specialist completion + 75%-of-ceiling threshold detection (Story 6.5
   consumes this module's :class:`CostAggregation`).

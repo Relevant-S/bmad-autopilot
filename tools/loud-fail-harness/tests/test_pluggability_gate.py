@@ -71,6 +71,25 @@ CLI / main exit-code matrix (AC-6, AC-9):
 Diagnostic-prose verbatim (AC-7):
     [x] format_findings matches AC-7 verbatim                     → test_format_findings_matches_ac7_verbatim
 
+Production-tree witness (Story 10.6 AC-1):
+    [x] production agents/ dir — four-specialist baseline clean          → test_production_agents_dir_four_specialist_baseline_clean
+
+Story 10.6 AC-2 — LAD path-form cross-direction edges (Rule 1):
+    [x] review-lad-wrapper → dev-wrapper (path-form)                    → test_rule1_review_lad_references_dev_path_form_violation
+    [x] review-lad-wrapper → review-bmad-wrapper (path-form)            → test_rule1_review_lad_references_review_bmad_path_form_violation
+    [x] review-lad-wrapper → qa (path-form)                             → test_rule1_review_lad_references_qa_path_form_violation
+    [x] dev-wrapper → review-lad-wrapper (path-form)                    → test_rule1_dev_references_review_lad_path_form_violation
+    [x] review-bmad-wrapper → review-lad-wrapper (path-form)            → test_rule1_review_bmad_references_review_lad_path_form_violation
+    [x] qa → review-lad-wrapper (path-form)                             → test_rule1_qa_references_review_lad_path_form_violation
+
+Story 10.6 AC-3 — LAD slug-form cross-direction edges (Rule 2):
+    [x] review-lad-wrapper → dev-wrapper (slug-form)                    → test_rule2_review_lad_references_dev_slug_form_violation
+    [x] review-lad-wrapper → review-bmad-wrapper (slug-form)            → test_rule2_review_lad_references_review_bmad_slug_form_violation
+    [x] dev-wrapper → review-lad-wrapper (slug-form)                    → test_rule2_dev_references_review_lad_slug_form_violation
+    [x] review-bmad-wrapper → review-lad-wrapper (slug-form)            → test_rule2_review_bmad_references_review_lad_slug_form_violation
+    [x] qa → review-lad-wrapper (slug-form)                             → test_rule2_qa_references_review_lad_slug_form_violation
+    [x] bare `qa` token — Rule 2 asymmetry, no violation (s3)           → test_rule2_review_lad_references_qa_bare_slug_no_violation
+
 Coverage (AC-9):
     [x] pluggability_gate.py module-level statement coverage ≥ 90% → review-enforced; not a CI gate
 """
@@ -85,6 +104,7 @@ import sys
 import pytest
 from pydantic import ValidationError
 
+from loud_fail_harness._shared import find_repo_root
 from loud_fail_harness.pluggability_gate import (
     CrossReferenceFinding,
     GateResult,
@@ -253,6 +273,37 @@ def test_four_specialists_no_violations(tmp_path: pathlib.Path) -> None:
     assert result.cross_reference_violation == []
 
 
+def test_production_agents_dir_four_specialist_baseline_clean() -> None:
+    """Story 10.6 AC-1: production agents/ dir contains four FR62-clean specialists.
+
+    Production-tree structural witness paralleling the synthetic-fixture
+    coverage at :func:`test_four_specialists_no_violations`. Asserts the
+    REAL inner-repo ``agents/`` directory at test-execution time carries
+    exactly the Phase-1.5-locked four-specialist set
+    (``dev-wrapper`` / ``qa`` / ``review-bmad-wrapper`` /
+    ``review-lad-wrapper``) and that ``run_pluggability_gate`` returns
+    ``GateResult.cross_reference_violation == []`` with all four in the
+    ``passing`` bucket — the structural-enforcement witness against drift
+    between synthetic fixtures and the real ``agents/`` directory. The
+    four-specialist set is the Phase-1.5-locked invariant per
+    ``epics-phase-1.5.md`` lines 83 + 121.
+    """
+    production_agents_dir = find_repo_root() / "agents"
+    assert production_agents_dir.is_dir(), (
+        f"expected production agents/ at {production_agents_dir}"
+    )
+    result = run_pluggability_gate(production_agents_dir)
+    assert result.cross_reference_violation == []
+    assert {ref.specialist_slug for ref in result.passing} == {
+        "dev-wrapper",
+        "qa",
+        "review-bmad-wrapper",
+        "review-lad-wrapper",
+    }
+    for ref in result.passing:
+        assert ref.scanned_line_count > 0
+
+
 # ---------------------------------------------------------------------------
 # Rule 1 (path-form) cases
 # ---------------------------------------------------------------------------
@@ -276,6 +327,158 @@ def test_rule1_path_form_basic_violation(tmp_path: pathlib.Path) -> None:
     assert "via rule path-form" in out
     assert 'matched "agents/dev-wrapper.md"' in out
     assert "at line 2" in out
+
+
+# ---------------------------------------------------------------------------
+# Story 10.6 AC-2: six path-form negative fixtures covering all six cross-
+# direction edges between Review-LAD and {Dev, Review-BMAD, QA}
+# ---------------------------------------------------------------------------
+
+
+def _four_specialist_fixture(
+    tmp_path: pathlib.Path,
+    *,
+    offender_filename: str,
+    offending_line: str,
+) -> pathlib.Path:
+    """Build a four-specialist `agents/` tree where one wrapper carries an
+    offending reference at line 5 of its file (deterministic per Story 1.10a).
+
+    The three non-offending wrappers carry baseline-clean text (single H1 +
+    one prose line) — the structural witness that the gate's per-file
+    detection is correctly scoped.
+    """
+    clean_bodies: dict[str, str] = {
+        "dev-wrapper.md": "# Dev Wrapper\nBaseline-clean.\n",
+        "review-bmad-wrapper.md": "# Review-BMAD Wrapper\nBaseline-clean.\n",
+        "qa.md": "# QA\nBaseline-clean.\n",
+        "review-lad-wrapper.md": "# Review-LAD Wrapper\nBaseline-clean.\n",
+    }
+    offender_preamble = (
+        "# Offender\nLine 2.\nLine 3.\nLine 4.\n"
+    )
+    clean_bodies[offender_filename] = offender_preamble + offending_line
+    return _make_agents_dir(tmp_path, specialists=clean_bodies)
+
+
+def _assert_single_path_form_violation(
+    agents_dir: pathlib.Path,
+    *,
+    offending_specialist: str,
+    referenced_specialist: str,
+) -> None:
+    result = run_pluggability_gate(agents_dir)
+    assert len(result.cross_reference_violation) == 1
+    finding = result.cross_reference_violation[0]
+    assert finding.offending_specialist == offending_specialist
+    assert finding.referenced_specialist == referenced_specialist
+    assert finding.rule == "path-form"
+    assert finding.line_number == 5
+    assert len(result.passing) == 3
+
+
+def test_rule1_review_lad_references_dev_path_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-2 (e1): review-lad-wrapper → dev-wrapper path-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-lad-wrapper.md",
+        offending_line="See agents/dev-wrapper.md for the Dev handoff seam.\n",
+    )
+    _assert_single_path_form_violation(
+        agents_dir,
+        offending_specialist="review-lad-wrapper",
+        referenced_specialist="dev-wrapper",
+    )
+
+
+def test_rule1_review_lad_references_review_bmad_path_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-2 (e2): review-lad-wrapper → review-bmad-wrapper path-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-lad-wrapper.md",
+        offending_line=(
+            "See agents/review-bmad-wrapper.md for the Review-BMAD handoff seam.\n"
+        ),
+    )
+    _assert_single_path_form_violation(
+        agents_dir,
+        offending_specialist="review-lad-wrapper",
+        referenced_specialist="review-bmad-wrapper",
+    )
+
+
+def test_rule1_review_lad_references_qa_path_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-2 (e3): review-lad-wrapper → qa path-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-lad-wrapper.md",
+        offending_line="See agents/qa.md for the QA handoff seam.\n",
+    )
+    _assert_single_path_form_violation(
+        agents_dir,
+        offending_specialist="review-lad-wrapper",
+        referenced_specialist="qa",
+    )
+
+
+def test_rule1_dev_references_review_lad_path_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-2 (e4): dev-wrapper → review-lad-wrapper path-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="dev-wrapper.md",
+        offending_line=(
+            "See agents/review-lad-wrapper.md for the LAD handoff seam.\n"
+        ),
+    )
+    _assert_single_path_form_violation(
+        agents_dir,
+        offending_specialist="dev-wrapper",
+        referenced_specialist="review-lad-wrapper",
+    )
+
+
+def test_rule1_review_bmad_references_review_lad_path_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-2 (e5): review-bmad-wrapper → review-lad-wrapper path-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-bmad-wrapper.md",
+        offending_line=(
+            "See agents/review-lad-wrapper.md for the LAD handoff seam.\n"
+        ),
+    )
+    _assert_single_path_form_violation(
+        agents_dir,
+        offending_specialist="review-bmad-wrapper",
+        referenced_specialist="review-lad-wrapper",
+    )
+
+
+def test_rule1_qa_references_review_lad_path_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-2 (e6): qa → review-lad-wrapper path-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="qa.md",
+        offending_line=(
+            "See agents/review-lad-wrapper.md for the LAD handoff seam.\n"
+        ),
+    )
+    _assert_single_path_form_violation(
+        agents_dir,
+        offending_specialist="qa",
+        referenced_specialist="review-lad-wrapper",
+    )
 
 
 def test_rule1_path_form_inside_markdown_link(tmp_path: pathlib.Path) -> None:
@@ -389,6 +592,145 @@ def test_rule2_slug_form_basic_violation(tmp_path: pathlib.Path) -> None:
     assert "specialist dev-wrapper" in out
     assert "via rule slug-form" in out
     assert 'matched "dev-wrapper"' in out
+
+
+# ---------------------------------------------------------------------------
+# Story 10.6 AC-3: five slug-form negative fixtures (Rule 2 fires) + one
+# deliberate-asymmetry positive (bare `qa` outside Rule 2's scope)
+# ---------------------------------------------------------------------------
+
+
+def _assert_single_slug_form_violation(
+    agents_dir: pathlib.Path,
+    *,
+    offending_specialist: str,
+    referenced_specialist: str,
+) -> None:
+    result = run_pluggability_gate(agents_dir)
+    assert len(result.cross_reference_violation) == 1
+    finding = result.cross_reference_violation[0]
+    assert finding.offending_specialist == offending_specialist
+    assert finding.referenced_specialist == referenced_specialist
+    assert finding.rule == "slug-form"
+    assert finding.line_number == 5
+
+
+def test_rule2_review_lad_references_dev_slug_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-3 (s1): review-lad-wrapper → dev-wrapper slug-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-lad-wrapper.md",
+        offending_line=(
+            "Compose with the dev-wrapper interface for context.\n"
+        ),
+    )
+    _assert_single_slug_form_violation(
+        agents_dir,
+        offending_specialist="review-lad-wrapper",
+        referenced_specialist="dev-wrapper",
+    )
+
+
+def test_rule2_review_lad_references_review_bmad_slug_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-3 (s2): review-lad-wrapper → review-bmad-wrapper slug-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-lad-wrapper.md",
+        offending_line=(
+            "Compose with the review-bmad-wrapper interface for context.\n"
+        ),
+    )
+    _assert_single_slug_form_violation(
+        agents_dir,
+        offending_specialist="review-lad-wrapper",
+        referenced_specialist="review-bmad-wrapper",
+    )
+
+
+def test_rule2_dev_references_review_lad_slug_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-3 (s4): dev-wrapper → review-lad-wrapper slug-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="dev-wrapper.md",
+        offending_line=(
+            "Compose with the review-lad-wrapper interface for context.\n"
+        ),
+    )
+    _assert_single_slug_form_violation(
+        agents_dir,
+        offending_specialist="dev-wrapper",
+        referenced_specialist="review-lad-wrapper",
+    )
+
+
+def test_rule2_review_bmad_references_review_lad_slug_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-3 (s5): review-bmad-wrapper → review-lad-wrapper slug-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-bmad-wrapper.md",
+        offending_line=(
+            "Compose with the review-lad-wrapper interface for context.\n"
+        ),
+    )
+    _assert_single_slug_form_violation(
+        agents_dir,
+        offending_specialist="review-bmad-wrapper",
+        referenced_specialist="review-lad-wrapper",
+    )
+
+
+def test_rule2_qa_references_review_lad_slug_form_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-3 (s6): qa → review-lad-wrapper slug-form."""
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="qa.md",
+        offending_line=(
+            "Compose with the review-lad-wrapper interface for context.\n"
+        ),
+    )
+    _assert_single_slug_form_violation(
+        agents_dir,
+        offending_specialist="qa",
+        referenced_specialist="review-lad-wrapper",
+    )
+
+
+def test_rule2_review_lad_references_qa_bare_slug_no_violation(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 10.6 AC-3 deliberate-asymmetry: bare `qa` token is OUTSIDE Rule 2.
+
+    Per ``pluggability_gate.py:149-159`` rationale: single-word slugs like
+    ``qa`` are deliberately excluded from Rule 2 to avoid colliding with
+    marker classes (``qa-failed``), lifecycle states, section names. The
+    review-lad-wrapper carrying bare-prose ``"qa"`` text produces ZERO
+    findings — Rule 2 does not fire AND Rule 1 does not fire (no
+    ``agents/qa.md`` substring). The structural-witness against any
+    future drift that would re-introduce single-word slugs into Rule 2.
+    """
+    agents_dir = _four_specialist_fixture(
+        tmp_path,
+        offender_filename="review-lad-wrapper.md",
+        offending_line="Hand off to the qa specialist after review.\n",
+    )
+    result = run_pluggability_gate(agents_dir)
+    assert result.cross_reference_violation == []
+    assert {ref.specialist_slug for ref in result.passing} == {
+        "dev-wrapper",
+        "qa",
+        "review-bmad-wrapper",
+        "review-lad-wrapper",
+    }
 
 
 def test_rule2_slug_form_multiple_matches_per_file(

@@ -59,8 +59,8 @@ specialist files land):
       text; lives in substrate, not ``agents/``);
     * Story 3.2 (Review-BMAD wrapper PR — gate fires non-trivially);
     * Stories 4.x (QA elaboration must not reference Dev or Review-BMAD);
-    * Stories 5.x (Review-LAD Phase 1.5 must not reference any other
-      specialist).
+    * Stories 10.x (Review-LAD Phase 1.5 must not reference any other
+      specialist — Story 10.6 lands the explicit FR62 structural witness).
 The baseline-zero pass (no ``agents/`` directory at story 1.10a's landing
 time) is the gate's correct posture: 0 specialists = 0 possible cross-
 references, exit 0.
@@ -193,6 +193,17 @@ Determinism (parallel to 1.4 / 1.5 / 1.6 / 1.7 / 1.8 / 1.9):
       order JSON serialization (load-bearing for byte-stable
       ``model_dump_json()``).
     * No use of ``set`` for stdout-observed collections.
+
+Phase-1.5 four-specialist coverage (Story 10.6): the gate's discovery +
+Rule 1 + Rule 2 already covered Review-LAD by construction at Story
+1.10a's landing time (top-level ``agents/*.md`` glob, no specialist
+allowlist; ``"-" in stem`` multi-hyphen filter admits
+``review-lad-wrapper`` automatically). Story 10.6 lands the explicit structural-
+witness tests at ``test_pluggability_gate.py`` covering all six cross-
+direction edges between Review-LAD and ``{Dev, Review-BMAD, QA}``, the
+four-specialist clean-baseline witness against the production
+``agents/`` tree, and the deliberate-asymmetry-on-bare-``qa`` witness
+codifying that Rule 2's single-word-slug exclusion is load-bearing.
 """
 
 from __future__ import annotations

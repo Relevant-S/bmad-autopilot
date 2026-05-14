@@ -12,6 +12,8 @@ Coverage map (per AC-6):
     (h) collect happy path → CollectionResult with marker_classification=None
     (i) collect failure path with OtelPipelineUnreachable
     (j) collect failure path with PromptIdCorrelationMissing
+    (k) aggregate_costs four-layer LAD-enabled — lad partition present (Story 10.6 AC-5)
+    (l) aggregate_costs four-specialist no-LAD — lad partition absent (Story 10.6 AC-5)
 """
 
 from __future__ import annotations
@@ -261,6 +263,58 @@ def test_aggregate_costs_dev_review_retry_sequence_produces_four_entries() -> No
     # boundary (run_state.py:342-379's CostToDateBySpecialist field names).
     assert aggregation.per_specialist_totals["dev"] == pytest.approx(0.90)
     assert aggregation.per_specialist_totals["review_bmad"] == pytest.approx(0.50)
+
+
+def test_aggregate_costs_four_layer_review_sequence_includes_lad_partition() -> None:
+    """Story 10.6 AC-5: Phase-1.5 4-layer-review per-attempt LAD partition.
+
+    Canonical Phase-1.5 four-layer-review retry sequence: six cost-events
+    across ``(dev, 1)`` / ``(review-bmad, 1)`` / ``(lad, 1)`` /
+    ``(dev, 2)`` / ``(review-bmad, 2)`` / ``(lad, 2)`` — Review-LAD as a
+    first-class peer of Dev + Review-BMAD at the NFR-P5 per-specialist ×
+    per-retry resolution. The `lad` partition lands as `per_specialist_per_retry`
+    entries plus a `per_specialist_totals["lad"]` sum. The `_SPECIALIST_TO_RUN_STATE_KEY`
+    mapping `"lad" → "lad"` (kebab-case-to-snake-case identity at the
+    single-word slug) keeps the totals key flat.
+    """
+    events: Sequence[CostEvent] = (
+        _make_event("dev", 1, 0.50),
+        _make_event("review-bmad", 1, 0.30),
+        _make_event("lad", 1, 0.40),
+        _make_event("dev", 2, 0.45),
+        _make_event("review-bmad", 2, 0.28),
+        _make_event("lad", 2, 0.38),
+    )
+    aggregation = aggregate_costs(events)
+    assert len(aggregation.per_specialist_per_retry) == 6
+    assert aggregation.per_specialist_per_retry[("lad", 1)] == pytest.approx(0.40)
+    assert aggregation.per_specialist_per_retry[("lad", 2)] == pytest.approx(0.38)
+    assert aggregation.per_specialist_totals["lad"] == pytest.approx(0.78)
+    assert set(aggregation.per_specialist_totals.keys()) == {
+        "dev",
+        "review_bmad",
+        "lad",
+    }
+
+
+def test_aggregate_costs_lad_disabled_no_lad_partition() -> None:
+    """Story 10.6 AC-5: LAD-disabled run produces no `lad` partition entries.
+
+    Silence-unless-configured at the cost-partition surface: when zero
+    `specialist="lad"` cost-events flow into `aggregate_costs`, the
+    resulting `CostAggregation.per_specialist_totals` does NOT contain
+    a `"lad"` key. NFR-I3 silence-unless-configured discipline mirrored
+    at the cost-observability boundary.
+    """
+    events: Sequence[CostEvent] = (
+        _make_event("dev", 1, 0.50),
+        _make_event("review-bmad", 1, 0.30),
+        _make_event("dev", 2, 0.40),
+        _make_event("review-bmad", 2, 0.20),
+    )
+    aggregation = aggregate_costs(events)
+    assert len(aggregation.per_specialist_per_retry) == 4
+    assert "lad" not in aggregation.per_specialist_totals
 
 
 # --------------------------------------------------------------------------- #
