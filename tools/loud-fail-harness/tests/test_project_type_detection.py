@@ -568,3 +568,251 @@ def test_write_detected_project_type_preserved_when_non_canonical_value(
     assert result.action == "preserved"
     content = config_path.read_text(encoding="utf-8")
     assert content.count("project_type:") == 1
+
+
+
+# =========================================================================
+# Story 12.1 — read-side short-circuit on existing
+# `_bmad/automation/config.yaml:project_type`. Each test below names its
+# AC predicate. The 27 pre-existing tests are byte-identical.
+# =========================================================================
+
+
+def _write_config(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
+    """AC-6 setup helper — write a config.yaml with the given body
+    text under `<tmp_path>/_bmad/automation/`. Returns the file path."""
+    config_dir = tmp_path / "_bmad" / "automation"
+    config_dir.mkdir(parents=True)
+    config_path = config_dir / "config.yaml"
+    config_path.write_text(body, encoding="utf-8")
+    return config_path
+
+
+def test_existing_config_short_circuits_to_mobile(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-1 — canonical mobile value in config short-circuits before
+    indicator scan; evidence string is the exact single-token form."""
+    _write_config(tmp_path, "project_type: mobile\n")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "mobile"
+    assert outcome.reason == "unambiguous"
+    assert outcome.diagnostic is None
+    assert outcome.evidence == [
+        "_bmad/automation/config.yaml:project_type=mobile"
+    ]
+
+
+def test_existing_config_short_circuits_to_web(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-1 — canonical web value in config short-circuits before
+    indicator scan."""
+    _write_config(tmp_path, "project_type: web\n")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "web"
+    assert outcome.reason == "unambiguous"
+    assert outcome.diagnostic is None
+    assert outcome.evidence == [
+        "_bmad/automation/config.yaml:project_type=web"
+    ]
+
+
+def test_existing_config_short_circuits_to_api(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-1 — canonical api value in config short-circuits before
+    indicator scan."""
+    _write_config(tmp_path, "project_type: api\n")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "api"
+    assert outcome.reason == "unambiguous"
+    assert outcome.diagnostic is None
+    assert outcome.evidence == [
+        "_bmad/automation/config.yaml:project_type=api"
+    ]
+
+
+def test_existing_config_short_circuits_with_surrounding_comments(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-1 + AC-2 — column-0 anchor honors the key regardless of
+    surrounding comment lines; mimics the canonical
+    `config.yaml.template` shape from Story 9.2 AC-4."""
+    _write_config(
+        tmp_path,
+        "# Source: FR40 | FR-P1.5-2\n"
+        "project_type: mobile\n"
+        "# trailing comment\n",
+    )
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "mobile"
+    assert outcome.reason == "unambiguous"
+    assert outcome.diagnostic is None
+    assert outcome.evidence == [
+        "_bmad/automation/config.yaml:project_type=mobile"
+    ]
+
+
+def test_existing_config_takes_precedence_over_top_level_indicators(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-1 — load-bearing behavioral contract: explicit-config wins
+    over filesystem indicators; the indicator scan is skipped so
+    `package.json:react` does NOT appear in evidence."""
+    _write_config(tmp_path, "project_type: api\n")
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"react": "^18.0.0"}}),
+        encoding="utf-8",
+    )
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "api"
+    assert outcome.reason == "unambiguous"
+    assert outcome.evidence == [
+        "_bmad/automation/config.yaml:project_type=api"
+    ]
+
+
+def test_existing_config_short_circuits_in_nested_layout_case(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-1 — paw-care-app trigger case: `_bmad/` at the root, the
+    mobile workspace under a subdirectory. The top-level-only
+    indicator scan would find nothing; the read-side short-circuit
+    honors the practitioner-supplied value."""
+    _write_config(tmp_path, "project_type: mobile\n")
+    nested = tmp_path / "paw-care"
+    (nested / "ios").mkdir(parents=True)
+    (nested / "android").mkdir(parents=True)
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "mobile"
+    assert outcome.reason == "unambiguous"
+    assert outcome.evidence == [
+        "_bmad/automation/config.yaml:project_type=mobile"
+    ]
+
+
+def test_malformed_config_falls_through_to_indicator_scan(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-3 — `UnicodeDecodeError` on read is caught; indicator scan
+    runs unchanged."""
+    config_dir = tmp_path / "_bmad" / "automation"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.yaml").write_bytes(b"\xff\xfe\x00\x01nope")
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"next": "^14"}}),
+        encoding="utf-8",
+    )
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "web"
+    assert outcome.evidence == ["package.json:next"]
+
+
+def test_unreadable_config_falls_through_to_indicator_scan(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-3 — `IsADirectoryError` (subclass of `OSError`) on read is
+    caught; indicator scan runs unchanged."""
+    config_dir = tmp_path / "_bmad" / "automation"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.yaml").mkdir()
+    (tmp_path / "go.mod").write_text("module foo\n", encoding="utf-8")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "api"
+    assert outcome.evidence == ["go.mod"]
+
+
+def test_non_canonical_value_in_config_falls_through_to_indicator_scan(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-4 — non-canonical value (`desktop`) does NOT short-circuit;
+    `_scan_existing_project_type` returns None for it; the indicator
+    scan runs unchanged."""
+    _write_config(tmp_path, "project_type: desktop\n")
+    (tmp_path / "pubspec.yaml").write_text("name: foo\n", encoding="utf-8")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "mobile"
+    assert outcome.evidence == ["pubspec.yaml"]
+
+
+def test_commented_only_project_type_line_falls_through_unchanged(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-3 — the canonical commented-placeholder line from
+    `config.yaml.template` MUST NOT trigger the short-circuit;
+    first-init flow on a freshly-scaffolded template flows to the
+    indicator scan."""
+    _write_config(tmp_path, "# project_type: mobile\n")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type is None
+    assert outcome.reason == "no-indicators"
+    assert outcome.diagnostic is not None
+
+
+def test_absent_config_falls_through_unchanged_regression(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-3 — most important regression guard: no `_bmad/` directory
+    at all; the canonical Story 9.2 happy path remains unaffected
+    (RN ios/+android/ resolves to mobile)."""
+    (tmp_path / "ios").mkdir()
+    (tmp_path / "android").mkdir()
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "mobile"
+    assert outcome.evidence == ["ios/", "android/"]
+
+
+def test_indented_project_type_key_under_nested_mapping_does_not_short_circuit(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-2 — column-0 anchor at `_scan_existing_project_type` is
+    load-bearing; indented `project_type:` (e.g., under `metadata:`)
+    is ignored on the read path just as it is on the write path."""
+    _write_config(tmp_path, "metadata:\n  project_type: mobile\n")
+    (tmp_path / "go.mod").write_text("module foo\n", encoding="utf-8")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type == "api"
+    assert outcome.evidence == ["go.mod"]
+
+
+def test_no_indicators_diagnostic_appends_non_canonical_value_hint(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-5 (IN) — when the indicator scan resolves to no-indicators
+    AND a non-canonical `project_type:` line is present in config,
+    the diagnostic gains a self-diagnosis hint pointing at the
+    canonical-literal requirement. No marker emission; no reason
+    field change."""
+    _write_config(tmp_path, "project_type: desktop\n")
+
+    outcome = detect_project_type(DetectionRequest(project_root=tmp_path))
+
+    assert outcome.project_type is None
+    assert outcome.reason == "no-indicators"
+    assert outcome.diagnostic is not None
+    assert "not one of {web, api, mobile}" in outcome.diagnostic

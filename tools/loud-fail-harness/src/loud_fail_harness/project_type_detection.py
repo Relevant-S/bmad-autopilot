@@ -52,10 +52,28 @@ Architectural anchors:
   specialist-wrapper module (``dev_wrapper`` / ``review_bmad_wrapper``
   / ``qa_ac_iteration`` / ``playwright_driver`` / ``http_driver`` /
   ``bundle_assembly`` / ``specialist_dispatch``).
+* **Story 12.1 + Sprint Change Proposal 2026-05-17** — adds the
+  step-0 explicit-config short-circuit (read-side binding of the
+  ``_RESOLUTION_OPTIONS_BLOCK`` Option 1 promise). Driver artifact:
+  ``_bmad-output/planning-artifacts/sprint-change-proposal-2026-05-17.md``.
+  Closes the diagnostic↔implementation drift surfaced by the
+  paw-care-app real-project trial (nested-workspace layout where
+  ``_bmad/`` sits at the root and ``ios/``/``android/`` live one
+  directory below).
 
 Detection rule (deterministic precedence — top-to-bottom; first
 non-conflicting match wins):
 
+0. **explicit-config** — IF
+   ``<root>/_bmad/automation/config.yaml`` exists AND is readable
+   AND contains a non-comment top-level ``project_type:`` line
+   whose value is one of {``web``, ``api``, ``mobile``}, → return
+   that value with ``reason="unambiguous"`` and
+   ``evidence=["_bmad/automation/config.yaml:project_type=<value>"]``;
+   skip the filesystem indicator scan. Practitioner override is
+   authoritative — even if top-level indicators would have produced
+   a different (or ambiguous, or no-indicators) outcome, the
+   explicit value wins. Documented per Story 12.1.
 1. **mobile** —
    (``<root>/ios/`` is a directory AND ``<root>/android/`` is a
    directory) — canonical React Native layout, OR
@@ -383,14 +401,43 @@ def detect_project_type(request: DetectionRequest) -> DetectionOutcome:
     ``api`` / ``mobile`` / ``ambiguous`` / ``no-indicators``.
 
     Pure function: reads only top-level filesystem indicators under
-    ``request.project_root``; performs NO subprocess calls, NO
-    network I/O, NO marker emission, NO stderr writes, NO
-    ``sys.exit`` calls. Sensor-not-advisor per ADR-004.
+    ``request.project_root`` (and, per Story 12.1 step 0, the
+    practitioner-supplied ``_bmad/automation/config.yaml`` if
+    present); performs NO subprocess calls, NO network I/O, NO
+    marker emission, NO stderr writes, NO ``sys.exit`` calls.
+    Sensor-not-advisor per ADR-004.
 
     See the module docstring for the full detection-rule precedence
-    and the supported indicator set.
+    and the supported indicator set. Step 0 (Story 12.1) delegates
+    config-text parsing to :func:`_scan_existing_project_type` —
+    single source of truth for the column-0 anchor and
+    canonical-value check; the scan rule is NOT restated here (AC-2).
     """
     root = request.project_root
+
+    # Story 12.1 — explicit-config-wins short-circuit. Honor an
+    # existing valid project_type: in _bmad/automation/config.yaml
+    # BEFORE running the top-level filesystem indicator scan. The
+    # diagnostic at _RESOLUTION_OPTIONS_BLOCK (Option 1) promises
+    # this works; this is the read-side binding. The parse rule is
+    # delegated to _scan_existing_project_type (single source of
+    # truth for the column-0 anchor and canonical-value check).
+    config_path = root / "_bmad" / "automation" / "config.yaml"
+    try:
+        raw_config_text: str | None = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        raw_config_text = None
+    if raw_config_text is not None:
+        existing_value = _scan_existing_project_type(raw_config_text)
+        if existing_value is not None:
+            return DetectionOutcome(
+                project_type=existing_value,
+                evidence=[
+                    f"_bmad/automation/config.yaml:project_type={existing_value}"
+                ],
+                reason="unambiguous",
+                diagnostic=None,
+            )
 
     mobile_evidence: list[str] = []
     web_evidence: list[str] = []
@@ -493,7 +540,7 @@ def detect_project_type(request: DetectionRequest) -> DetectionOutcome:
         project_type=None,
         evidence=[],
         reason="no-indicators",
-        diagnostic=_format_no_indicators_diagnostic(),
+        diagnostic=_format_no_indicators_diagnostic(raw_config_text),
     )
 
 
@@ -724,11 +771,34 @@ def _format_ambiguous_diagnostic(evidence: list[str]) -> str:
     )
 
 
-def _format_no_indicators_diagnostic() -> str:
-    return (
+def _format_no_indicators_diagnostic(
+    raw_config_text: str | None = None,
+) -> str:
+    """Compose the no-indicators halt diagnostic. Story 12.1 AC-5:
+    when ``raw_config_text`` is non-None AND a non-comment top-level
+    ``project_type:`` key is present (per
+    :func:`_project_type_key_exists`) BUT
+    :func:`_scan_existing_project_type` rejected its value as
+    non-canonical, append a single self-diagnosis line pointing the
+    practitioner at the canonical-literal requirement. Not a marker
+    emission and does not change the ``reason`` field.
+    """
+    base = (
         f"{_NO_INDICATORS_DIAGNOSTIC_HEADER}\n\n"
         f"{_RESOLUTION_OPTIONS_BLOCK}"
     )
+    if raw_config_text is not None and _project_type_key_exists(
+        raw_config_text
+    ) and _scan_existing_project_type(raw_config_text) is None:
+        base += (
+            "\n\nNote: a `project_type:` line was found in "
+            "`_bmad/automation/config.yaml` but its value is not "
+            "one of {web, api, mobile}; the auto-detection rule "
+            "fell through to the filesystem indicator scan. Verify "
+            "the value is non-commented and exactly one of the "
+            "three canonical literals."
+        )
+    return base
 
 
 def _atomic_write_text(path: pathlib.Path, body: str) -> None:
