@@ -76,12 +76,16 @@ schema_version: "1.4"
 #                           version_floor pinned to bb47e9e (resolved short
 #                           SHA of Shelpuk-AI-Technology-Consulting/
 #                           lad_mcp_server HEAD at implementation time per
-#                           ADR-008); API-key env var corrected from
-#                           LAD_API_KEY to OPENROUTER_API_KEY in the init
-#                           diagnostic_pointer prose; runtime
-#                           configured-but-api-key-missing sub_classification
-#                           gains a diagnostic_pointer field analog to
-#                           mobile-mcp.runtime (Story 10.1, 2026-05-12).
+#                           ADR-008). Story 10.1, 2026-05-12.
+# schema_version 1.4 (post-Story-12.2): lad's `configured-but-api-key-missing`
+#                           sub_classification entries (both `init` and `runtime`
+#                           profiles) were RETIRED per Sprint Change Proposal
+#                           2026-05-18 + Story 12.2 — validation-responsibility-
+#                           boundary correction. Third-party credential validation
+#                           belongs to the upstream `lad_mcp_server` MCP boundary,
+#                           not to bmad-autopilot. After Story 12.2 each profile's
+#                           `sub_classifications:` list shrinks to its remaining
+#                           `unconfigured` entry (`silent: true`).
 
 dependencies:
   claude-code:
@@ -179,16 +183,10 @@ dependencies:
       init:
         profile: opt-in-skip
         sub_classifications:
-          - condition: configured-but-api-key-missing
-            emits_marker: LAD-skipped
-            diagnostic_pointer: "LAD configured but `OPENROUTER_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
           - condition: unconfigured
             silent: true
       runtime:
         profile: opt-in-skip
         sub_classifications:
-          - condition: configured-but-api-key-missing
-            emits_marker: LAD-skipped
-            diagnostic_pointer: "LAD MCP unavailable mid-run; 4th-layer review skipped."
           - condition: unconfigured
             silent: true

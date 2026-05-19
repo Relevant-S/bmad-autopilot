@@ -479,7 +479,7 @@ def test_dispatch_four_layer_review_lad_blocked_failed_layers_carries_lad(
     lad_envelope = _make_lad_envelope(
         status="blocked",
         findings=[],
-        rationale="`mcp__lad__code_review` returned `OPENROUTER_API_KEY missing`.",
+        rationale="`mcp__lad__code_review` returned an upstream error.",
     )
     _captures, callback = _capture_dispatches()
     _events, appender = _capture_event_appender()
@@ -881,14 +881,16 @@ def test_dispatch_four_layer_review_both_blocked_merged_status_blocked(
 _LAD_RUNTIME_DIAGNOSTIC_POINTER: str = (
     "LAD MCP unavailable mid-run; 4th-layer review skipped."
 )
-"""SDN-001 runtime ``diagnostic_pointer`` literal — verbatim from
+"""Substrate-fallback runtime ``diagnostic_pointer`` literal. Pre-Story-
+12.2 this matched the SDN-001
 ``schemas/dependencies.yaml#lad.profiles.runtime.sub_classifications[condition=configured-but-api-key-missing].diagnostic_pointer``
-at line 191. Used to inject the literal into
-``dispatch_four_layer_review`` for byte-stable test assertions per
-Story 10.5 AC-4 wording ("source the SDN-001 runtime
-``diagnostic_pointer`` literal via ``load_dependencies(...)`` ... OR
-pass it as a parameter from the orchestrator skill at
-dispatch-construction time")."""
+entry, but per Sprint Change Proposal 2026-05-18 + Story 12.2
+(validation-responsibility-boundary correction) the schema entry was
+retired. The substrate now sources this same literal from the
+module-level constant
+``loud_fail_harness.four_layer_review_dispatch._LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC``;
+this test constant is kept as the byte-stable assertion target the
+LAD-blocked branch's emission produces."""
 
 
 def test_dispatch_four_layer_review_lad_timeout_emits_lad_skipped_marker(
@@ -930,7 +932,6 @@ def test_dispatch_four_layer_review_lad_timeout_emits_lad_skipped_marker(
         envelope_resolver=resolver,
         lad_enabled=True,
         agent_definition_dir=tmp_path / "agents",
-        lad_runtime_diagnostic_pointer=_LAD_RUNTIME_DIAGNOSTIC_POINTER,
     )
 
     assert len(result.lad_skipped_emissions) == 1
@@ -980,7 +981,6 @@ def test_dispatch_four_layer_review_lad_envelope_validation_failed_emits_lad_ski
         envelope_resolver=resolver,
         lad_enabled=True,
         agent_definition_dir=tmp_path / "agents",
-        lad_runtime_diagnostic_pointer=_LAD_RUNTIME_DIAGNOSTIC_POINTER,
     )
 
     assert len(result.lad_skipped_emissions) == 1
@@ -988,20 +988,26 @@ def test_dispatch_four_layer_review_lad_envelope_validation_failed_emits_lad_ski
     assert emission.context["sub_cause"] == "mid-run-mcp-unavailable"
 
 
-def test_dispatch_four_layer_review_lad_wrapper_api_key_missing_emits_lad_skipped_marker(
+def test_lad_blocked_envelope_with_generic_credential_agnostic_rationale_routes_to_mid_run_mcp_unavailable(
     tmp_path: pathlib.Path,
 ) -> None:
-    """Story 10.5 AC-4 trigger condition (b): LAD wrapper returns
-    ``status: blocked`` with rationale carrying the verbatim AC-1
-    substring ``"OPENROUTER_API_KEY env var missing"``;
-    ``context.sub_cause="mid-run-api-key-missing"``.
+    """Story 12.2 AC-7 ADDED test (replacing the retired AC-1
+    substring-discriminator test): a wrapper-returned ``status:
+    blocked`` envelope with rationale
+    ``"LAD MCP tool invocation failed: missing or invalid API key."``
+    (no ``"OPENROUTER_API_KEY env var missing"`` substring) flows
+    through the existing failed-layers path correctly. After Sprint
+    Change Proposal 2026-05-18 + Story 12.2 the substrate no longer
+    discriminates on the rationale substring; the LAD-blocked branch
+    collapses to a single unconditional ``mid-run-mcp-unavailable``
+    ``sub_cause`` emission regardless of upstream error class.
     """
     review_bmad_envelope = _load_yaml_envelope(_REVIEW_PASS_THREE_LAYER_FIXTURE)
     lad_envelope = _make_lad_envelope(
         status="blocked",
         findings=[],
         rationale=(
-            "OPENROUTER_API_KEY env var missing; no review verdict reached."
+            "LAD MCP tool invocation failed: missing or invalid API key."
         ),
     )
     _captures, callback = _capture_dispatches()
@@ -1011,7 +1017,7 @@ def test_dispatch_four_layer_review_lad_wrapper_api_key_missing_emits_lad_skippe
     )
 
     result = dispatch_four_layer_review(
-        story_id="10-5-test",
+        story_id="12-2-test",
         story_doc_resolution=_make_minimal_story_doc_resolution(),
         run_state_path=tmp_path / "run-state.yaml",
         dispatch_callback=callback,
@@ -1020,13 +1026,19 @@ def test_dispatch_four_layer_review_lad_wrapper_api_key_missing_emits_lad_skippe
         envelope_resolver=resolver,
         lad_enabled=True,
         agent_definition_dir=tmp_path / "agents",
-        lad_runtime_diagnostic_pointer=_LAD_RUNTIME_DIAGNOSTIC_POINTER,
     )
 
+    # failed_layers projection per the existing
+    # `surface_failed_layers` substrate (unchanged by Story 12.2).
+    assert "lad" in result.merged_envelope["failed_layers"]
+    # Exactly one LAD-skipped emission, carrying the unified
+    # `mid-run-mcp-unavailable` sub_cause (not the retired
+    # `mid-run-api-key-missing`) and the substrate-fallback
+    # diagnostic_pointer constant verbatim.
     assert len(result.lad_skipped_emissions) == 1
     emission = result.lad_skipped_emissions[0]
     assert emission.marker_class == "LAD-skipped"
-    assert emission.context["sub_cause"] == "mid-run-api-key-missing"
+    assert emission.context["sub_cause"] == "mid-run-mcp-unavailable"
     assert emission.context["diagnostic_pointer"] == _LAD_RUNTIME_DIAGNOSTIC_POINTER
     assert emission.context["lifecycle_phase"] == "runtime"
 
@@ -1065,7 +1077,6 @@ def test_dispatch_four_layer_review_lad_wrapper_other_blocked_emits_lad_skipped_
         envelope_resolver=resolver,
         lad_enabled=True,
         agent_definition_dir=tmp_path / "agents",
-        lad_runtime_diagnostic_pointer=_LAD_RUNTIME_DIAGNOSTIC_POINTER,
     )
 
     assert len(result.lad_skipped_emissions) == 1
@@ -1114,7 +1125,6 @@ def test_dispatch_four_layer_review_lad_pass_emits_zero_lad_skipped_markers(
         envelope_resolver=resolver,
         lad_enabled=True,
         agent_definition_dir=tmp_path / "agents",
-        lad_runtime_diagnostic_pointer=_LAD_RUNTIME_DIAGNOSTIC_POINTER,
     )
 
     assert result.lad_skipped_emissions == ()
@@ -1160,7 +1170,6 @@ def test_dispatch_four_layer_review_lad_disabled_emits_zero_lad_skipped_markers(
         envelope_resolver=resolver,
         lad_enabled=False,
         agent_definition_dir=tmp_path / "agents",
-        lad_runtime_diagnostic_pointer=_LAD_RUNTIME_DIAGNOSTIC_POINTER,
     )
 
     # Substrate short-circuited; exactly one Review-BMAD dispatch.
@@ -1172,49 +1181,4 @@ def test_dispatch_four_layer_review_lad_disabled_emits_zero_lad_skipped_markers(
     assert _surface_lad_calls == [], "surface_lad_unavailable must not be called when LAD is disabled"
 
 
-def test_dispatch_four_layer_review_lad_runtime_diagnostic_pointer_loaded_from_dependencies_yaml(
-    tmp_path: pathlib.Path,
-) -> None:
-    """Story 10.5 AC-4 SDN-001 source-of-truth witness: when the
-    caller does NOT inject ``lad_runtime_diagnostic_pointer``, the
-    substrate loads it via :func:`load_dependencies` per Story 1.6's
-    source-of-truth rule. The loaded value matches the verbatim
-    SDN-001 runtime literal at
-    ``schemas/dependencies.yaml#lad.profiles.runtime.sub_classifications[condition=configured-but-api-key-missing].diagnostic_pointer``.
-    """
-    review_bmad_envelope = _load_yaml_envelope(_REVIEW_PASS_THREE_LAYER_FIXTURE)
-    captures, _ = _capture_dispatches()
 
-    def _callback_raising_on_lad(**kwargs: Any) -> DispatchCallbackResult:
-        captures.append({"specialist": kwargs.get("specialist")})
-        if kwargs.get("specialist") == "lad":
-            raise SpecialistTimeoutExceeded(
-                timeout_seconds=900,
-                specialist="lad",
-                story_id=str(kwargs.get("story_id")),
-                attempt_number=0,
-            )
-        return DispatchCallbackResult(
-            dispatched=True, reason="test stub dispatched review-bmad"
-        )
-
-    _events, appender = _capture_event_appender()
-    resolver = _envelope_resolver_from_mapping({"review-bmad": review_bmad_envelope})
-
-    result = dispatch_four_layer_review(
-        story_id="10-5-test",
-        story_doc_resolution=_make_minimal_story_doc_resolution(),
-        run_state_path=tmp_path / "run-state.yaml",
-        dispatch_callback=_callback_raising_on_lad,
-        event_log_appender=appender,
-        marker_registry=_canonical_registry(),
-        envelope_resolver=resolver,
-        lad_enabled=True,
-        agent_definition_dir=tmp_path / "agents",
-        # No lad_runtime_diagnostic_pointer parameter — substrate must
-        # resolve the literal via load_dependencies(...).
-    )
-
-    assert len(result.lad_skipped_emissions) == 1
-    emission = result.lad_skipped_emissions[0]
-    assert emission.context["diagnostic_pointer"] == _LAD_RUNTIME_DIAGNOSTIC_POINTER

@@ -2,7 +2,7 @@
 
 Operator-facing setup guide for the LAD (LLM-Adversarial-Diff) MCP server the BMAD Agent Development Automator drives via the Review-LAD specialist on opt-in 4th-layer adversarial code-review (Phase 1.5 — ADR-008, see `_bmad-output/planning-artifacts/architecture.md` lines 661–734). The LAD MCP itself is `Shelpuk-AI-Technology-Consulting/lad_mcp_server` at version_floor `bb47e9e` (Apache-2.0 licensed; the upstream `code_review` MCP tool surface that runs two OpenRouter-backed reviewers in parallel).
 
-If `/bmad-automation init` halted on `LAD-skipped` (sub_cause `init-api-key-missing` OR `init-mcp-unavailable`) and the verbatim diagnostic `"LAD MCP unavailable at init; 4th-layer review skipped."` (or the runtime variant `"LAD MCP unavailable mid-run; 4th-layer review skipped."`), follow this guide to install the LAD MCP, set the `OPENROUTER_API_KEY` env var, and re-run `init`.
+If `/bmad-automation init` halted on `LAD-skipped` (sub_cause `init-mcp-unavailable`) and the verbatim diagnostic `"LAD MCP unavailable at init; 4th-layer review skipped."` (or the runtime variant `"LAD MCP unavailable mid-run; 4th-layer review skipped."`), follow this guide to install the LAD MCP, set the `OPENROUTER_API_KEY` env var, and re-run `init`.
 
 ## Prerequisites
 
@@ -10,7 +10,7 @@ The LAD MCP runs as a `uvx`-managed stdio process Claude Code launches on demand
 
 - **`uv` ≥ 0.4** (`uvx` is the `uv tool run` companion; bundled with uv). Check with `uv --version`. Install per [uv documentation](https://docs.astral.sh/uv/getting-started/installation/) if missing.
 - **An OpenRouter account with credits.** The LAD MCP backs both reviewers through OpenRouter. Sign up at [openrouter.ai](https://openrouter.ai) and provision an API key. Credits must be available for at least one full review pass (typically $0.20–$0.80 per LAD invocation depending on diff size + the OpenRouter model pair's per-token pricing).
-- **`OPENROUTER_API_KEY` env var set in your shell.** Per ADR-008's NAME-not-VALUE discipline (NFR-S1), the BMAD Automator reads only the env-var NAME via the substrate's wrapper-side presence check; the VALUE is consumed exclusively by the upstream `lad_mcp_server` process via the `claude mcp add ... -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY"` install handle. Do NOT commit the VALUE to any file; do NOT echo it into shell scripts; do NOT include it in `_bmad/automation/config.yaml` (the config carries only the NAME `api_key_env_var: OPENROUTER_API_KEY`).
+- **`OPENROUTER_API_KEY` env var set in your shell.** Per ADR-008's NAME-not-VALUE discipline (NFR-S1), the BMAD Automator reads only the env-var NAME; the VALUE is consumed exclusively by the upstream `lad_mcp_server` process via the `claude mcp add ... -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY"` install handle. Do NOT commit the VALUE to any file; do NOT echo it into shell scripts; do NOT include it in `_bmad/automation/config.yaml` (the config carries only the NAME `api_key_env_var: OPENROUTER_API_KEY`).
 
 ## Install + connect
 
@@ -62,18 +62,18 @@ The `api_key_env_var` value carries the env-var NAME (default `OPENROUTER_API_KE
 
 ## Re-run `bmad-automation init`
 
-With the LAD MCP installed, the `OPENROUTER_API_KEY` env var set, and `_bmad/automation/config.yaml#review_lad.enabled: true`, re-run `/bmad-automation init` from the project root. The init flow's precondition substrate (Story 7.3's `run_init_preconditions` + Story 10.5's `lad_precondition_probe_factory`) re-probes the LAD MCP reachability + env-var-presence. On a clean probe-True return, the `LAD-skipped: init-api-key-missing` / `init-mcp-unavailable` emissions do NOT fire; init proceeds and `review_lad.enabled: true` is preserved in the rewritten config. The Automator is then ready to run LAD-enabled loops via `/bmad-automation run <story-id>`.
+With the LAD MCP installed, the `OPENROUTER_API_KEY` env var set, and `_bmad/automation/config.yaml#review_lad.enabled: true`, re-run `/bmad-automation init` from the project root. The init flow's precondition substrate (Story 7.3's `run_init_preconditions` + Story 10.5's `lad_precondition_probe_factory`, post-Story-12.2 collapsed) re-probes the LAD MCP reachability. On a clean probe-True return, the init proceeds and `review_lad.enabled: true` is preserved in the rewritten config. Per Sprint Change Proposal 2026-05-18 + Story 12.2 (validation-responsibility-boundary correction), the precondition substrate no longer probes the `OPENROUTER_API_KEY` env-var presence — if the var is unset or invalid, the upstream `lad_mcp_server` MCP server surfaces the error at the first `mcp__lad__code_review` invocation; the wrapper catches it and returns `status: blocked`, which the orchestrator routes through `LAD-skipped: mid-run-mcp-unavailable`. The Automator is then ready to run LAD-enabled loops via `/bmad-automation run <story-id>`.
 
 ## Troubleshooting
 
-### `LAD-skipped: init-api-key-missing` despite the install succeeding
+### `LAD MCP tool invocation failed` mid-run when `OPENROUTER_API_KEY` is unset or invalid (post-Story-12.2 natural-failure path)
 
-Likely cause: the `OPENROUTER_API_KEY` env var is unset in the current shell (the `claude mcp add` ran in a prior shell session, then the env var was unset; OR the env var was set with a different NAME).
+Likely cause: the `OPENROUTER_API_KEY` env var is unset (or set to an invalid value) in the shell that launched the `lad_mcp_server` process. Pre-Story-12.2 the wrapper short-circuited with a credential-specific rationale; post-Story-12.2 (Sprint Change Proposal 2026-05-18 + Story 12.2 validation-responsibility-boundary correction) the upstream `lad_mcp_server` is the single source-of-truth for credential validation. The first `mcp__lad__code_review` invocation returns an upstream-OpenRouter authentication error; the wrapper catches the failure and emits `status: blocked` with rationale `"LAD MCP tool invocation failed: <upstream error>"` (representative example: `"LAD MCP tool invocation failed: <lad_mcp_server: upstream OpenRouter authentication failed; verify OPENROUTER_API_KEY env var is set in the shell that launched the lad_mcp_server process>"` — the exact upstream wording depends on `lad_mcp_server`'s implementation). The orchestrator then emits the unified `LAD-skipped: mid-run-mcp-unavailable` marker.
 
 Fix:
 1. `echo $OPENROUTER_API_KEY` — if blank, re-export with `export OPENROUTER_API_KEY="<your-key>"` from a startup file (e.g., `~/.zshenv` or `~/.bashrc`) so the var is set in every shell.
-2. Confirm `_bmad/automation/config.yaml#review_lad.api_key_env_var` literally reads `OPENROUTER_API_KEY` (NOT the Phase-1-era placeholder `LAD_API_KEY`; per ADR-008 Consequence 3 no alias).
-3. Re-run `/bmad-automation init`.
+2. Re-register the LAD MCP server in the now-corrected shell: `claude mcp remove lad && claude mcp add --transport stdio lad -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" -- uvx --from git+https://github.com/Shelpuk-AI-Technology-Consulting/lad_mcp_server lad-mcp-server`.
+3. Verify with `claude mcp list | grep lad` (should show `✓ Connected`) and retry the LAD-enabled run.
 
 ### `LAD-skipped: init-mcp-unavailable` despite the env var being set
 

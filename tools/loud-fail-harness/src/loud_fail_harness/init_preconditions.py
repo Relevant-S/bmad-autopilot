@@ -170,12 +170,16 @@ class PreconditionProbeResult(BaseModel):
             ``"version-agnostic; detected at init"``) skip the
             comparison and treat ``available=True`` as success.
         sub_classification: For opt-in-skip dependencies (LAD), the
-            condition string that matched (e.g.,
-            ``"configured-but-api-key-missing"`` per
-            ``dependencies.yaml`` lines 156-159). The dispatcher walks
-            the entry's ``sub_classifications:`` list to find the
-            matching condition and routes to its ``emits_marker`` /
-            ``silent`` branch.
+            condition string that matched (e.g., ``"unconfigured"`` per
+            ``dependencies.yaml#lad.profiles.init.sub_classifications``).
+            The dispatcher walks the entry's ``sub_classifications:``
+            list to find the matching condition and routes to its
+            ``emits_marker`` / ``silent`` branch. Pre-Story-12.2 this
+            field also carried ``"configured-but-api-key-missing"``;
+            that sub_classification was retired when wrapper-side
+            ``OPENROUTER_API_KEY`` presence checking was moved to the
+            upstream ``lad_mcp_server`` MCP boundary (Sprint Change
+            Proposal 2026-05-18 + Story 12.2).
         evidence: Optional human-readable evidence string (e.g., the raw
             ``claude --version`` stdout) for diagnostic enrichment. NOT
             currently surfaced in the aggregated diagnostic; reserved
@@ -355,16 +359,15 @@ class PreconditionProbeRegistry(BaseModel):
 
 def lad_precondition_probe_factory(
     *,
-    get_env: Callable[[str], str | None],
     read_review_lad_enabled: Callable[[], bool],
-    read_api_key_env_var_name: Callable[[], str],
 ) -> PreconditionProbe:
-    """Construct the LAD precondition probe per Story 10.5 AC-3.
+    """Construct the LAD precondition probe per Story 10.5 AC-3 +
+    Story 12.2 validation-responsibility-boundary correction.
 
-    The factory composes three injected callables (Pattern 6
+    The factory composes a single injected callable (Pattern 6
     dependency-injection) into a zero-argument ``PreconditionProbe``
     callable returning a :class:`PreconditionProbeResult` shaped per
-    the SDN-001 dispatch contract at
+    the post-Story-12.2 SDN-001 dispatch contract at
     ``schemas/dependencies.yaml#lad.profiles.init.sub_classifications``:
 
         * If ``read_review_lad_enabled() is False`` →
@@ -374,48 +377,32 @@ def lad_precondition_probe_factory(
           ``condition: unconfigured`` branch (``silent: true``) and
           emits ZERO marker per AC-5 silence-unless-configured
           invariant.
-        * If ``read_review_lad_enabled() is True`` AND
-          ``get_env(read_api_key_env_var_name())`` returns ``None`` or
-          the empty string →
-          ``PreconditionProbeResult(available=False,
-          sub_classification="configured-but-api-key-missing",
-          evidence=None)`` → :func:`_dispatch_opt_in_skip` routes
-          through the SDN-001 ``condition: configured-but-api-key-missing``
-          branch and registers ``marker_class="LAD-skipped"`` with the
-          init-time SDN-001 ``diagnostic_pointer`` verbatim. The
-          existing :func:`_dispatch_opt_in_skip` substrate already
-          carries the emission via :func:`record_marker_with_context`;
-          adding a parallel emission call to
-          :func:`loud_fail_harness.lad_mcp_unavailable.surface_lad_unavailable`
-          at init-time would violate the SINGLE source-of-truth
-          discipline (Story 10.5 Dev Notes — substrate-init-time vs
-          substrate-runtime asymmetry is intentional).
-        * If ``read_review_lad_enabled() is True`` AND
-          ``get_env(read_api_key_env_var_name())`` returns a non-empty
-          string → ``PreconditionProbeResult(available=True,
+        * If ``read_review_lad_enabled() is True`` →
+          ``PreconditionProbeResult(available=True,
           sub_classification=None, evidence=None)`` →
           :func:`_dispatch_opt_in_skip` routes through the
           ``probe_result.available is True`` early-return branch and
           records ``outcome="pass"`` (no marker emitted; LAD is
-          configured and ready).
+          configured — the upstream ``lad_mcp_server`` MCP server is
+          the single source-of-truth for credential validation per
+          Story 12.2 + Sprint Change Proposal 2026-05-18).
+
+    Story 12.2 retired the pre-existing
+    ``configured-but-api-key-missing`` branch (and its
+    ``get_env`` + ``read_api_key_env_var_name`` injected callables)
+    because third-party API-key validation is not bmad-autopilot's
+    responsibility — when the operator misconfigures the env var the
+    first ``mcp__lad__code_review`` invocation surfaces the error via
+    the wrapper's natural-failure path
+    (:mod:`loud_fail_harness.four_layer_review_dispatch` ->
+    ``mid-run-mcp-unavailable`` ``LAD-skipped`` emission).
 
     The factory's ``evidence`` return value is ``None`` ALWAYS — the
-    env-var VALUE MUST NEVER appear in any
-    :class:`PreconditionProbeResult.evidence` field per Story 10.5 AC-7
-    NFR-S1 hygiene witness. The only env-var-related string the
-    factory may surface is the env-var NAME (e.g.,
-    ``"OPENROUTER_API_KEY"``) — and even that is sourced from
-    ``read_api_key_env_var_name()``, NEVER embedded as a literal in the
-    factory's source code (per Pattern 6 dependency-injection
-    discipline).
+    factory has no access to any env-var VALUE per the Story-12.2
+    boundary, and NFR-S1's never-in-files invariant remains
+    structurally preserved by construction.
 
     Args:
-        get_env: Pattern 6-injected callable that reads an env-var
-            VALUE by NAME. Production callers wrap ``os.environ.get``;
-            test callers inject deterministic stubs. The return type
-            is ``str | None`` — ``None`` signals "env var unset"; an
-            empty string is treated as equivalent to ``None`` for the
-            api-key-missing branch.
         read_review_lad_enabled: Pattern 6-injected callable returning
             the ``_bmad/automation/config.yaml#review_lad.enabled``
             boolean. Production callers wrap a ``yaml.safe_load``-
@@ -423,14 +410,6 @@ def lad_precondition_probe_factory(
             ``config.get("review_lad", {}).get("enabled", False)``
             consumer-side dict-access pattern per Story 10.4 AC-1
             default; test callers inject deterministic stubs.
-        read_api_key_env_var_name: Pattern 6-injected callable
-            returning the
-            ``_bmad/automation/config.yaml#review_lad.api_key_env_var``
-            string value (default ``"OPENROUTER_API_KEY"`` per Story
-            10.4 AC-1 default). The factory passes this NAME into
-            ``get_env(...)`` to read the env-var VALUE — the factory
-            never reads the value directly, preserving NFR-S1's
-            structural-vs-self-attestation discipline.
 
     Returns:
         A zero-argument :data:`PreconditionProbe` callable that returns
@@ -445,14 +424,6 @@ def lad_precondition_probe_factory(
             return PreconditionProbeResult(
                 available=False,
                 sub_classification="unconfigured",
-                evidence=None,
-            )
-        env_var_name = read_api_key_env_var_name()
-        env_var_value = get_env(env_var_name)
-        if env_var_value is None or env_var_value == "":
-            return PreconditionProbeResult(
-                available=False,
-                sub_classification="configured-but-api-key-missing",
                 evidence=None,
             )
         return PreconditionProbeResult(

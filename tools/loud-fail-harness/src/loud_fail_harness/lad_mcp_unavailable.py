@@ -90,22 +90,31 @@ Architectural anchors
   function signature takes the :class:`MarkerClassRegistry` injected
   by the caller; the substrate does NOT load the registry from disk.
 * **ADR-002** (substrate-vs-LLM-runtime split) — this module sits on
-  the substrate side; the wrapper-side env-var presence check at
-  ``agents/review-lad-wrapper.md`` is the LLM-runtime side.
+  the substrate side; the upstream ``lad_mcp_server`` MCP server (an
+  external process per ADR-008) is the credential-handling side. The
+  wrapper at ``agents/review-lad-wrapper.md`` no longer reads the
+  env-var directly post-Story-12.2 (Sprint Change Proposal 2026-05-18
+  validation-responsibility-boundary correction).
 * **ADR-003** — substrate-component closure at FIVE preserved (this
   module is substrate-library NOT a sixth component).
 * **ADR-008** (LAD MCP server selection) — the env-var name
   ``OPENROUTER_API_KEY`` is the canonical name (line 681); the
-  init-time + runtime ``diagnostic_pointer`` literals (lines 685 +
-  687) are sourced from ``schemas/dependencies.yaml`` via
-  :func:`loud_fail_harness.dependencies_validator.load_dependencies`
-  per Story 1.6 source-of-truth rule.
+  upstream ``lad_mcp_server`` reads it at server startup via the
+  ``claude mcp add ... -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY"``
+  install handle. Pre-Story-12.2 this module's runtime emission site
+  sourced the ``diagnostic_pointer`` literal from
+  ``schemas/dependencies.yaml`` via :func:`load_dependencies`; post-
+  Story-12.2 the ``configured-but-api-key-missing`` SDN-001 entries
+  are retired and the runtime caller uses a substrate-level fallback
+  constant
+  (``four_layer_review_dispatch._LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC``).
 * **SDN-001** (architecture.md lines 730-882) — Dependency
   failure-profile schema. The ``lad`` entry at
-  ``schemas/dependencies.yaml`` lines 176-195 carries the init +
-  runtime ``sub_classifications`` whose ``diagnostic_pointer``
-  literals THIS substrate emits via the marker's ``context.diagnostic_pointer``
-  field.
+  ``schemas/dependencies.yaml`` carries init + runtime
+  ``sub_classifications`` lists; per Story 12.2 each list collapses
+  to the single ``unconfigured`` entry (``silent: true``, no
+  ``diagnostic_pointer``). The marker emission via
+  ``context.diagnostic_pointer`` no longer reads the schema directly.
 
 FR62 pluggability classification
 ================================
@@ -184,19 +193,23 @@ __all__ = [
 # --------------------------------------------------------------------------- #
 
 #: The marker-class string identifier emitted on the mid-run LAD-MCP-
-#: unavailable surface AND (via the init-time path) the init-time
-#: ``configured-but-api-key-missing`` precondition surface. Consumed
-#: AS-IS from ``schemas/marker-taxonomy.yaml`` line 97 — Phase 1
-#: taxonomy v1 closed-set member; ``sub_classifications: []`` empty
-#: list (taxonomy line 104) is preserved structurally per Story 10.5
+#: unavailable surface. Consumed AS-IS from
+#: ``schemas/marker-taxonomy.yaml`` line 97 — Phase 1 taxonomy v1
+#: closed-set member; ``sub_classifications: []`` empty list
+#: (taxonomy line 104) is preserved structurally per Story 10.5
 #: AC-9 invariant + Story 10.4 AC-10 invariant + Epic 8 retro's
 #: ratified-closed-set discipline. Mirrors Story 9.5's
 #: :data:`loud_fail_harness.mobile_driver.MOBILE_BLOCKED_MARKER`
-#: constant pattern.
+#: constant pattern. Pre-Story-12.2 this constant was also emitted on
+#: the ``configured-but-api-key-missing`` precondition surface; per
+#: Sprint Change Proposal 2026-05-18 + Story 12.2 third-party
+#: credential validation moved to the upstream ``lad_mcp_server`` MCP
+#: boundary — the marker is preserved (closed-set invariant) but its
+#: emission sites collapsed to MCP-unavailability paths only.
 LAD_SKIPPED_MARKER: Literal["LAD-skipped"] = "LAD-skipped"
 
 
-#: Sentinel string constants for the three ``sub_cause`` values that
+#: Sentinel string constants for the ``sub_cause`` values that
 #: :func:`surface_lad_unavailable` accepts. Kept as module-level
 #: ``Literal`` constants for type-narrowing at downstream consumers
 #: (Story 6.3 marker-coverage audit + Story 6.4 cost telemetry) and
@@ -206,9 +219,21 @@ LAD_SKIPPED_MARKER: Literal["LAD-skipped"] = "LAD-skipped"
 #: per AC-9 invariant (the init-vs-runtime distinction is carried in
 #: the marker's ``context.sub_cause`` payload, NOT in the marker's
 #: ``sub_cause`` field).
+#:
+#: Per Story 12.2 + Sprint Change Proposal 2026-05-18 (validation-
+#: responsibility-boundary correction), the prior credential-specific
+#: values ``"init-api-key-missing"`` and ``"mid-run-api-key-missing"``
+#: were retired — third-party API-key validation belongs at the
+#: upstream ``lad_mcp_server`` MCP boundary, not in this substrate.
+#: After Story 12.2 the documented enum collapses to the two
+#: MCP-unavailable values; production callers pass only
+#: ``"mid-run-mcp-unavailable"`` today (no current init-time emission
+#: site via this substrate — init-time LAD ``unconfigured`` paths flow
+#: through ``_dispatch_opt_in_skip``'s ``silent: true`` branch).
+#: ``"init-mcp-unavailable"`` is preserved as forward-compatible for
+#: any future init-time MCP-unreachability emission site.
 _SubCause = Literal[
-    "init-api-key-missing",
-    "mid-run-api-key-missing",
+    "init-mcp-unavailable",
     "mid-run-mcp-unavailable",
 ]
 
@@ -290,8 +315,7 @@ def surface_lad_unavailable(
           required fields ``(story_id, sub_cause, diagnostic_pointer,
           lifecycle_phase)`` where ``lifecycle_phase`` is derived
           from ``sub_cause``: ``"init"`` for
-          ``sub_cause="init-api-key-missing"``; ``"runtime"`` for
-          either ``"mid-run-api-key-missing"`` or
+          ``sub_cause="init-mcp-unavailable"``; ``"runtime"`` for
           ``"mid-run-mcp-unavailable"``. The context is consumed by
           Story 6.3's marker-coverage audit + Story 6.2's
           actionable-pointer interpolation.
@@ -318,32 +342,35 @@ def surface_lad_unavailable(
         sub_cause: Discriminator carried in the marker's
             ``context.sub_cause`` payload. One of:
 
-            * ``"init-api-key-missing"`` — init-time path; the
-              orchestrator's ``init`` precondition check observed
-              ``review_lad.enabled=true`` AND the
-              ``OPENROUTER_API_KEY`` env var unset. Carries
-              ``lifecycle_phase="init"`` in the context.
-            * ``"mid-run-api-key-missing"`` — the LAD wrapper
-              returned ``status: blocked`` with the
-              API-key-missing rationale (AC-1 verbatim literal).
-              Carries ``lifecycle_phase="runtime"``.
+            * ``"init-mcp-unavailable"`` — init-time path; reserved
+              forward-compatible value for any future init-time
+              LAD-MCP-unreachability emission site. Carries
+              ``lifecycle_phase="init"`` in the context. No current
+              production caller emits this value (init-time LAD
+              ``unconfigured`` paths flow through
+              ``_dispatch_opt_in_skip``'s ``silent: true`` branch).
             * ``"mid-run-mcp-unavailable"`` — the LAD dispatch path
               hit ``SpecialistTimeoutExceeded`` /
               ``EnvelopeValidationFailed`` / ``UnknownMarkerClass``,
               OR the wrapper returned ``status: blocked`` for any
-              non-API-key-missing reason (MCP-process-crash,
-              MCP-tool-timeout, malformed payload). Carries
-              ``lifecycle_phase="runtime"``.
+              reason (including upstream-MCP-server-reported
+              credential errors — Story 12.2 + Sprint Change
+              Proposal 2026-05-18 collapsed the prior credential-
+              specific discriminator into this unified path).
+              Carries ``lifecycle_phase="runtime"``.
 
-        diagnostic_pointer: The SDN-001-sourced diagnostic-pointer
-            string. For init-time emission, the
-            ``schemas/dependencies.yaml#lad.profiles.init.sub_classifications[condition=configured-but-api-key-missing].diagnostic_pointer``
-            literal verbatim. For runtime emission, the
-            ``schemas/dependencies.yaml#lad.profiles.runtime.sub_classifications[condition=configured-but-api-key-missing].diagnostic_pointer``
-            literal verbatim. The caller sources both via
-            :func:`loud_fail_harness.dependencies_validator.load_dependencies`
-            per Story 1.6's source-of-truth rule — NEVER hardcoded
-            as a Python string literal at the call site.
+        diagnostic_pointer: A short operator-facing diagnostic-pointer
+            string the caller threads into the marker's
+            ``context.diagnostic_pointer`` field for downstream
+            consumers (Story 6.2 actionable-pointer interpolation;
+            Story 6.3 marker-coverage audit). Per Story 12.2 the
+            ``configured-but-api-key-missing`` SDN-001 entries are
+            retired, so the credential-specific ``diagnostic_pointer``
+            literals previously sourced via ``load_dependencies``
+            no longer exist; current callers source the runtime
+            value from a substrate-level fallback constant
+            (``four_layer_review_dispatch._LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC``)
+            rather than from ``schemas/dependencies.yaml``.
 
     Returns:
         :class:`LadMcpUnavailableEmission` carrying ``marker_record``.
@@ -357,7 +384,7 @@ def surface_lad_unavailable(
 
     # Step 2 — construct the structured context payload.
     lifecycle_phase: Literal["init", "runtime"] = (
-        "init" if sub_cause == "init-api-key-missing" else "runtime"
+        "init" if sub_cause == "init-mcp-unavailable" else "runtime"
     )
     context: Mapping[str, Any] = {
         "story_id": story_id,

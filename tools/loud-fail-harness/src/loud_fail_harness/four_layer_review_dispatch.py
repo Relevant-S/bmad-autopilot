@@ -114,8 +114,10 @@ LAD-layer-failure detection
 
 (ii) ``lad_envelope["status"] == "blocked"`` — the wrapper itself
      signalled a precondition failure per Story 10.2 AC-2 status
-     semantics (e.g., ``OPENROUTER_API_KEY`` missing, MCP process
-     crashed, dispatch payload malformed).
+     semantics (e.g., MCP process crashed, dispatch payload malformed,
+     upstream MCP-server-reported error such as missing/invalid API
+     key per Story 12.2's validation-responsibility-boundary
+     correction).
 
 The two detection paths converge to the same three-channel emission
 (``failed_layers: ["lad"]`` + synthetic ``decision_needed: HIGH``
@@ -173,13 +175,26 @@ Cross-references
   — the canonical LAD envelope fixtures; THIS module's tests consume
   the passing fixture verbatim.
 * Story 10.5 — env-var-handling discipline at runtime (``LAD-skipped``
-  marker emission for the env-var-missing precondition path; distinct
-  from THIS story's runtime-failure marker per the symbolic
+  marker emission via :func:`surface_lad_unavailable` for the
+  LAD-unavailable / wrapper-blocked path; distinct from THIS story's
+  runtime-failure marker per the symbolic
   :data:`loud_fail_harness.review_layer_failure.REVIEW_LAYER_FAILED_MARKER`
   constant).
 * Story 10.6 — pluggability-CI-gate coverage extension to
   Review-LAD code + cost-observability partition extension.
 * Story 10.7 — reference LAD-enabled end-to-end run fixture.
+* Story 12.2 + Sprint Change Proposal 2026-05-18 —
+  validation-responsibility-boundary correction. Retired the
+  wrapper-side ``OPENROUTER_API_KEY`` presence check, the paired
+  ``_LAD_API_KEY_MISSING_RATIONALE_SUBSTRING`` substrate rationale-
+  substring discriminator, and the
+  ``_load_lad_runtime_diagnostic_pointer`` SDN-001 reader. After
+  this story the LAD-blocked branch collapses to a single
+  unconditional ``mid-run-mcp-unavailable`` ``sub_cause`` emission
+  carrying a credential-agnostic substrate-fallback diagnostic
+  pointer (constant ``_LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC``);
+  third-party credential validation lives at the upstream
+  ``lad_mcp_server`` MCP boundary, not in this substrate.
 
 See also: ``docs/extension-audit.md`` "no-introductions principle"
 subsection (Story 3.2 codification) — THIS story is a worked instance.
@@ -192,7 +207,6 @@ import pathlib
 from collections.abc import Callable
 from typing import Any
 
-from loud_fail_harness.dependencies_validator import load_dependencies
 from loud_fail_harness.env_provisioning import MarkerEmissionRecord
 from loud_fail_harness.lad_mcp_unavailable import surface_lad_unavailable
 from loud_fail_harness.orchestrator_run_entry import (
@@ -233,60 +247,21 @@ _REVIEW_BMAD_LAYERS: frozenset[str] = frozenset({"blind", "edge", "auditor"})
 _ALL_FOUR_LAYERS: frozenset[str] = _REVIEW_BMAD_LAYERS | {_LAD_LAYER}
 
 
-#: Regex literal — substring anchor for the wrapper-side
-#: API-key-missing rationale (Story 10.5 AC-4 trigger condition (b);
-#: matches the verbatim wrapper rationale at
-#: ``agents/review-lad-wrapper.md`` line 50). Treated as a literal
-#: substring search (not a regex) for byte-stable matching against
-#: the wrapper's rationale field.
-_LAD_API_KEY_MISSING_RATIONALE_SUBSTRING: str = "OPENROUTER_API_KEY env var missing"
-
-
-def _load_lad_runtime_diagnostic_pointer() -> str:
-    """Return the SDN-001 runtime ``diagnostic_pointer`` literal for
-    the ``lad`` dependency's ``configured-but-api-key-missing``
-    sub-classification.
-
-    Sources the literal from
-    ``schemas/dependencies.yaml#lad.profiles.runtime.sub_classifications[condition=configured-but-api-key-missing].diagnostic_pointer``
-    via :func:`load_dependencies` per Story 1.6 source-of-truth rule
-    (Story 10.5 AC-4 — the literal MUST NOT be hardcoded as a Python
-    string in the emission call site; it is read from the parsed
-    schema dict). On missing or malformed schema entry, raises
-    :exc:`RuntimeError` with the load-bearing diagnostic per Pattern 5.
-    """
-    deps = load_dependencies()
-    dependencies = deps.get("dependencies", {})
-    lad_entry = dependencies.get("lad")
-    if not isinstance(lad_entry, dict):
-        raise RuntimeError(
-            "four_layer_review_dispatch._load_lad_runtime_diagnostic_pointer: "
-            "schemas/dependencies.yaml is missing the `lad` entry; "
-            "this story (10.5) requires the Story 10.1 SDN-001 `lad` "
-            "activation to have landed."
-        )
-    profiles = lad_entry.get("profiles", {})
-    runtime = profiles.get("runtime", {})
-    sub_classifications = runtime.get("sub_classifications", [])
-    if not isinstance(sub_classifications, list):
-        raise RuntimeError(
-            "four_layer_review_dispatch._load_lad_runtime_diagnostic_pointer: "
-            "schemas/dependencies.yaml#lad.profiles.runtime.sub_classifications "
-            "did not parse to a list."
-        )
-    for entry in sub_classifications:
-        if not isinstance(entry, dict):
-            continue
-        if entry.get("condition") == "configured-but-api-key-missing":
-            pointer = entry.get("diagnostic_pointer")
-            if isinstance(pointer, str) and pointer:
-                return pointer
-    raise RuntimeError(
-        "four_layer_review_dispatch._load_lad_runtime_diagnostic_pointer: "
-        "schemas/dependencies.yaml#lad.profiles.runtime.sub_classifications "
-        "is missing the `configured-but-api-key-missing` entry's "
-        "`diagnostic_pointer`."
-    )
+#: Substrate fallback diagnostic_pointer for the LAD mid-run unavailable
+#: emission path (Story 12.2 + Sprint Change Proposal 2026-05-18 —
+#: validation-responsibility-boundary correction). After Story 12.2 the
+#: schema-sourced ``configured-but-api-key-missing`` runtime
+#: ``diagnostic_pointer`` is retired (the schema's
+#: ``lad.profiles.runtime.sub_classifications`` list shrinks to the
+#: ``unconfigured`` entry, which is ``silent`` and carries no pointer).
+#: This module-level constant is the credential-agnostic substrate
+#: fallback the LAD-blocked branch passes to
+#: :func:`surface_lad_unavailable`; the upstream MCP server's error
+#: text (when present in the wrapper's ``rationale``) remains the
+#: load-bearing operator signal.
+_LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC: str = (
+    "LAD MCP unavailable mid-run; 4th-layer review skipped."
+)
 
 
 #: Type alias for the envelope-resolver callable injected into
@@ -337,15 +312,17 @@ class FourLayerReviewResult:
         * ``lad_skipped_emissions`` — tuple of
           :class:`loud_fail_harness.env_provisioning.MarkerEmissionRecord`
           carrying the ``LAD-skipped`` marker emissions produced at
-          the LAD-dispatch-failure surface (Story 10.5 AC-4). Each
-          record's ``context.sub_cause`` discriminates among
-          ``"mid-run-api-key-missing"`` (wrapper returned
-          ``status: blocked`` with API-key-missing rationale) and
-          ``"mid-run-mcp-unavailable"`` (LAD dispatch raised a named
-          exception OR wrapper returned ``status: blocked`` for any
-          non-API-key-missing reason). Empty tuple ``()`` when LAD is
-          disabled (AC-5 silence-unless-configured invariant) OR when
-          LAD reached a verdict (``status: pass`` / ``fail``).
+          the LAD-dispatch-failure surface (Story 10.5 AC-4 + Story
+          12.2 validation-responsibility-boundary correction). Each
+          record's ``context.sub_cause`` is always
+          ``"mid-run-mcp-unavailable"`` post-Story-12.2 (the prior
+          ``"mid-run-api-key-missing"`` discriminator was retired
+          when the wrapper-side ``OPENROUTER_API_KEY`` presence check
+          + paired substrate rationale-substring branch were removed;
+          upstream credential errors now flow through the unified
+          ``mid-run-mcp-unavailable`` path). Empty tuple ``()`` when
+          LAD is disabled (AC-5 silence-unless-configured invariant)
+          OR when LAD reached a verdict (``status: pass`` / ``fail``).
           Default ``()`` preserves backward-compatibility for Story
           10.4's existing tests.
     """
@@ -527,7 +504,6 @@ def dispatch_four_layer_review(
     lad_enabled: bool,
     agent_definition_dir: pathlib.Path,
     lad_api_key_env_var: str = "OPENROUTER_API_KEY",
-    lad_runtime_diagnostic_pointer: str | None = None,
 ) -> FourLayerReviewResult:
     """Composes Story 2.6's ``dispatch_callback`` to dispatch
     ``review-bmad`` and (when ``lad_enabled=True``) ``lad`` as TWO
@@ -696,13 +672,17 @@ def dispatch_four_layer_review(
         marker_registry=marker_registry,
     )
 
-    # Story 10.5 AC-4 — mid-run ``LAD-skipped`` emission site. Composes
-    # :func:`surface_lad_unavailable` (the single source-of-truth
-    # substrate-library callable per Story 10.5 AC-2) on the
-    # LAD-dispatch-failure path. The three trigger conditions converge
-    # on the same SDN-001-sourced ``diagnostic_pointer`` but discriminate
-    # via ``context.sub_cause`` for downstream consumers (Story 6.3
-    # marker-coverage audit + Story 6.4 cost telemetry).
+    # Story 10.5 AC-4 + Story 12.2 — mid-run ``LAD-skipped`` emission
+    # site. Composes :func:`surface_lad_unavailable` (the single
+    # source-of-truth substrate-library callable per Story 10.5 AC-2)
+    # on the LAD-dispatch-failure path. Per Story 12.2 + Sprint Change
+    # Proposal 2026-05-18 (validation-responsibility-boundary
+    # correction), the prior rationale-substring discriminator
+    # (``mid-run-api-key-missing`` vs ``mid-run-mcp-unavailable``) is
+    # retired; the LAD-blocked branch collapses to a single
+    # unconditional ``mid-run-mcp-unavailable`` ``sub_cause`` emission.
+    # Third-party credential-error discrimination belongs at the
+    # upstream MCP-server boundary, not here.
     #
     # The emission is ADDITIVE — it fires IN ADDITION TO the existing
     # ``review-layer-failed`` marker emission via
@@ -714,48 +694,13 @@ def dispatch_four_layer_review(
     if lad_dispatch_failure_reason is not None or (
         lad_envelope is not None and lad_envelope.get("status") == "blocked"
     ):
-        runtime_pointer: str = (
-            lad_runtime_diagnostic_pointer
-            if lad_runtime_diagnostic_pointer is not None
-            else _load_lad_runtime_diagnostic_pointer()
+        _lad_emission = surface_lad_unavailable(
+            story_id=story_id,
+            registry=marker_registry,
+            sub_cause="mid-run-mcp-unavailable",
+            diagnostic_pointer=_LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC,
         )
-        if lad_dispatch_failure_reason is not None:
-            # Trigger condition (a) — dispatch raised a named-invariant
-            # exception (SpecialistTimeoutExceeded / EnvelopeValidationFailed
-            # / UnknownMarkerClass per Story 2.6).
-            _lad_emission = surface_lad_unavailable(
-                story_id=story_id,
-                registry=marker_registry,
-                sub_cause="mid-run-mcp-unavailable",
-                diagnostic_pointer=runtime_pointer,
-            )
-            lad_skipped_emissions = (_lad_emission.marker_record,)
-        else:
-            # Trigger conditions (b) and (c) — wrapper returned
-            # ``status: blocked``. Discriminate via rationale substring
-            # match: API-key-missing rationale routes to
-            # ``mid-run-api-key-missing``; any other rationale (MCP-process-
-            # crash, MCP-tool-timeout, malformed-payload) routes to
-            # ``mid-run-mcp-unavailable``.
-            # Structural invariant: lad_dispatch_failure_reason is None here,
-            # so the outer guard was satisfied by lad_envelope is not None.
-            assert lad_envelope is not None
-            rationale = str(lad_envelope.get("rationale", ""))
-            if _LAD_API_KEY_MISSING_RATIONALE_SUBSTRING in rationale:
-                _lad_emission = surface_lad_unavailable(
-                    story_id=story_id,
-                    registry=marker_registry,
-                    sub_cause="mid-run-api-key-missing",
-                    diagnostic_pointer=runtime_pointer,
-                )
-            else:
-                _lad_emission = surface_lad_unavailable(
-                    story_id=story_id,
-                    registry=marker_registry,
-                    sub_cause="mid-run-mcp-unavailable",
-                    diagnostic_pointer=runtime_pointer,
-                )
-            lad_skipped_emissions = (_lad_emission.marker_record,)
+        lad_skipped_emissions = (_lad_emission.marker_record,)
     # else — LAD reached a verdict (status == "pass" or "fail") or the
     # envelope is None (LAD disabled — structurally unreachable here
     # because the AC-5 short-circuit returns earlier). Empty-tuple

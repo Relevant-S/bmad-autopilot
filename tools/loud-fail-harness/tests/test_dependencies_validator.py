@@ -805,38 +805,41 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     assert rc == 0, f"enumeration-check failed: stdout={out.getvalue()!r} stderr={err.getvalue()!r}"
 
     text = out.getvalue()
-    # Post-Story-7.3: 15 passing + 20 orphans, no deferral note.
-    # Arithmetic: 29 total taxonomy markers (post-Story-4.9 baseline) −
-    # 9 distinct referenced markers across the two reconciliation pairs:
-    #   dependencies.yaml pair: env-setup-failed, mobile-blocked, LAD-skipped,
-    #                            playwright-mcp-unavailable (NEW in 7.3 —
-    #                            the playwright-mcp web init total-block
-    #                            profile gained a marker_class reference)
-    #   escalation-bundles pair: Tier-3-not-configured, plan-drift-detected,
-    #                            smoke-first-abort, retry-budget-exhausted,
-    #                            scope-assertion-violation
-    # (env-setup-failed appears in BOTH pairs but counts as ONE distinct
-    # taxonomy entry) → 29 − 9 = 20 orphans.
-    # The 15 passing references break down as:
-    #   dependencies.yaml: env-setup-failed ×4 (NEW: claude-code init +
-    #                        bmad-core init + tea-module init in Story 7.3;
-    #                        existing: playwright-mcp web runtime),
-    #                       mobile-blocked ×2 (mobile-mcp mobile init [C1 fix]
-    #                        + mobile-mcp mobile runtime), LAD-skipped ×2,
-    #                       playwright-mcp-unavailable ×1 (NEW in 7.3 —
-    #                       playwright-mcp web init) = 9 refs
-    #   escalation-bundles: env-setup-failed ×1, Tier-3-not-configured ×1,
-    #                        plan-drift-detected ×1, smoke-first-abort ×1,
+    # Post-Story-12.2: 13 passing + 21 orphans, no deferral note.
+    # Story 12.2 (Sprint Change Proposal 2026-05-18 — validation-
+    # responsibility-boundary correction) retired the two
+    # `configured-but-api-key-missing` `emits_marker: LAD-skipped`
+    # entries from `lad.profiles.{init,runtime}.sub_classifications`.
+    # The two `LAD-skipped` enumerated references in dependencies.yaml
+    # disappear → passing-reference count drops from 15 to 13. The
+    # `LAD-skipped` marker class itself is preserved in
+    # `schemas/marker-taxonomy.yaml` (closed-set marker-taxonomy v1
+    # invariant per AC-9 + Epic 8 retro) but now has no schema-side
+    # consumer; it lands in the orphan bucket → orphan count rises
+    # from 20 to 21.
+    # The 13 passing references break down as:
+    #   dependencies.yaml: env-setup-failed ×4 (claude-code init +
+    #                        bmad-core init + tea-module init +
+    #                        playwright-mcp web runtime),
+    #                       mobile-blocked ×2 (mobile-mcp mobile init
+    #                        + mobile-mcp mobile runtime),
+    #                       playwright-mcp-unavailable ×1
+    #                       (playwright-mcp web init) = 7 refs
+    #   escalation-bundles: env-setup-failed ×1, Tier-3-not-configured
+    #                        ×1, plan-drift-detected ×1,
+    #                        smoke-first-abort ×1,
     #                        retry-budget-exhausted ×1,
     #                        scope-assertion-violation ×1 = 6 refs
-    # Story 10.1 activated the `lad` block (phase: "1.5" gate removed) —
-    # the LAD-skipped ×2 references above were already discovered by
-    # enumeration_check pre-activation (emits_marker references are not
-    # filtered by the phase field); count unchanged at 15/0/20.
+    # Total: 13 references. Orphans: 21 (LAD-skipped joins the orphan
+    # bucket post-Story-12.2 since the dependencies.yaml emission
+    # references were retired; the substrate-side emission via
+    # `four_layer_review_dispatch._LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC`
+    # is the runtime path and is outside enumeration-check's reconciliation
+    # scope).
     # If a future story adds markers to marker-taxonomy.yaml or new
     # marker_class references to dependencies.yaml or to schemas/escalation-
     # bundles/*.yaml, update this count accordingly.
-    assert "Summary: 15 passing reference(s), 0 missing reference(s), 20 orphan marker class(es)" in text
+    assert "Summary: 13 passing reference(s), 0 missing reference(s), 21 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
@@ -913,24 +916,18 @@ def test_load_dependencies_returns_dict() -> None:
     # Story 10.1 AC-1: version_floor pinned to the resolved upstream short
     # commit SHA per ADR-008.
     assert deps["lad"]["version_floor"] == "bb47e9e"
-    # Story 10.1 AC-6: env-var-name correction witnesses on the init
-    # diagnostic_pointer prose — placeholder LAD_API_KEY removed; chosen
-    # MCP server's actual env var OPENROUTER_API_KEY present.
-    lad_init_dp = deps["lad"]["profiles"]["init"]["sub_classifications"][0][
-        "diagnostic_pointer"
-    ]
-    assert "OPENROUTER_API_KEY" in lad_init_dp
-    assert "LAD_API_KEY" not in lad_init_dp
-    # Story 10.1 AC-2 / AC-3: runtime configured-but-api-key-missing
-    # sub_classification gains a diagnostic_pointer (analog to
-    # mobile-mcp.runtime's existing diagnostic_pointer).
-    lad_runtime_sc = deps["lad"]["profiles"]["runtime"]["sub_classifications"][0]
-    assert lad_runtime_sc["condition"] == "configured-but-api-key-missing"
-    assert lad_runtime_sc["emits_marker"] == "LAD-skipped"
-    assert (
-        lad_runtime_sc["diagnostic_pointer"]
-        == "LAD MCP unavailable mid-run; 4th-layer review skipped."
-    )
+    # Story 12.2 + Sprint Change Proposal 2026-05-18: the prior
+    # ``configured-but-api-key-missing`` sub_classification entries on
+    # both init + runtime profiles were retired (validation-
+    # responsibility-boundary correction — third-party credential
+    # validation belongs at the upstream `lad_mcp_server` MCP boundary,
+    # not in bmad-autopilot). Each profile's sub_classifications list
+    # collapses to the remaining ``unconfigured`` entry (``silent:
+    # true``); no other lad sub_classification entries should remain.
+    lad_init_sc = deps["lad"]["profiles"]["init"]["sub_classifications"]
+    assert lad_init_sc == [{"condition": "unconfigured", "silent": True}]
+    lad_runtime_sc = deps["lad"]["profiles"]["runtime"]["sub_classifications"]
+    assert lad_runtime_sc == [{"condition": "unconfigured", "silent": True}]
     # Per AC-4: per-lifecycle-phase variance verifiable on playwright-mcp + mobile-mcp.
     assert (
         deps["playwright-mcp"]["by_project_type"]["web"]["profiles"]["init"]["profile"]
@@ -989,20 +986,22 @@ def test_extended_fixture_mobile_mcp_activated_state() -> None:
 
 
 def test_extended_fixture_lad_activated_state() -> None:
-    """Story 10.1 AC-7 — activated-lad fixture witness.
+    """Story 10.1 AC-7 — activated-lad fixture witness (post-Story-12.2).
 
     Loads the Story 7.3 extended fixture (which now includes a Story 10.1
     activated-state ``lad`` entry) and verifies the activated shape:
-    ``phase`` field absent, ``version_floor`` pinned to the resolved upstream
-    short SHA per ADR-008, both init + runtime ``opt-in-skip`` profiles
-    intact, both ``LAD-skipped`` ``emits_marker`` references present, init
-    ``diagnostic_pointer`` carries the corrected ``OPENROUTER_API_KEY`` env
-    var (no ``LAD_API_KEY`` placeholder), and the runtime
-    ``configured-but-api-key-missing`` sub_classification carries the new
-    ``diagnostic_pointer`` analog to ``mobile-mcp.runtime``. Ensures the
-    activated-lad fixture row is structurally valid; substrate component 5
-    (fixture-coverage) gains coverage of ``LAD-skipped`` reachability in the
-    Phase 1.5 steady-state configuration.
+    ``phase`` field absent, ``version_floor`` pinned to the resolved
+    upstream short SHA per ADR-008, both init + runtime ``opt-in-skip``
+    profiles intact. Post-Story-12.2 + Sprint Change Proposal 2026-05-18
+    (validation-responsibility-boundary correction), the prior
+    ``configured-but-api-key-missing`` sub_classification entries (one
+    per profile) are RETIRED; each profile's sub_classifications list
+    collapses to the remaining ``unconfigured`` entry (``silent: true``).
+    Substrate component 5 (fixture-coverage) still exercises the
+    activated-lad fixture row's structural validity; ``LAD-skipped``
+    marker reachability now flows through the substrate's mid-run
+    emission path in ``four_layer_review_dispatch`` rather than the
+    schema's `emits_marker` field.
     """
     fixture_path = (
         pathlib.Path(__file__).resolve().parent
@@ -1019,25 +1018,15 @@ def test_extended_fixture_lad_activated_state() -> None:
 
     init_profile = deps["lad"]["profiles"]["init"]
     assert init_profile["profile"] == "opt-in-skip"
-    init_sc = init_profile["sub_classifications"]
-    assert init_sc[0]["condition"] == "configured-but-api-key-missing"
-    assert init_sc[0]["emits_marker"] == "LAD-skipped"
-    assert "OPENROUTER_API_KEY" in init_sc[0]["diagnostic_pointer"]
-    assert "LAD_API_KEY" not in init_sc[0]["diagnostic_pointer"]
-    assert init_sc[1]["condition"] == "unconfigured"
-    assert init_sc[1]["silent"] is True
+    assert init_profile["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
 
     runtime_profile = deps["lad"]["profiles"]["runtime"]
     assert runtime_profile["profile"] == "opt-in-skip"
-    runtime_sc = runtime_profile["sub_classifications"]
-    assert runtime_sc[0]["condition"] == "configured-but-api-key-missing"
-    assert runtime_sc[0]["emits_marker"] == "LAD-skipped"
-    assert (
-        runtime_sc[0]["diagnostic_pointer"]
-        == "LAD MCP unavailable mid-run; 4th-layer review skipped."
-    )
-    assert runtime_sc[1]["condition"] == "unconfigured"
-    assert runtime_sc[1]["silent"] is True
+    assert runtime_profile["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
 
 
 def test_load_dependencies_raises_on_invalid_shape(tmp_path: pathlib.Path) -> None:

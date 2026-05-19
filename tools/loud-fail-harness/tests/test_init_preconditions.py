@@ -382,48 +382,6 @@ def test_project_type_filter_mobile_mcp_web_is_opt_in_skip(
 
 
 # --------------------------------------------------------------------------- #
-# AC-9 case 9 — opt-in-skip with configured-but-api-key-missing               #
-# --------------------------------------------------------------------------- #
-
-
-def test_opt_in_skip_lad_configured_but_api_key_missing(
-    runtime_marker_registry: MarkerClassRegistry,
-) -> None:
-    """AC-9 case 9: lad probe returns available=False AND
-    sub_classification="configured-but-api-key-missing" → run does NOT
-    halt AND `LAD-skipped` IS registered (per dependencies.yaml's
-    emits_marker field) AND the per-dep outcome is "warn" AND the
-    diagnostic enumerates the LAD entry."""
-    base = _passing_probes()
-    probes = PreconditionProbeRegistry(
-        claude_code=base.claude_code,
-        bmad_core=base.bmad_core,
-        tea_module=base.tea_module,
-        playwright_mcp=base.playwright_mcp,
-        mobile_mcp=base.mobile_mcp,
-        lad=lambda: PreconditionProbeResult(
-            available=False, sub_classification="configured-but-api-key-missing"
-        ),
-    )
-    run = run_init_preconditions(
-        probes,
-        project_type="web",
-        marker_registry=runtime_marker_registry,
-        run_state=_make_run_state(),
-    )
-    assert run.halted is False
-    lad = next(r for r in run.results if r.dependency == "lad")
-    assert lad.outcome == "warn"
-    assert lad.marker_class == "LAD-skipped"
-    assert lad.sub_classification == "configured-but-api-key-missing"
-    assert run.run_state is not None
-    assert "LAD-skipped" in run.run_state.active_markers
-    diagnostic = format_init_diagnostic(run, marker_registry=runtime_marker_registry)
-    assert "LAD-skipped" in diagnostic
-    assert "lad" in diagnostic.lower()
-
-
-# --------------------------------------------------------------------------- #
 # AC-9 case 10 — opt-in-skip silent path: LAD unconfigured                    #
 # --------------------------------------------------------------------------- #
 
@@ -1066,21 +1024,23 @@ def test_run_init_preconditions_emits_init_unavailable_sub_classification_byte_i
 
 # --------------------------------------------------------------------------- #
 # Story 10.5 AC-3 — lad_precondition_probe_factory positive-path tests        #
+# (post-Story-12.2: factory signature collapsed to a single                   #
+# read_review_lad_enabled callable; configured-but-api-key-missing branch    #
+# retired per Sprint Change Proposal 2026-05-18 validation-responsibility-    #
+# boundary correction)                                                        #
 # --------------------------------------------------------------------------- #
 
 
 def test_lad_precondition_probe_disabled_returns_unconfigured() -> None:
-    """Story 10.5 AC-3 branch (i): ``read_review_lad_enabled() is False``
-    → probe returns ``available=False``,
-    ``sub_classification="unconfigured"``, ``evidence=None``. Routes
-    through ``_dispatch_opt_in_skip``'s SDN-001
-    ``condition: unconfigured`` branch (``silent: true``) — ZERO marker
-    emission per AC-5 silence-unless-configured invariant.
+    """Story 10.5 AC-3 branch (i) (post-Story-12.2):
+    ``read_review_lad_enabled() is False`` → probe returns
+    ``available=False``, ``sub_classification="unconfigured"``,
+    ``evidence=None``. Routes through ``_dispatch_opt_in_skip``'s
+    SDN-001 ``condition: unconfigured`` branch (``silent: true``) —
+    ZERO marker emission per AC-5 silence-unless-configured invariant.
     """
     probe = lad_precondition_probe_factory(
-        get_env=lambda _name: None,
         read_review_lad_enabled=lambda: False,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
     )
     result = probe()
     assert result.available is False
@@ -1089,76 +1049,23 @@ def test_lad_precondition_probe_disabled_returns_unconfigured() -> None:
     assert result.version_observed is None
 
 
-def test_lad_precondition_probe_enabled_missing_env_var_returns_configured_but_api_key_missing() -> None:  # noqa: E501
-    """Story 10.5 AC-3 branch (ii): ``read_review_lad_enabled() is True``
-    AND ``get_env(api_key_env_var_name)`` returns ``None`` → probe
-    returns ``available=False``,
-    ``sub_classification="configured-but-api-key-missing"``.
+def test_lad_precondition_probe_enabled_returns_available() -> None:
+    """Story 10.5 AC-3 branch (ii) (post-Story-12.2 collapsed branch):
+    ``read_review_lad_enabled() is True`` → probe returns
+    ``available=True``, ``sub_classification=None``, ``evidence=None``.
+    The pre-Story-12.2 ``configured-but-api-key-missing`` branch is
+    retired — third-party API-key validation now flows through the
+    upstream ``lad_mcp_server`` MCP boundary, not through this
+    precondition substrate (Sprint Change Proposal 2026-05-18 +
+    Story 12.2).
     """
     probe = lad_precondition_probe_factory(
-        get_env=lambda name: None if name == "OPENROUTER_API_KEY" else "irrelevant",
         read_review_lad_enabled=lambda: True,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
-    )
-    result = probe()
-    assert result.available is False
-    assert result.sub_classification == "configured-but-api-key-missing"
-    assert result.evidence is None
-
-
-def test_lad_precondition_probe_enabled_env_var_empty_string_returns_configured_but_api_key_missing() -> None:  # noqa: E501
-    """Story 10.5 AC-3 branch (ii) edge: ``get_env`` returns the empty
-    string → treated as equivalent to ``None`` per factory docstring;
-    same routing as the ``None`` case.
-    """
-    probe = lad_precondition_probe_factory(
-        get_env=lambda _name: "",
-        read_review_lad_enabled=lambda: True,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
-    )
-    result = probe()
-    assert result.available is False
-    assert result.sub_classification == "configured-but-api-key-missing"
-    assert result.evidence is None
-
-
-def test_lad_precondition_probe_enabled_env_var_present_returns_available() -> None:
-    """Story 10.5 AC-3 branch (iii): ``read_review_lad_enabled() is
-    True`` AND ``get_env(api_key_env_var_name)`` returns a non-empty
-    string → probe returns ``available=True``,
-    ``sub_classification=None``, ``evidence=None`` (NFR-S1 hygiene:
-    the env-var VALUE never appears in the result).
-    """
-    probe = lad_precondition_probe_factory(
-        get_env=lambda _name: "sk-fake-api-key-do-not-leak",
-        read_review_lad_enabled=lambda: True,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
     )
     result = probe()
     assert result.available is True
     assert result.sub_classification is None
     assert result.evidence is None
-
-
-def test_lad_precondition_probe_uses_injected_env_var_name() -> None:
-    """Story 10.5 AC-3 Pattern 6 dependency-injection witness: the
-    factory threads the env-var NAME from ``read_api_key_env_var_name``
-    into ``get_env(...)`` — the NAME is NEVER hardcoded as a literal
-    in the factory's source code.
-    """
-    seen: dict[str, str] = {}
-
-    def _capturing_get_env(name: str) -> str | None:
-        seen["env_var_name"] = name
-        return None
-
-    probe = lad_precondition_probe_factory(
-        get_env=_capturing_get_env,
-        read_review_lad_enabled=lambda: True,
-        read_api_key_env_var_name=lambda: "CUSTOM_API_KEY_NAME",
-    )
-    _ = probe()
-    assert seen["env_var_name"] == "CUSTOM_API_KEY_NAME"
 
 
 # --------------------------------------------------------------------------- #
@@ -1169,8 +1076,8 @@ def test_lad_precondition_probe_uses_injected_env_var_name() -> None:
 def test_lad_precondition_probe_disabled_emits_zero_lad_skipped_markers(
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 10.5 AC-5 silence-unless-configured #1: config disabled,
-    env-var unset → ``run_init_preconditions`` routes the LAD entry
+    """Story 10.5 AC-5 silence-unless-configured #1 (post-Story-12.2):
+    config disabled → ``run_init_preconditions`` routes the LAD entry
     through the SDN-001 ``condition: unconfigured`` branch
     (``silent: true``); ``PreconditionRun.results[lad].outcome ==
     "silent"`` AND zero ``"LAD-skipped"`` markers in
@@ -1179,9 +1086,7 @@ def test_lad_precondition_probe_disabled_emits_zero_lad_skipped_markers(
     rs = _make_run_state()
     base = _passing_probes()
     probe = lad_precondition_probe_factory(
-        get_env=lambda _name: None,
         read_review_lad_enabled=lambda: False,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
     )
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
@@ -1205,70 +1110,25 @@ def test_lad_precondition_probe_disabled_emits_zero_lad_skipped_markers(
     assert "LAD-skipped" not in run.run_state.active_markers
 
 
-def test_lad_precondition_probe_enabled_missing_env_var_emits_lad_skipped_with_init_diagnostic(
-    runtime_marker_registry: MarkerClassRegistry,
-) -> None:
-    """Story 10.5 AC-5 silence-unless-configured #2 (positive emission
-    witness): config enabled, env-var unset →
-    ``run_init_preconditions`` routes through the SDN-001
-    ``condition: configured-but-api-key-missing`` branch and emits the
-    ``LAD-skipped`` marker with the init-time ``diagnostic_pointer``
-    verbatim. The complementary witness to the silence tests — proves
-    the silence-vs-emit boundary fires correctly on the
-    configured-but-missing path.
-    """
-    rs = _make_run_state()
-    base = _passing_probes()
-    probe = lad_precondition_probe_factory(
-        get_env=lambda _name: None,
-        read_review_lad_enabled=lambda: True,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
-    )
-    probes = PreconditionProbeRegistry(
-        claude_code=base.claude_code,
-        bmad_core=base.bmad_core,
-        tea_module=base.tea_module,
-        playwright_mcp=base.playwright_mcp,
-        mobile_mcp=base.mobile_mcp,
-        lad=probe,
-    )
-    run = run_init_preconditions(
-        probes,
-        project_type="web",
-        marker_registry=runtime_marker_registry,
-        run_state=rs,
-    )
-    assert run.halted is False
-    lad = next(r for r in run.results if r.dependency == "lad")
-    assert lad.outcome == "warn"
-    assert lad.marker_class == "LAD-skipped"
-    assert lad.sub_classification == "configured-but-api-key-missing"
-    assert lad.dependency_diagnostic is not None
-    assert "OPENROUTER_API_KEY" in lad.dependency_diagnostic
-    assert "Set the env var or disable LAD" in lad.dependency_diagnostic
-    assert run.run_state is not None
-    assert "LAD-skipped" in run.run_state.active_markers
-
-
 def test_config_review_lad_omitted_block_emits_zero_lad_skipped_markers(
     runtime_marker_registry: MarkerClassRegistry,
 ) -> None:
-    """Story 10.5 AC-5 silence-unless-configured #3: the operator's
-    ``_bmad/automation/config.yaml`` has NO ``review_lad`` block at
-    all → the consumer-side ``config.get("review_lad", {}).get(
-    "enabled", False)`` defaulting path resolves to ``False`` →
-    ``read_review_lad_enabled()`` returns ``False`` → probe returns
-    ``available=False, sub_classification="unconfigured"``. The env
-    var IS set (sentinel value) — proving "env-var presence alone
-    does NOT activate LAD; the operator's config.yaml is the
-    authoritative enabler".
+    """Story 10.5 AC-5 silence-unless-configured #3 (post-Story-12.2):
+    the operator's ``_bmad/automation/config.yaml`` has NO
+    ``review_lad`` block at all → the consumer-side
+    ``config.get("review_lad", {}).get("enabled", False)`` defaulting
+    path resolves to ``False`` → ``read_review_lad_enabled()`` returns
+    ``False`` → probe returns ``available=False,
+    sub_classification="unconfigured"``. Post-Story-12.2 the factory
+    no longer consults any env var — the consumer-side config gate is
+    the authoritative enabler regardless of env-var state, and
+    upstream credential validation lives at the ``lad_mcp_server``
+    MCP boundary per Sprint Change Proposal 2026-05-18.
     """
     rs = _make_run_state()
     base = _passing_probes()
     probe = lad_precondition_probe_factory(
-        get_env=lambda _name: "sk-real-key-but-config-omitted",
         read_review_lad_enabled=lambda: False,
-        read_api_key_env_var_name=lambda: "OPENROUTER_API_KEY",
     )
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
