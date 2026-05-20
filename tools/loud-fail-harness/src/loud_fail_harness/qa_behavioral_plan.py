@@ -119,6 +119,28 @@ AC-hash function — canonical normalization rules (AC-2 + AC-7):
     Order stability: two calls with the same ACs in different ordering
     yield the same digest (test ``test_compute_ac_hash_order_treatment``).
 
+Flow-branch enumeration (FR22c — Story 13.2):
+    ``QABehavioralPlanEntry`` carries an optional ``flow_branches`` field —
+    a ``tuple[FlowBranch, ...]`` enumerating the optional / branching steps
+    *within* a single AC's flow. Each ``FlowBranch`` carries ``branch_id``,
+    ``description``, ``disposition`` (``"must-visit"`` default, or
+    ``"intentionally-skipped"`` — which requires a one-line
+    ``skip_rationale``), and ``skip_rationale``. The field is additive and
+    optional with an empty-tuple default: a plan authored before FR22c
+    parses unchanged (``flow_branches == ()``), and ``generate_plan``
+    leaves it empty at MVP.
+
+    ``flow_branches`` is deliberately OUT of ``compute_ac_hash`` scope. The
+    hash is a pure function of the input AC *text* (``AcEntry.ac_text``);
+    ``flow_branches`` is QA-agent-authored *plan content*, not an input AC,
+    and is structurally outside the hash's input domain. Therefore an
+    operator editing ``flow_branches`` (e.g. flipping a ``disposition``)
+    does NOT change ``ac_hash`` and does NOT trigger story 4.2's
+    ``plan-drift-detected``. This module renders/parses ``flow_branches``
+    losslessly; branch *visitation* at run time is Story 13.3's iteration
+    contract and branch *enumeration* at plan-generation time is Story
+    13.4's wrapper prompt.
+
 Sensor-not-advisor (PRD-level invariant + Pattern 5):
     The library RETURNS the parsed plan + the action token; it does NOT
     emit markers, does NOT auto-correct AC text, does NOT write to the
@@ -139,9 +161,9 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Literal
+from typing import Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from loud_fail_harness.qa_plan_persistence_compromise import (
     render_compromise_blockquote,
@@ -172,6 +194,12 @@ SemanticVerificationRequirement = Literal[
     "required", "optional", "not_applicable"
 ]
 
+#: Allowed values for ``FlowBranch.disposition`` (FR22c / Story 13.2).
+#: ``"must-visit"`` is the default disposition for an enumerated within-AC
+#: flow branch; ``"intentionally-skipped"`` is opt-in per-branch and requires
+#: a one-line ``skip_rationale``.
+FlowBranchDisposition = Literal["must-visit", "intentionally-skipped"]
+
 #: Allowed values for ``QABehavioralPlanEntry.heuristic_applicability`` list
 #: elements (verbatim per epics.md line 497).
 HeuristicApplicability = Literal["empty-state", "error-state", "auth-boundary"]
@@ -199,13 +227,83 @@ class AcEntry(BaseModel):
     ac_text: str
 
 
+class FlowBranch(BaseModel):
+    """A single within-AC flow branch enumerated in a per-AC plan entry
+    (FR22c / Story 13.2).
+
+    A flow branch is an optional or branching step *inside* an AC's flow —
+    the path the QA agent reliably under-tests when it covers only the AC's
+    main flow. Story 4.1's per-AC entry had no structural slot for these;
+    this model is that slot.
+
+    Frozen for hashability + determinism — same discipline as ``AcEntry`` /
+    ``QABehavioralPlanEntry`` / ``QABehavioralPlan``.
+
+    ``disposition`` defaults to ``"must-visit"`` per FR22c ("the default
+    disposition for an enumerated branch is ``must-visit``"). An
+    ``"intentionally-skipped"`` branch requires a non-empty one-line
+    ``skip_rationale``; a ``"must-visit"`` branch must NOT carry one (a
+    rationale on a must-visit branch is a contradiction). The cross-field
+    conditional rule is enforced by the ``_check_skip_rationale``
+    ``@model_validator(mode="after")`` — a ``@field_validator`` cannot
+    enforce required-when-absent because it does not fire when the field is
+    omitted from input.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    branch_id: str = Field(min_length=1, pattern=r"^\S[^\n]*$")
+    description: str = Field(min_length=1, pattern=r"^\S[^\n]*$")
+    disposition: FlowBranchDisposition = "must-visit"
+    skip_rationale: str | None = None
+
+    @model_validator(mode="after")
+    def _check_skip_rationale(self) -> FlowBranch:
+        if self.disposition == "intentionally-skipped":
+            if (
+                self.skip_rationale is None
+                or not self.skip_rationale.strip()
+            ):
+                raise ValueError(
+                    "intentionally-skipped flow branch requires a "
+                    "non-empty skip_rationale"
+                )
+            if "\n" in self.skip_rationale:
+                raise ValueError(
+                    "skip_rationale must not contain newlines"
+                )
+        elif self.skip_rationale is not None:
+            raise ValueError(
+                "must-visit flow branch must not carry a skip_rationale"
+            )
+        return self
+
+
 class QABehavioralPlanEntry(BaseModel):
     """A per-AC plan entry carrying the four required per-AC fields named
-    verbatim by the epic AC at epics.md line 1818, plus the ``ac_id``
-    cross-reference field.
+    verbatim by the epic AC at epics.md line 1818, the ``ac_id``
+    cross-reference field, and the FR22c ``flow_branches`` within-AC
+    branch enumeration.
 
     Frozen for hashability + determinism. Field declaration order is load-
-    bearing for byte-stable ``model_dump_json()`` output.
+    bearing for byte-stable ``model_dump_json()`` output; ``flow_branches``
+    is appended LAST so every pre-existing field keeps its byte position.
+
+    ``flow_branches`` (FR22c / Story 13.2) is the per-AC enumeration of the
+    optional / branching steps *within* an AC's flow — the slot Story 4.1's
+    entry lacked. It is optional with an empty-tuple default:
+
+    * The MVP ``generate_plan`` path leaves it empty. Populating it at
+      plan-generation time is the Story 13.4 wrapper-prompt's responsibility
+      (FR22c's "MUST enumerate" is a directive on that prompt, not a
+      non-empty-cardinality constraint on this model).
+    * Visiting each ``must-visit`` branch at run time — or emitting a
+      ``heuristic-skipped: flow-branch-<branch-id>`` marker for an
+      ``intentionally-skipped`` one — is Story 13.3's iteration-contract
+      surface.
+    * ``flow_branches`` is QA-authored plan content and is deliberately OUT
+      of ``compute_ac_hash`` scope (the hash is a pure function of AC text);
+      see the module docstring's "Flow-branch enumeration" section.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -217,6 +315,7 @@ class QABehavioralPlanEntry(BaseModel):
     heuristic_applicability: tuple[HeuristicApplicability, ...] = Field(
         default_factory=tuple
     )
+    flow_branches: tuple[FlowBranch, ...] = Field(default_factory=tuple)
 
 
 class QABehavioralPlan(BaseModel):
@@ -239,6 +338,9 @@ class QABehavioralPlan(BaseModel):
       Story 4.9 thickens to per-AC derivation from AC text patterns.
     * ``assertion_shape`` is a placeholder declarative pattern derived
       from the AC text (literal echo at MVP — stories 4.6 / 4.7 thicken).
+    * ``flow_branches`` defaults to the empty tuple ``()`` (FR22c / Story
+      13.2). The MVP ``generate_plan`` path leaves it empty; Story 13.4's
+      wrapper prompt populates it at plan-generation time.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -361,6 +463,22 @@ _ENTRY_HEADER_RE = re.compile(r"^### AC-(?P<ac_id>.+)$", re.MULTILINE)
 _FIELD_LINE_RE = re.compile(
     r"^- (?P<key>[a-z_]+): (?P<value>.+)$", re.MULTILINE
 )
+#: ``flow_branches`` serialization regexes (FR22c / Story 13.2). Matched
+#: line-by-line with ``.match()`` so no MULTILINE flag is needed. The header
+#: line ``- flow_branches:`` has no value after ``: `` so it does NOT match
+#: ``_FIELD_LINE_RE``; the indented record lines are not column-0 anchored so
+#: they do not pollute the four-scalar-field ``fields`` dict either.
+_FLOW_BRANCH_HEADER_RE = re.compile(r"^- flow_branches:$")
+_FLOW_BRANCH_RECORD_RE = re.compile(r"^  - branch_id: (?P<branch_id>.+)$")
+_FLOW_BRANCH_SUBFIELD_RE = re.compile(
+    r"^    (?P<key>[a-z_]+): (?P<value>.+)$"
+)
+_FLOW_BRANCH_SUBFIELD_KEYS = frozenset(
+    {"description", "disposition", "skip_rationale"}
+)
+# ``branch_id`` is intentionally absent: it is extracted via
+# ``_FLOW_BRANCH_RECORD_RE`` (the ``  - branch_id: …`` line) and stored
+# directly, not as a four-space-indented sub-field.
 
 
 def render_plan_section(plan: QABehavioralPlan) -> str:
@@ -383,7 +501,11 @@ def render_plan_section(plan: QABehavioralPlan) -> str:
       regex-extractable.
     * One blank line.
     * Per-AC entries under ``### AC-{ac_id}`` H3 headers, each followed
-      by four ``- key: value`` lines for the four required per-AC fields.
+      by four ``- key: value`` lines for the four required per-AC fields,
+      then — only when the entry's ``flow_branches`` tuple is non-empty —
+      a ``- flow_branches:`` block enumerating the FR22c within-AC
+      branches (the block is OMITTED ENTIRELY when ``flow_branches`` is
+      empty, so a pre-FR22c plan stays byte-identical under render).
     * Entries separated by blank lines.
 
     The output ends with a trailing newline so downstream concatenation
@@ -410,6 +532,7 @@ def render_plan_section(plan: QABehavioralPlan) -> str:
             "- heuristic_applicability: "
             f"{_render_heuristic_list(entry.heuristic_applicability)}"
         )
+        parts.extend(_render_flow_branches(entry.flow_branches))
         parts.append("")
     return "\n".join(parts).rstrip("\n") + "\n"
 
@@ -425,6 +548,35 @@ def _render_heuristic_list(
     return "[" + ", ".join(items) + "]"
 
 
+def _render_flow_branches(
+    branches: tuple[FlowBranch, ...],
+) -> list[str]:
+    """Render the ``flow_branches`` tuple (FR22c) as a ``- flow_branches:``
+    header line followed by one indented record per branch. Returns the
+    EMPTY LIST when ``branches`` is empty so :func:`render_plan_section`
+    omits the block entirely — the omit-when-empty rule that keeps a
+    pre-FR22c plan byte-identical under render. Inverse of
+    :func:`_parse_flow_branches`.
+
+    Each record renders as a two-space-indented ``- branch_id: …`` line
+    followed by four-space-indented ``description`` / ``disposition`` lines
+    and — only when ``skip_rationale is not None`` — a ``skip_rationale``
+    line. Indented record lines do not match the
+    column-0-anchored ``_FIELD_LINE_RE``, so they do not perturb the
+    four-scalar-field extraction in :func:`parse_plan_section`.
+    """
+    if not branches:
+        return []
+    lines = ["- flow_branches:"]
+    for branch in branches:
+        lines.append(f"  - branch_id: {branch.branch_id}")
+        lines.append(f"    description: {branch.description}")
+        lines.append(f"    disposition: {branch.disposition}")
+        if branch.skip_rationale is not None:
+            lines.append(f"    skip_rationale: {branch.skip_rationale}")
+    return lines
+
+
 def parse_plan_section(section_body: str) -> QABehavioralPlan | None:
     """Parse a previously-rendered plan-section body back into a
     ``QABehavioralPlan``. Returns ``None`` if ``section_body`` does not
@@ -433,7 +585,10 @@ def parse_plan_section(section_body: str) -> QABehavioralPlan | None:
     generate fresh").
 
     Round-trip discipline: ``parse_plan_section(render_plan_section(plan))``
-    equals ``plan`` for any well-formed plan.
+    equals ``plan`` for any well-formed plan — including plans whose
+    entries carry populated ``flow_branches`` with mixed dispositions. An
+    entry block with no ``- flow_branches:`` block (the pre-FR22c shape)
+    parses to ``flow_branches == ()`` and MUST NOT raise (back-compat).
     """
     if not isinstance(section_body, str):
         return None
@@ -472,6 +627,7 @@ def parse_plan_section(section_body: str) -> QABehavioralPlan | None:
                 heuristic_applicability=_parse_heuristic_list(
                     fields["heuristic_applicability"]
                 ),
+                flow_branches=_parse_flow_branches(block),
             )
         except (KeyError, ValueError):
             return None
@@ -512,6 +668,86 @@ def _parse_heuristic_list(
         item for item in items  # type: ignore[misc]
     )
     return typed
+
+
+def _parse_flow_branches(block: str) -> tuple[FlowBranch, ...]:
+    """Inverse of :func:`_render_flow_branches`. Scan a per-AC entry
+    ``block`` for the ``- flow_branches:`` header line and parse the
+    indented branch records that follow it into a ``tuple[FlowBranch, ...]``.
+
+    Returns the EMPTY TUPLE when no ``- flow_branches:`` header is present
+    (the pre-FR22c shape) — this is the back-compat contract: a plan
+    authored before FR22c parses to ``flow_branches == ()`` and does NOT
+    raise.
+
+    Raises ``ValueError`` on malformed input (an unparseable line, a
+    sub-field before any branch record, an unknown or duplicate sub-field
+    key, a duplicate ``branch_id``, a missing required sub-field, an
+    invalid ``disposition`` value, or a header declared with no records)
+    so :func:`parse_plan_section` can return ``None`` cleanly — same
+    defensive-parser discipline as :func:`_parse_heuristic_list`.
+    """
+    lines = block.splitlines()
+    header_idx: int | None = None
+    for idx, line in enumerate(lines):
+        if _FLOW_BRANCH_HEADER_RE.match(line):
+            header_idx = idx
+            break
+    if header_idx is None:
+        return ()
+
+    records: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    seen_ids: set[str] = set()
+    for line in lines[header_idx + 1 :]:
+        if not line.strip():
+            break
+        record_match = _FLOW_BRANCH_RECORD_RE.match(line)
+        if record_match is not None:
+            branch_id = record_match.group("branch_id")
+            if branch_id in seen_ids:
+                raise ValueError(
+                    f"duplicate flow_branches branch_id: {branch_id!r}"
+                )
+            seen_ids.add(branch_id)
+            current = {"branch_id": branch_id}
+            records.append(current)
+            continue
+        subfield_match = _FLOW_BRANCH_SUBFIELD_RE.match(line)
+        if subfield_match is None:
+            raise ValueError(f"malformed flow_branches line: {line!r}")
+        if current is None:
+            raise ValueError(
+                f"flow_branches sub-field before any branch record: {line!r}"
+            )
+        key = subfield_match.group("key")
+        if key not in _FLOW_BRANCH_SUBFIELD_KEYS:
+            raise ValueError(f"unknown flow_branches sub-field: {key!r}")
+        if key in current:
+            raise ValueError(f"duplicate flow_branches sub-field: {key!r}")
+        current[key] = subfield_match.group("value")
+
+    if not records:
+        raise ValueError(
+            "flow_branches header declared with no branch records"
+        )
+
+    branches: list[FlowBranch] = []
+    for record in records:
+        disposition = record.get("disposition", "must-visit")
+        if disposition not in ("must-visit", "intentionally-skipped"):
+            raise ValueError(
+                f"invalid flow_branches disposition: {disposition!r}"
+            )
+        branches.append(
+            FlowBranch(
+                branch_id=record["branch_id"],
+                description=record["description"],
+                disposition=cast(FlowBranchDisposition, disposition),
+                skip_rationale=record.get("skip_rationale"),
+            )
+        )
+    return tuple(branches)
 
 
 # ---------------------------------------------------------------------------
@@ -577,6 +813,8 @@ def persist_or_reuse_plan(
 __all__ = [
     "AcEntry",
     "ExpectedEvidenceTier",
+    "FlowBranch",
+    "FlowBranchDisposition",
     "HeuristicApplicability",
     "PlanPersistAction",
     "PlanStatus",
