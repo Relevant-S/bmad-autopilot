@@ -1228,8 +1228,8 @@ verdicts:
   - marker_class: heuristic-skipped
     surface_name: specialist-wrapper-qa
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_exploratory_heuristics.py:242
-    audit_date: "2026-05-05"
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py:725
+    audit_date: "2026-05-21"
   - marker_class: heuristic-skipped
     surface_name: specialist-wrapper-review-bmad
     verdict: not-applicable
@@ -2573,7 +2573,7 @@ verdicts:
   - marker_class: smoke-first-abort
     surface_name: specialist-wrapper-qa
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py:433
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py:621
     audit_date: "2026-05-05"
   - marker_class: smoke-first-abort
     surface_name: specialist-wrapper-review-bmad

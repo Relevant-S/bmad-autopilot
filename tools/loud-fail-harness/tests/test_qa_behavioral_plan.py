@@ -4,9 +4,10 @@ Mirrors the test-file shape established by ``test_story_doc_validator.py``
 (story 1.10b) and the canonical-fixture regeneration-baseline pattern from
 ``test_bundle_assembly.py`` (story 3.4 — fixture round-trip discipline).
 
-Test enumeration (32 tests — 19 from Story 4.1 AC-6, 11 added by Story
+Test enumeration (33 tests — 19 from Story 4.1 AC-6, 11 added by Story
 13.2 AC-8 / AC-5 for the FR22c ``flow_branches`` surface, 2 added by
-Story 13.2 code-review patches for defensive-parser coverage):
+Story 13.2 code-review patches for defensive-parser coverage, 1 added by
+Story 13.3 AC-9 for ``branch_id`` marker-key-safety):
     1.  test_generate_plan_first_run_structure
     2.  test_generate_plan_ac_hash_matches_compute_ac_hash
     3.  test_compute_ac_hash_deterministic
@@ -39,6 +40,7 @@ Story 13.2 code-review patches for defensive-parser coverage):
     30. test_parse_plan_section_returns_none_for_malformed_flow_branches
     31. test_parse_plan_section_returns_none_for_missing_description
     32. test_parse_plan_section_returns_none_for_flow_branches_header_no_records
+    33. test_flow_branch_branch_id_rejects_trailing_whitespace
 """
 
 from __future__ import annotations
@@ -636,3 +638,27 @@ def test_parse_plan_section_returns_none_for_flow_branches_header_no_records() -
         "\n"
     )
     assert parse_plan_section(body) is None
+
+
+# 33
+def test_flow_branch_branch_id_rejects_trailing_whitespace() -> None:
+    """Story 13.3 AC-9 — now that ``branch_id`` is a marker-key component
+    (the ``<branch-id>`` of ``heuristic-skipped: flow-branch-<branch-id>``),
+    its ``Field`` pattern rejects leading AND trailing whitespace (and
+    newlines). A trailing-whitespace ``branch_id`` raises ``ValidationError``
+    (resolves the deferred-work item at ``deferred-work.md`` line 5; the
+    pre-13.3 pattern rejected only leading whitespace + newlines)."""
+    for bad_branch_id in (
+        "trailing-space ",
+        "trailing-tab\t",
+        "embedded\nnewline",
+        " leading-space",
+    ):
+        with pytest.raises(ValidationError):
+            FlowBranch(branch_id=bad_branch_id, description="d")
+    # A clean kebab-case id — and a single non-whitespace char — still
+    # construct (the ``^\S$`` alternative of the tightened pattern).
+    assert FlowBranch(
+        branch_id="duplicate-email", description="d"
+    ).branch_id == "duplicate-email"
+    assert FlowBranch(branch_id="x", description="d").branch_id == "x"

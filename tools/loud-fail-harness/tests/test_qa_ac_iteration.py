@@ -7,7 +7,9 @@ Mirrors the test-file shape established by ``test_http_driver.py``
 substrate-library tests; extends with the iteration-composition
 test surface.
 
-Test enumeration (Story 4.6 AC-9 — 20 tests):
+Test enumeration (Story 4.6 AC-9 — 20 tests; Story 13.3 AC-11 — 12
+tests for the FR22c within-AC flow-branch coverage contract; plus 2
+unnumbered bonus tests for exception-propagation):
     1.  test_module_all_exports
     2.  test_smoke_first_abort_marker_constant_byte_for_byte
     3.  test_surface_smoke_first_abort_atomic_on_failure
@@ -29,6 +31,18 @@ Test enumeration (Story 4.6 AC-9 — 20 tests):
     18. test_qa_ac_iteration_module_has_lf_line_endings
     19. test_qa_ac_iteration_module_pluggability_clean
     20. test_iterate_acs_preserves_story_doc_order_with_non_numeric_ac_ids
+    21. test_surface_flow_branch_skipped_atomic_on_failure
+    22. test_surface_flow_branch_skipped_happy_path
+    23. test_surface_flow_branch_skipped_must_visit_raises
+    24. test_iterate_acs_flow_branch_coverage_mixed_dispositions
+    25. test_iterate_acs_pre_fr22c_plan_empty_flow_branch_coverage
+    26. test_iterate_acs_smoke_first_abort_skips_flow_branch_processing
+    27. test_iterate_acs_ac1_blocked_processes_flow_branches
+    28. test_iterate_acs_mid_iteration_fail_ac_contributes_coverage
+    29. test_iterate_acs_flow_branch_coverage_project_type_parity
+    30. test_ac_iteration_result_with_flow_branch_coverage_frozen_byte_stable
+    31. test_flow_branch_symbols_in_all
+    32. test_ac_flow_branch_coverage_single_disposition_acs
 """
 
 from __future__ import annotations
@@ -57,6 +71,7 @@ from loud_fail_harness.mobile_driver import (
     NoOpMobileDriver,
 )
 from loud_fail_harness.playwright_driver import (
+    AcResult,
     MaskedSelectorPolicy,
     NetworkRequest,
     NoOpEvidenceCapturer,
@@ -66,21 +81,29 @@ from loud_fail_harness.playwright_driver import (
     surface_playwright_mcp_unavailable,
 )
 from loud_fail_harness.qa_ac_iteration import (
+    HEURISTIC_SKIPPED_MARKER,
     SMOKE_FIRST_ABORT_MARKER,
+    AcFlowBranchCoverage,
     AcIterationResult,
+    FlowBranchSkippedDiagnosticContext,
+    FlowBranchSkippedEmission,
+    FlowBranchSkippedEmissionRecord,
     PlanAbsentForIteration,
     ProjectType,
     SmokeFirstAbortDiagnosticContext,
     SmokeFirstAbortEmission,
     SmokeFirstAbortEmissionRecord,
     iterate_acs,
+    surface_flow_branch_skipped,
     surface_smoke_first_abort,
 )
 from loud_fail_harness.qa_behavioral_plan import (
     AcEntry,
+    FlowBranch,
     QABehavioralPlan,
     QABehavioralPlanEntry,
 )
+from loud_fail_harness.qa_evidence_tier import EvidenceRef
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     UnknownMarkerClass,
@@ -111,9 +134,14 @@ def envelope_schema(repo_root: pathlib.Path) -> dict[str, Any]:
 
 
 def _make_registry() -> MarkerClassRegistry:
-    """Registry containing exactly the ``smoke-first-abort`` marker class
-    (consumed by the abort-path tests)."""
-    return MarkerClassRegistry(marker_classes=frozenset({"smoke-first-abort"}))
+    """Registry containing the ``smoke-first-abort`` AND ``heuristic-skipped``
+    marker classes — the two classes :func:`iterate_acs` emits (the latter
+    via Story 13.3's :func:`surface_flow_branch_skipped` flow-branch path).
+    ``heuristic-skipped`` is harmless for the pre-13.3 abort-path tests
+    (an unconsumed extra class)."""
+    return MarkerClassRegistry(
+        marker_classes=frozenset({"smoke-first-abort", "heuristic-skipped"})
+    )
 
 
 def _empty_registry() -> MarkerClassRegistry:
@@ -157,9 +185,6 @@ def _make_ac1_fail_result() -> Any:
     items are wrapped as ``EvidenceRef(path=..., tier="tier-1-mechanical")``
     per the bumped ``$defs/evidence_ref`` shape.
     """
-    from loud_fail_harness.playwright_driver import AcResult
-    from loud_fail_harness.qa_evidence_tier import EvidenceRef
-
     return AcResult(
         ac_id="AC-1",
         status="fail",
@@ -315,7 +340,9 @@ class _SequenceApiDriver:
 # 1
 def test_module_all_exports() -> None:
     """AC-9 #1 — `qa_ac_iteration.__all__` carries the public-API
-    symbols enumerated in AC-1.
+    symbols enumerated in AC-1; extended by Story 13.3 AC-11 with the
+    six FR22c flow-branch symbols (the enumeration this test states is
+    necessarily updated because AC-11 deliberately expands `__all__`).
     """
     expected_symbols = {
         "SMOKE_FIRST_ABORT_MARKER",
@@ -328,6 +355,13 @@ def test_module_all_exports() -> None:
         "PlanAbsentForIteration",
         "surface_smoke_first_abort",
         "iterate_acs",
+        # Story 13.3 (FR22c within-AC flow-branch coverage).
+        "HEURISTIC_SKIPPED_MARKER",
+        "FlowBranchSkippedDiagnosticContext",
+        "FlowBranchSkippedEmissionRecord",
+        "FlowBranchSkippedEmission",
+        "AcFlowBranchCoverage",
+        "surface_flow_branch_skipped",
     }
     actual = set(qa_ac_iteration.__all__)
     missing = expected_symbols - actual
@@ -901,9 +935,6 @@ def test_ac_iteration_result_is_frozen_and_byte_stable() -> None:
         marker_class=SMOKE_FIRST_ABORT_MARKER,
         diagnostic_context=diagnostic,
     )
-    from loud_fail_harness.playwright_driver import AcResult
-    from loud_fail_harness.qa_evidence_tier import EvidenceRef
-
     result = AcIterationResult(
         ac_results=(
             AcResult(
@@ -1143,3 +1174,540 @@ def test_iterate_acs_propagates_api_service_broken_unchanged() -> None:
             evidence_capturer=capturer,
             masked_selectors=policy,
         )
+
+
+# --------------------------------------------------------------------------- #
+# Story 13.3 — FR22c within-AC flow-branch coverage (AC-11)                    #
+# --------------------------------------------------------------------------- #
+
+
+def _make_flow_branch_plan(
+    ac_ids: tuple[str, ...],
+    branches_by_ac: dict[str, tuple[FlowBranch, ...]],
+) -> QABehavioralPlan:
+    """Build a plan whose entries carry per-AC ``flow_branches`` (Story 13.3
+    FR22c within-AC branch-coverage tests). An AC absent from
+    ``branches_by_ac`` gets an empty ``flow_branches`` tuple — the pre-FR22c
+    shape. Entry order follows ``ac_ids``."""
+    return QABehavioralPlan(
+        plan_status="generated",
+        ac_hash="0" * 64,
+        entries=tuple(
+            QABehavioralPlanEntry(
+                ac_id=ac_id,
+                assertion_shape=f"verify: {ac_id}",
+                expected_evidence_tier="tier-1-mechanical",
+                semantic_verification_requirement="not_applicable",
+                heuristic_applicability=(),
+                flow_branches=branches_by_ac.get(ac_id, ()),
+            )
+            for ac_id in ac_ids
+        ),
+    )
+
+
+# 21
+def test_surface_flow_branch_skipped_atomic_on_failure() -> None:
+    """AC-11 #1 — a registry built WITHOUT `heuristic-skipped` makes
+    `surface_flow_branch_skipped` raise `UnknownMarkerClass` before any
+    model is constructed (Pattern 5 atomic-on-failure)."""
+    branch = FlowBranch(
+        branch_id="duplicate-email",
+        description="resubmitting an already-registered email",
+        disposition="intentionally-skipped",
+        skip_rationale="covered by AC-3's uniqueness assertion",
+    )
+    with pytest.raises(UnknownMarkerClass):
+        surface_flow_branch_skipped(
+            story_id="story-001",
+            ac_id="AC-2",
+            branch=branch,
+            registry=_empty_registry(),
+        )
+
+
+# 22
+def test_surface_flow_branch_skipped_happy_path() -> None:
+    """AC-11 #2 — happy path returns a `FlowBranchSkippedEmission` whose
+    record has `marker_class == "heuristic-skipped"`, `sub_classification
+    == "flow-branch"`, and a diagnostic context with branch_id /
+    branch_description / skip_rationale copied verbatim from the input
+    `FlowBranch`."""
+    branch = FlowBranch(
+        branch_id="duplicate-email",
+        description="resubmitting an already-registered email",
+        disposition="intentionally-skipped",
+        skip_rationale="covered by AC-3's uniqueness assertion",
+    )
+    emission = surface_flow_branch_skipped(
+        story_id="story-001",
+        ac_id="AC-2",
+        branch=branch,
+        registry=_make_registry(),
+    )
+    assert isinstance(emission, FlowBranchSkippedEmission)
+    record = emission.marker_record
+    assert record.marker_class == "heuristic-skipped"
+    assert record.marker_class == HEURISTIC_SKIPPED_MARKER
+    assert record.sub_classification == "flow-branch"
+    ctx = emission.diagnostic_context
+    assert ctx.story_id == "story-001"
+    assert ctx.ac_id == "AC-2"
+    assert ctx.branch_id == branch.branch_id
+    assert ctx.branch_description == branch.description
+    assert ctx.skip_rationale == branch.skip_rationale
+    # Co-exposure: marker_record.diagnostic_context is the same payload.
+    assert record.diagnostic_context == ctx
+
+
+# 23
+def test_surface_flow_branch_skipped_must_visit_raises() -> None:
+    """AC-11 #3 — passing a `must-visit` branch to
+    `surface_flow_branch_skipped` raises `ValueError` (emitting a skip
+    marker for a must-visit branch is a caller bug — the AC-3(b)
+    precondition guard)."""
+    must_visit = FlowBranch(
+        branch_id="blank-email",
+        description="submitting with the email field blank",
+    )
+    with pytest.raises(ValueError, match=r"intentionally-skipped"):
+        surface_flow_branch_skipped(
+            story_id="story-001",
+            ac_id="AC-2",
+            branch=must_visit,
+            registry=_make_registry(),
+        )
+
+
+# 24
+def test_iterate_acs_flow_branch_coverage_mixed_dispositions() -> None:
+    """AC-11 #4 — `iterate_acs` over a plan whose ACs carry populated
+    `flow_branches[]` with mixed dispositions produces one
+    `AcFlowBranchCoverage` per AC-with-branches; `must_visit_branch_ids`
+    lists the must-visit IDs in plan order; `skipped` carries one record
+    per intentionally-skipped branch."""
+    ac_ids = ("AC-1", "AC-2", "AC-3")
+    plan = _make_flow_branch_plan(
+        ac_ids,
+        {
+            "AC-2": (
+                FlowBranch(branch_id="ac2-must-a", description="must a"),
+                FlowBranch(branch_id="ac2-must-b", description="must b"),
+                FlowBranch(
+                    branch_id="ac2-skip",
+                    description="skipped branch",
+                    disposition="intentionally-skipped",
+                    skip_rationale="covered elsewhere",
+                ),
+            ),
+            "AC-3": (
+                FlowBranch(
+                    branch_id="ac3-skip",
+                    description="skipped branch",
+                    disposition="intentionally-skipped",
+                    skip_rationale="out of MVP scope",
+                ),
+                FlowBranch(branch_id="ac3-must", description="must c"),
+            ),
+        },
+    )
+    ac_list = _make_ac_list(ac_ids)
+
+    result = iterate_acs(
+        plan=plan,
+        ac_list=ac_list,
+        project_type="web",
+        story_id="story-001",
+        registry=_make_registry(),
+        web_driver=NoOpWebDriver(
+            assertion=WebDriverAssertion(
+                passed=True, observed="ok", expected="ok"
+            )
+        ),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    # One coverage record per AC-with-branches (AC-1 has none).
+    assert len(result.flow_branch_coverage) == 2
+    cov2, cov3 = result.flow_branch_coverage
+    assert cov2.ac_id == "AC-2"
+    assert cov2.must_visit_branch_ids == ("ac2-must-a", "ac2-must-b")
+    assert len(cov2.skipped) == 1
+    assert cov2.skipped[0].marker_class == "heuristic-skipped"
+    assert cov2.skipped[0].sub_classification == "flow-branch"
+    assert cov2.skipped[0].diagnostic_context.branch_id == "ac2-skip"
+    assert cov2.skipped[0].diagnostic_context.ac_id == "AC-2"
+    assert cov3.ac_id == "AC-3"
+    assert cov3.must_visit_branch_ids == ("ac3-must",)
+    assert len(cov3.skipped) == 1
+    assert cov3.skipped[0].diagnostic_context.branch_id == "ac3-skip"
+    # Iteration itself unaffected — 3 ACs, no abort.
+    assert len(result.ac_results) == 3
+    assert result.smoke_first_abort is None
+
+
+# 25
+def test_iterate_acs_pre_fr22c_plan_empty_flow_branch_coverage() -> None:
+    """AC-11 #5 / AC-7 — `iterate_acs` over a pre-FR22c plan (every
+    entry's `flow_branches == ()`) yields `flow_branch_coverage == ()`;
+    `ac_results` / `smoke_first_abort` are unchanged (back-compat)."""
+    plan = _make_plan(("AC-1", "AC-2", "AC-3"))
+    ac_list = _make_ac_list(("AC-1", "AC-2", "AC-3"))
+
+    result = iterate_acs(
+        plan=plan,
+        ac_list=ac_list,
+        project_type="web",
+        story_id="story-001",
+        registry=_make_registry(),
+        web_driver=NoOpWebDriver(
+            assertion=WebDriverAssertion(
+                passed=True, observed="ok", expected="ok"
+            )
+        ),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    assert result.flow_branch_coverage == ()
+    assert len(result.ac_results) == 3
+    assert result.smoke_first_abort is None
+
+
+# 26
+def test_iterate_acs_smoke_first_abort_skips_flow_branch_processing() -> None:
+    """AC-11 #6 / AC-6 — when AC-1 fails AND AC-1 carries populated
+    `flow_branches[]`, smoke-first abort takes precedence:
+    `flow_branch_coverage == ()` and `surface_flow_branch_skipped` is
+    never called. Proven by a registry that has `smoke-first-abort` but
+    NOT `heuristic-skipped` — flow-branch processing of AC-1's
+    intentionally-skipped branch would raise `UnknownMarkerClass` if it
+    ran; it does not, because the abort returns first."""
+    ac_ids = ("AC-1", "AC-2")
+    plan = _make_flow_branch_plan(
+        ac_ids,
+        {
+            "AC-1": (
+                FlowBranch(
+                    branch_id="ac1-skip",
+                    description="a within-AC-1 branch",
+                    disposition="intentionally-skipped",
+                    skip_rationale="irrelevant — AC-1 itself fails",
+                ),
+            ),
+        },
+    )
+    ac_list = _make_ac_list(ac_ids)
+    smoke_only_registry = MarkerClassRegistry(
+        marker_classes=frozenset({"smoke-first-abort"})
+    )
+    failing = WebDriverAssertion(
+        passed=False, observed="500 error", expected="ok"
+    )
+
+    result = iterate_acs(
+        plan=plan,
+        ac_list=ac_list,
+        project_type="web",
+        story_id="story-001",
+        registry=smoke_only_registry,
+        web_driver=_SequenceWebDriver(assertions=[failing]),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    assert result.smoke_first_abort is not None
+    assert result.smoke_first_abort.marker_class == "smoke-first-abort"
+    assert result.flow_branch_coverage == ()
+    assert len(result.ac_results) == 1
+
+
+# 27
+def test_iterate_acs_ac1_blocked_processes_flow_branches() -> None:
+    """AC-11 #7 / AC-6 — AC-1 with `status == "blocked"` does NOT trigger
+    smoke-first abort; AC-1's own `flow_branches[]` ARE processed and
+    iteration continues."""
+    ac_ids = ("AC-1", "AC-2")
+    plan = _make_flow_branch_plan(
+        ac_ids,
+        {
+            "AC-1": (
+                FlowBranch(branch_id="ac1-must", description="must visit"),
+                FlowBranch(
+                    branch_id="ac1-skip",
+                    description="skip this",
+                    disposition="intentionally-skipped",
+                    skip_rationale="covered by AC-2",
+                ),
+            ),
+        },
+    )
+    ac_list = _make_ac_list(ac_ids)
+    passing = WebDriverAssertion(passed=True, observed="ok", expected="ok")
+    # First call raises a non-MCP exception → AC-1 verify_ac → blocked.
+    web_driver = _SequenceWebDriver(
+        assertions=[passing, passing],
+        action_exceptions=[RuntimeError("transient glitch"), None],
+    )
+
+    result = iterate_acs(
+        plan=plan,
+        ac_list=ac_list,
+        project_type="web",
+        story_id="story-001",
+        registry=_make_registry(),
+        web_driver=web_driver,
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    assert result.ac_results[0].status == "blocked"
+    assert result.smoke_first_abort is None
+    assert len(result.ac_results) == 2
+    # AC-1's branches were processed despite the blocked status.
+    assert len(result.flow_branch_coverage) == 1
+    cov1 = result.flow_branch_coverage[0]
+    assert cov1.ac_id == "AC-1"
+    assert cov1.must_visit_branch_ids == ("ac1-must",)
+    assert len(cov1.skipped) == 1
+    assert cov1.skipped[0].diagnostic_context.branch_id == "ac1-skip"
+
+
+# 28
+def test_iterate_acs_mid_iteration_fail_ac_contributes_coverage() -> None:
+    """AC-11 #8 / AC-6 — a non-AC-1 AC with `status == "fail"` and
+    populated `flow_branches[]` still contributes an `AcFlowBranchCoverage`
+    record; iteration continues to the end."""
+    ac_ids = ("AC-1", "AC-2", "AC-3")
+    plan = _make_flow_branch_plan(
+        ac_ids,
+        {
+            "AC-2": (
+                FlowBranch(branch_id="ac2-must", description="must visit"),
+                FlowBranch(
+                    branch_id="ac2-skip",
+                    description="skip this",
+                    disposition="intentionally-skipped",
+                    skip_rationale="low-value path",
+                ),
+            ),
+        },
+    )
+    ac_list = _make_ac_list(ac_ids)
+    passing = WebDriverAssertion(passed=True, observed="ok", expected="ok")
+    failing = WebDriverAssertion(passed=False, observed="bad", expected="ok")
+    web_driver = _SequenceWebDriver(assertions=[passing, failing, passing])
+
+    result = iterate_acs(
+        plan=plan,
+        ac_list=ac_list,
+        project_type="web",
+        story_id="story-001",
+        registry=_make_registry(),
+        web_driver=web_driver,
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    assert [r.status for r in result.ac_results] == ["pass", "fail", "pass"]
+    assert result.smoke_first_abort is None
+    assert len(result.flow_branch_coverage) == 1
+    cov = result.flow_branch_coverage[0]
+    assert cov.ac_id == "AC-2"
+    assert cov.must_visit_branch_ids == ("ac2-must",)
+    assert len(cov.skipped) == 1
+    assert cov.skipped[0].diagnostic_context.branch_id == "ac2-skip"
+
+
+# 29
+def test_iterate_acs_flow_branch_coverage_project_type_parity() -> None:
+    """AC-11 #9 / AC-8 — the same mixed-disposition plan iterated with
+    `project_type` web / api / mobile yields byte-identical
+    `flow_branch_coverage` (flow-branch processing is plan-driven and
+    project-type-agnostic — added once in the shared loop body)."""
+    ac_ids = ("AC-1", "AC-2")
+    branches = {
+        "AC-2": (
+            FlowBranch(branch_id="must-one", description="must one"),
+            FlowBranch(
+                branch_id="skip-one",
+                description="skip one",
+                disposition="intentionally-skipped",
+                skip_rationale="covered by AC-1",
+            ),
+        ),
+    }
+    ac_list = _make_ac_list(ac_ids)
+    registry = _make_registry()
+
+    result_web = iterate_acs(
+        plan=_make_flow_branch_plan(ac_ids, branches),
+        ac_list=ac_list,
+        project_type="web",
+        story_id="story-001",
+        registry=registry,
+        web_driver=NoOpWebDriver(
+            assertion=WebDriverAssertion(
+                passed=True, observed="ok", expected="ok"
+            )
+        ),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+    result_api = iterate_acs(
+        plan=_make_flow_branch_plan(ac_ids, branches),
+        ac_list=ac_list,
+        project_type="api",
+        story_id="story-001",
+        registry=registry,
+        api_driver=NoOpApiDriver(),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+    result_mobile = iterate_acs(
+        plan=_make_flow_branch_plan(ac_ids, branches),
+        ac_list=ac_list,
+        project_type="mobile",
+        story_id="story-001",
+        registry=registry,
+        mobile_driver=NoOpMobileDriver(assert_passed=True),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    # Byte-identical flow_branch_coverage across all three project types.
+    web_dump = [
+        cov.model_dump_json() for cov in result_web.flow_branch_coverage
+    ]
+    api_dump = [
+        cov.model_dump_json() for cov in result_api.flow_branch_coverage
+    ]
+    mobile_dump = [
+        cov.model_dump_json() for cov in result_mobile.flow_branch_coverage
+    ]
+    assert web_dump == api_dump == mobile_dump
+    assert len(web_dump) == 1
+
+
+# 30
+def test_ac_iteration_result_with_flow_branch_coverage_frozen_byte_stable() -> (
+    None
+):
+    """AC-11 #10 — an `AcIterationResult` carrying a populated
+    `flow_branch_coverage` is frozen and `model_dump_json()` is byte-stable
+    across two dumps; the nested `AcFlowBranchCoverage` is frozen too."""
+    skipped_record = FlowBranchSkippedEmissionRecord(
+        marker_class=HEURISTIC_SKIPPED_MARKER,
+        sub_classification="flow-branch",
+        diagnostic_context=FlowBranchSkippedDiagnosticContext(
+            story_id="story-001",
+            ac_id="AC-2",
+            branch_id="dup-email",
+            branch_description="resubmitting a registered email",
+            skip_rationale="covered by AC-3",
+        ),
+    )
+    coverage = AcFlowBranchCoverage(
+        ac_id="AC-2",
+        must_visit_branch_ids=("blank-email", "malformed-email"),
+        skipped=(skipped_record,),
+    )
+    result = AcIterationResult(
+        ac_results=(
+            AcResult(
+                ac_id="AC-1",
+                status="pass",
+                assertions=("verify: AC-1",),
+                evidence_refs=(
+                    EvidenceRef(
+                        path="_bmad-output/qa-evidence/x.txt",
+                        tier="tier-1-mechanical",
+                    ),
+                ),
+                semantic_verification="not_applicable",
+            ),
+        ),
+        project_type="web",
+        flow_branch_coverage=(coverage,),
+    )
+
+    # Frozen — assignment to a field raises ValidationError.
+    with pytest.raises(ValidationError):
+        result.flow_branch_coverage = ()  # type: ignore[misc]
+    with pytest.raises(ValidationError):
+        coverage.ac_id = "AC-9"  # type: ignore[misc]
+
+    dump_a = result.model_dump_json()
+    dump_b = result.model_dump_json()
+    assert dump_a == dump_b
+
+
+# 31
+def test_flow_branch_symbols_in_all() -> None:
+    """AC-11 #11 — `qa_ac_iteration.__all__` carries the six new public
+    symbols added by Story 13.3."""
+    new_symbols = {
+        "FlowBranchSkippedDiagnosticContext",
+        "FlowBranchSkippedEmissionRecord",
+        "FlowBranchSkippedEmission",
+        "AcFlowBranchCoverage",
+        "surface_flow_branch_skipped",
+        "HEURISTIC_SKIPPED_MARKER",
+    }
+    assert new_symbols.issubset(set(qa_ac_iteration.__all__))
+
+
+# 32
+def test_ac_flow_branch_coverage_single_disposition_acs() -> None:
+    """AC-11 #12 — an AC whose branches are all `must-visit` yields
+    `AcFlowBranchCoverage.skipped == ()`; an AC whose branches are all
+    `intentionally-skipped` yields `must_visit_branch_ids == ()`."""
+    ac_ids = ("AC-1", "AC-2", "AC-3")
+    plan = _make_flow_branch_plan(
+        ac_ids,
+        {
+            "AC-2": (
+                FlowBranch(branch_id="m1", description="must one"),
+                FlowBranch(branch_id="m2", description="must two"),
+            ),
+            "AC-3": (
+                FlowBranch(
+                    branch_id="s1",
+                    description="skip one",
+                    disposition="intentionally-skipped",
+                    skip_rationale="reason one",
+                ),
+                FlowBranch(
+                    branch_id="s2",
+                    description="skip two",
+                    disposition="intentionally-skipped",
+                    skip_rationale="reason two",
+                ),
+            ),
+        },
+    )
+    ac_list = _make_ac_list(ac_ids)
+
+    result = iterate_acs(
+        plan=plan,
+        ac_list=ac_list,
+        project_type="api",
+        story_id="story-001",
+        registry=_make_registry(),
+        api_driver=NoOpApiDriver(),
+        evidence_capturer=NoOpEvidenceCapturer(),
+        masked_selectors=MaskedSelectorPolicy(),
+    )
+
+    assert len(result.flow_branch_coverage) == 2
+    cov_must, cov_skip = result.flow_branch_coverage
+    assert cov_must.ac_id == "AC-2"
+    assert cov_must.must_visit_branch_ids == ("m1", "m2")
+    assert cov_must.skipped == ()
+    assert cov_skip.ac_id == "AC-3"
+    assert cov_skip.must_visit_branch_ids == ()
+    assert len(cov_skip.skipped) == 2
+    assert [
+        rec.diagnostic_context.branch_id for rec in cov_skip.skipped
+    ] == ["s1", "s2"]

@@ -69,6 +69,26 @@ Plan-driven iteration contract (Story 4.6 AC-2 + AC-3 + AC-4):
        catches and routes via Story 4.10's ``verification-fail``
        escalation contract.
 
+    5. **Within-AC flow-branch processing** (FR22c — Story 13.3;
+       Architecture Pattern 8 "Within-AC Flow-Branch Enumeration").
+       For every non-aborting AC, :func:`iterate_acs` processes the
+       per-AC ``flow_branches[]`` enumeration Story 13.2 landed on
+       :class:`QABehavioralPlanEntry`: each ``intentionally-skipped``
+       branch becomes a ``heuristic-skipped: flow-branch-<branch-id>``
+       marker record via :func:`surface_flow_branch_skipped`; each
+       ``must-visit`` branch becomes a coverage obligation. Both
+       halves are carried back, per AC, on
+       :attr:`AcIterationResult.flow_branch_coverage` as a tuple of
+       :class:`AcFlowBranchCoverage` records. Per Pattern 8,
+       enumeration is plan-generation and *visitation is run-time* —
+       this library emits the deterministic skip markers and surfaces
+       the ``must-visit`` obligation as typed data; it does NOT drive
+       a ``must-visit`` branch (Story 13.4's ``agents/qa.md``
+       wrapper-prompt change does that, and Story 13.5's CI fixture
+       reconciles a ``must-visit`` branch with no evidence and no
+       marker). Smoke-first abort (item 2) takes precedence — a
+       failed AC-1's ``flow_branches[]`` are not processed.
+
 Marker-class linkage:
     The ``smoke-first-abort`` marker class exists from Story 1.4 at
     ``schemas/marker-taxonomy.yaml`` line 188. THIS module is the
@@ -150,9 +170,9 @@ Sensor-not-advisor (PRD-level invariant + Pattern 5):
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from loud_fail_harness.http_driver import verify_ac as _http_verify_ac
 from loud_fail_harness.http_driver import ApiDriver
@@ -166,7 +186,11 @@ from loud_fail_harness.playwright_driver import (
     WebDriver,
 )
 from loud_fail_harness.playwright_driver import verify_ac as _playwright_verify_ac
-from loud_fail_harness.qa_behavioral_plan import AcEntry, QABehavioralPlan
+from loud_fail_harness.qa_behavioral_plan import (
+    AcEntry,
+    FlowBranch,
+    QABehavioralPlan,
+)
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
@@ -179,6 +203,20 @@ from loud_fail_harness.specialist_dispatch import (
 #: 4.2's ``PLAN_DRIFT_DETECTED_MARKER`` constant pattern + Story
 #: 4.4's ``PLAYWRIGHT_MCP_UNAVAILABLE_MARKER`` constant pattern.
 SMOKE_FIRST_ABORT_MARKER: Literal["smoke-first-abort"] = "smoke-first-abort"
+
+
+#: The marker class identifier emitted for an ``intentionally-skipped``
+#: within-AC flow branch (FR22c / Story 13.3). It is the EXISTING v1
+#: 27-class ``heuristic-skipped`` marker class from
+#: ``schemas/marker-taxonomy.yaml`` — reused AS-IS with NO new top-level
+#: class; the ``flow-branch`` sub-classification under it is declared by
+#: Story 13.6's v1.5 → v1.6 PATCH bump. This is the SAME canonical
+#: taxonomy string as
+#: :data:`loud_fail_harness.qa_exploratory_heuristics.HEURISTIC_SKIPPED_MARKER`,
+#: defined LOCALLY here (not cross-imported) to avoid a cross-module
+#: coupling — consistent with the codebase's documented
+#: ``HeuristicKind``-is-duplicated cross-story-coupling-avoidance posture.
+HEURISTIC_SKIPPED_MARKER: Final[Literal["heuristic-skipped"]] = "heuristic-skipped"
 
 
 #: The supported project-type literal alias mirroring the dispatch
@@ -288,14 +326,162 @@ class SmokeFirstAbortEmission(BaseModel):
     diagnostic_context: SmokeFirstAbortDiagnosticContext
 
 
+class FlowBranchSkippedDiagnosticContext(BaseModel):
+    """The five-field diagnostic context carried on a
+    ``heuristic-skipped: flow-branch-<branch-id>`` marker emission
+    (FR22c / Story 13.3).
+
+    Emitted for one ``intentionally-skipped`` within-AC flow branch (a
+    :class:`loud_fail_harness.qa_behavioral_plan.FlowBranch` of a per-AC
+    ``flow_branches[]`` entry — Story 13.2). Carries enough for the
+    operator to see, in the PR bundle, *what* within-AC branch was
+    skipped and *why*.
+
+    Field semantics:
+        * ``story_id`` — the BMAD story identifier the dispatch is
+          scoped to.
+        * ``ac_id`` — the AC identifier whose ``flow_branches[]`` the
+          skipped branch belongs to.
+        * ``branch_id`` — the skipped :class:`FlowBranch`'s
+          ``branch_id`` (the ``<branch-id>`` component of the rendered
+          ``heuristic-skipped: flow-branch-<branch-id>`` marker token).
+        * ``branch_description`` — the skipped branch's ``description``
+          (the human-readable "what").
+        * ``skip_rationale`` — the operator-facing "why", copied
+          VERBATIM from the :class:`FlowBranch`'s ``skip_rationale``
+          (Story 13.2's ``FlowBranch`` model guarantees it non-empty
+          for an ``intentionally-skipped`` branch via its
+          ``@model_validator``).
+
+    Frozen for hashability + determinism. Field declaration order is
+    load-bearing for byte-stable ``model_dump_json()`` output.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    story_id: str = Field(min_length=1)
+    ac_id: str = Field(min_length=1)
+    branch_id: str = Field(min_length=1)
+    branch_description: str = Field(min_length=1)
+    skip_rationale: str = Field(min_length=1)
+
+
+class FlowBranchSkippedEmissionRecord(BaseModel):
+    """One marker-emission record for the within-AC flow-branch skip
+    channel (FR22c / Story 13.3).
+
+    Local to Story 13.3 — NOT a reuse of Story 4.9's
+    :class:`loud_fail_harness.qa_exploratory_heuristics.HeuristicSkippedEmissionRecord`,
+    whose own docstring states "Local to Story 4.9 — NOT a reuse …
+    different diagnostic shape, different remediation surface". A
+    within-AC ``flow-branch`` skip and a cross-AC exploratory-heuristic
+    skip share the ``heuristic-skipped`` marker class but carry
+    different diagnostic payloads — the cross-story-coupling-avoidance
+    posture Stories 4.2 / 4.6 / 4.9 took.
+
+    Frozen for determinism + hashability. Field declaration order is
+    load-bearing for byte-stable ``model_dump_json()`` output.
+
+    Field semantics:
+        * ``marker_class`` — the canonical marker class identifier;
+          always ``"heuristic-skipped"`` — the EXISTING v1 27-class
+          marker class, reused AS-IS with NO new top-level class (the
+          whole point of Story 13.6's PATCH-only taxonomy bump).
+          Verified by the :data:`HEURISTIC_SKIPPED_MARKER` constant.
+        * ``sub_classification`` — always ``"flow-branch"``: the
+          taxonomy-reconcilable sub-classification token Story 13.6
+          declares under ``heuristic-skipped``; distinguishes a
+          within-AC flow-branch skip from the cross-AC exploratory
+          heuristics (``empty-state`` / ``error-state`` /
+          ``auth-boundary``).
+        * ``diagnostic_context`` — the five-field
+          :class:`FlowBranchSkippedDiagnosticContext`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    marker_class: Literal["heuristic-skipped"]
+    sub_classification: Literal["flow-branch"]
+    diagnostic_context: FlowBranchSkippedDiagnosticContext
+
+
+class FlowBranchSkippedEmission(BaseModel):
+    """The atomic-emission return shape of
+    :func:`surface_flow_branch_skipped` (FR22c / Story 13.3).
+
+    Mirrors Story 4.6's :class:`SmokeFirstAbortEmission` + Story 4.9's
+    :class:`loud_fail_harness.qa_exploratory_heuristics.HeuristicSkippedEmission`
+    co-exposure pattern: the ``diagnostic_context`` is co-exposed
+    alongside the ``marker_record`` for ergonomic access without
+    unwrapping the record (the equal payload object as
+    ``marker_record.diagnostic_context``).
+
+    Frozen for determinism + hashability. Field declaration order is
+    load-bearing for byte-stable ``model_dump_json()`` output.
+
+    Field semantics:
+        * ``marker_record`` — the
+          :class:`FlowBranchSkippedEmissionRecord`.
+        * ``diagnostic_context`` — the five-field
+          :class:`FlowBranchSkippedDiagnosticContext`. Co-exposed for
+          ergonomic access (equal payload object as
+          ``marker_record.diagnostic_context``).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    marker_record: FlowBranchSkippedEmissionRecord
+    diagnostic_context: FlowBranchSkippedDiagnosticContext
+
+
+class AcFlowBranchCoverage(BaseModel):
+    """The per-AC within-AC flow-branch coverage record (FR22c /
+    Story 13.3) — both halves of the FR22c contract for one AC in a
+    single typed, operator-reviewable, machine-readable shape.
+
+    Produced by :func:`iterate_acs` for ONE iterated AC, and ONLY for an
+    AC whose ``flow_branches`` tuple is non-empty — an AC with an empty
+    ``flow_branches[]`` (every pre-FR22c AC, and every strictly-linear
+    FR22c AC) contributes NO :class:`AcFlowBranchCoverage` record.
+
+    Frozen for determinism + hashability. Field declaration order is
+    load-bearing for byte-stable ``model_dump_json()`` output.
+
+    Field semantics — the two halves of the FR22c within-AC contract:
+        * ``ac_id`` — the AC identifier this coverage record is for.
+        * ``must_visit_branch_ids`` — the ``branch_id`` of every
+          ``FlowBranch`` of the AC whose ``disposition ==
+          "must-visit"``, in plan-declaration order. This is the
+          COVERAGE OBLIGATION: Story 13.4's wrapper drives each of
+          these branches at run time, and Story 13.5's CI fixture
+          reconciles a ``must-visit`` branch with no evidence and no
+          marker as a contract violation. :func:`iterate_acs` does NOT
+          itself visit a ``must-visit`` branch — it only surfaces the
+          obligation as typed data.
+        * ``skipped`` — one :class:`FlowBranchSkippedEmissionRecord`
+          per ``intentionally-skipped`` branch of the AC, in
+          plan-declaration order. This is the DISCHARGED-BY-MARKER
+          set: each skip is loud-failed via a
+          ``heuristic-skipped: flow-branch-<branch-id>`` marker.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    ac_id: str = Field(min_length=1)
+    must_visit_branch_ids: tuple[str, ...]
+    skipped: tuple[FlowBranchSkippedEmissionRecord, ...]
+
+
 class AcIterationResult(BaseModel):
     """The result of :func:`iterate_acs` — composed by the QA
     wrapper to project into the envelope's ``ac_results`` array
-    (FR55) AND surface the ``smoke-first-abort`` marker via the
-    orchestrator-event log (when ``smoke_first_abort`` is non-None).
+    (FR55), surface the ``smoke-first-abort`` marker via the
+    orchestrator-event log (when ``smoke_first_abort`` is non-None),
+    AND surface the FR22c within-AC flow-branch coverage (Story 13.3).
 
     Frozen + field declaration order load-bearing for byte-stable
-    ``model_dump_json()`` output.
+    ``model_dump_json()`` output. ``flow_branch_coverage`` is appended
+    LAST so every pre-existing field keeps its byte position.
 
     Field semantics:
         * ``ac_results`` — tuple of :class:`AcResult` records
@@ -315,6 +501,21 @@ class AcIterationResult(BaseModel):
           the verbatim epic AC.
         * ``project_type`` — echoed verbatim from the dispatch for
           downstream debugging visibility.
+        * ``flow_branch_coverage`` — the FR22c within-AC
+          flow-branch-coverage surface (Story 13.3): one
+          :class:`AcFlowBranchCoverage` per iterated AC whose
+          ``flow_branches[]`` was non-empty, in plan-iteration
+          (story-doc) order. EMPTY for a pre-FR22c plan, for a plan
+          whose ACs are all strictly linear (no enumerated
+          branches), AND on a smoke-first-aborted run — on abort it
+          carries only the coverage of ACs processed before the
+          abort, which is none, because a failed AC-1 returns before
+          its own flow-branch processing (AC-6). Additive-optional
+          with an empty-tuple default: an :class:`AcIterationResult`
+          constructed WITHOUT ``flow_branch_coverage`` succeeds and
+          yields ``flow_branch_coverage == ()`` — the property that
+          keeps Story 13.3 non-breaking for every pre-existing
+          constructor and consumer.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -322,6 +523,9 @@ class AcIterationResult(BaseModel):
     ac_results: tuple[AcResult, ...]
     smoke_first_abort: SmokeFirstAbortEmissionRecord | None = None
     project_type: ProjectType
+    flow_branch_coverage: tuple[AcFlowBranchCoverage, ...] = Field(
+        default_factory=tuple
+    )
 
 
 class PlanAbsentForIteration(Exception):
@@ -442,6 +646,114 @@ def surface_smoke_first_abort(
     )
 
 
+def surface_flow_branch_skipped(
+    story_id: str,
+    ac_id: str,
+    branch: FlowBranch,
+    registry: MarkerClassRegistry,
+) -> FlowBranchSkippedEmission:
+    """Atomic-on-failure within-AC flow-branch-skipped emission helper
+    (FR22c / Story 13.3).
+
+    Mirrors Story 4.6's :func:`surface_smoke_first_abort` + Story 4.9's
+    :func:`loud_fail_harness.qa_exploratory_heuristics.surface_heuristic_skipped`
+    Pattern-5 atomic-on-failure structure byte-for-byte:
+    :func:`validate_marker_emission` runs FIRST; on registry rejection
+    :exc:`UnknownMarkerClass` propagates UNCHANGED per Pattern 5 BEFORE
+    any partial state is constructed.
+
+    Behavior:
+        * **Step 1 — Validate marker emission FIRST**. Calls
+          :func:`validate_marker_emission(registry,
+          HEURISTIC_SKIPPED_MARKER)`. On registry rejection
+          :exc:`loud_fail_harness.specialist_dispatch.UnknownMarkerClass`
+          propagates per Pattern 5; NO partial state is constructed
+          (atomic-on-failure). The ``heuristic-skipped`` marker class
+          exists in the registry from Story 1.4 — the Story 13.6
+          dependency is the taxonomy's ``flow-branch``
+          *sub-classification* + the CI reconciliation, NOT the runtime
+          registry (which checks only the marker *class*).
+        * **Step 2 — Precondition guard**. ``branch.disposition`` MUST
+          be ``"intentionally-skipped"`` — emitting a skip marker for a
+          ``must-visit`` branch is a caller bug; :exc:`ValueError` is
+          raised otherwise.
+        * **Step 3 — Construct the diagnostic context** carrying
+          ``story_id`` + ``ac_id`` + the ``branch``'s ``branch_id`` /
+          ``description`` / ``skip_rationale`` (copied VERBATIM —
+          ``branch.skip_rationale`` is guaranteed non-``None`` and
+          non-empty for an ``intentionally-skipped`` branch by
+          :class:`FlowBranch`'s ``@model_validator``).
+        * **Step 4 — Construct the marker emission record** carrying
+          ``marker_class="heuristic-skipped"`` +
+          ``sub_classification="flow-branch"`` + the diagnostic
+          context.
+        * **Step 5 — Return the** :class:`FlowBranchSkippedEmission`
+          carrying both the marker record + the (co-exposed) diagnostic
+          context.
+
+    Pure: no file I/O, no story-doc reads or writes, no marker emission
+    to the orchestrator-event log (the
+    :class:`FlowBranchSkippedEmissionRecord` is *data* the QA wrapper
+    consumes and emits — Story 13.4 / the bundle assembler renders the
+    literal ``heuristic-skipped: flow-branch-<branch-id>`` token).
+
+    Args:
+        story_id: The BMAD story identifier; threaded into the
+            diagnostic context.
+        ac_id: The AC identifier whose ``flow_branches[]`` the skipped
+            branch belongs to; threaded into the diagnostic context.
+        branch: The ``intentionally-skipped``
+            :class:`loud_fail_harness.qa_behavioral_plan.FlowBranch`.
+            Its ``branch_id`` / ``description`` / ``skip_rationale``
+            are copied verbatim into the diagnostic context.
+        registry: The runtime
+            :class:`loud_fail_harness.specialist_dispatch.MarkerClassRegistry`;
+            must contain the ``heuristic-skipped`` marker class.
+            Registry rejection raises :exc:`UnknownMarkerClass`.
+
+    Returns:
+        :class:`FlowBranchSkippedEmission` carrying ``marker_record`` +
+        ``diagnostic_context``.
+
+    Raises:
+        :exc:`loud_fail_harness.specialist_dispatch.UnknownMarkerClass`:
+            registry does not contain ``"heuristic-skipped"``.
+        :exc:`ValueError`: ``branch.disposition`` is not
+            ``"intentionally-skipped"`` (a skip marker for a
+            ``must-visit`` branch is a caller bug).
+    """
+    validate_marker_emission(registry, HEURISTIC_SKIPPED_MARKER)
+
+    if branch.disposition != "intentionally-skipped":
+        raise ValueError(
+            "surface_flow_branch_skipped requires an intentionally-skipped"
+            f" flow branch; got disposition={branch.disposition!r} for"
+            f" branch_id={branch.branch_id!r}"
+        )
+    # branch.skip_rationale is guaranteed non-None + non-empty for an
+    # intentionally-skipped branch by FlowBranch's @model_validator; the
+    # assert narrows str | None -> str for the type checker (the same
+    # narrowing-assert posture as iterate_acs's driver guards).
+    assert branch.skip_rationale is not None
+
+    diagnostic_context = FlowBranchSkippedDiagnosticContext(
+        story_id=story_id,
+        ac_id=ac_id,
+        branch_id=branch.branch_id,
+        branch_description=branch.description,
+        skip_rationale=branch.skip_rationale,
+    )
+    marker_record = FlowBranchSkippedEmissionRecord(
+        marker_class=HEURISTIC_SKIPPED_MARKER,
+        sub_classification="flow-branch",
+        diagnostic_context=diagnostic_context,
+    )
+    return FlowBranchSkippedEmission(
+        marker_record=marker_record,
+        diagnostic_context=diagnostic_context,
+    )
+
+
 def iterate_acs(
     plan: QABehavioralPlan | None,
     ac_list: tuple[AcEntry, ...] | list[AcEntry],
@@ -502,6 +814,46 @@ def iterate_acs(
           abort (per the verbatim epic AC — only ``"fail"``
           triggers).
 
+        * **Step 4 — within-AC flow-branch processing** (FR22c —
+          AC-4 + AC-6 + AC-8 / Story 13.3). After each non-aborting
+          entry's ``verify_ac`` call, the framework processes
+          ``entry.flow_branches`` (Story 13.2's per-AC within-AC
+          branch enumeration on :class:`QABehavioralPlanEntry`):
+          every ``intentionally-skipped`` branch becomes a
+          ``heuristic-skipped: flow-branch-<branch-id>`` marker
+          record via :func:`surface_flow_branch_skipped`, and every
+          ``must-visit`` branch's ``branch_id`` becomes a coverage
+          obligation. One :class:`AcFlowBranchCoverage` record is
+          produced per iterated AC whose ``flow_branches`` tuple is
+          non-empty; the records accumulate, in plan-iteration order,
+          into the returned
+          :attr:`AcIterationResult.flow_branch_coverage`. The
+          processing is plan-driven with no driver dependency, so it
+          lives once in the shared loop body — byte-identical on the
+          web / api / mobile branches (AC-8). The framework does NOT
+          itself drive a ``must-visit`` branch: visitation +
+          per-branch evidence is the QA agent's run-time job (Story
+          13.4's ``agents/qa.md`` wrapper-prompt change), and the
+          must-visit-vs-evidence reconciliation is Story 13.5's CI
+          gate.
+
+          **FR22b × FR22c precedence** (AC-6 — resolves the
+          deferred-work item "FR22b × FR22c interaction at AC-1
+          failure unspecified", ``deferred-work.md`` line 793):
+          smoke-first abort wins. When AC-1's ``verify_ac`` returns
+          ``status="fail"``, :func:`iterate_acs` fires
+          :func:`surface_smoke_first_abort` and returns immediately —
+          AC-1's own ``flow_branches[]`` are NOT processed (no skip
+          markers, no coverage record), so the returned
+          :class:`AcIterationResult` carries
+          ``flow_branch_coverage == ()``. A broken happy path makes
+          within-AC branch coverage moot, exactly as FR22b makes
+          downstream-AC coverage moot. For every NON-aborting AC — a
+          ``pass`` / ``blocked`` AC-1 and every reached AC-2..AC-N —
+          flow-branch processing runs regardless of that AC's own
+          ``status`` (the ``intentionally-skipped`` emissions are
+          plan-derived and status-independent).
+
     The function does NOT itself catch :exc:`PlaywrightMcpUnavailable`
     or :exc:`ApiServiceBroken` — those propagate UNCHANGED for the
     QA wrapper to catch and route through Stories 4.4 / 4.5's
@@ -525,7 +877,10 @@ def iterate_acs(
         story_id: The BMAD story identifier; threaded into the
             smoke-first-abort diagnostic context on AC-1 failure.
         registry: The runtime :class:`MarkerClassRegistry`. Must
-            contain ``"smoke-first-abort"`` for the abort path.
+            contain ``"smoke-first-abort"`` for the abort path and
+            ``"heuristic-skipped"`` for plans with
+            ``intentionally-skipped`` branches (via
+            :func:`surface_flow_branch_skipped` — FR22c / Story 13.3).
         web_driver: The :class:`WebDriver` Protocol implementation
             for ``project_type="web"``; required (else
             :exc:`ValueError`).
@@ -545,7 +900,11 @@ def iterate_acs(
         :class:`AcIterationResult` carrying ``ac_results`` (tuple
         of per-AC records in story-doc order) +
         ``smoke_first_abort`` (the marker record on AC-1 failure;
-        :data:`None` otherwise) + ``project_type`` (echoed).
+        :data:`None` otherwise) + ``project_type`` (echoed) +
+        ``flow_branch_coverage`` (one :class:`AcFlowBranchCoverage`
+        per iterated AC with a non-empty ``flow_branches[]``, in
+        plan-iteration order; empty tuple for a pre-FR22c plan or a
+        smoke-first-aborted run — FR22c / Story 13.3).
 
     Raises:
         :exc:`ValueError`: ``project_type`` is unsupported OR the
@@ -553,9 +912,13 @@ def iterate_acs(
         :exc:`PlanAbsentForIteration`: structural plan / ac_list
             shape invalid for iteration.
         :exc:`loud_fail_harness.specialist_dispatch.UnknownMarkerClass`:
-            on AC-1 failure, the registry does not contain
-            ``"smoke-first-abort"`` (propagated unchanged from
-            :func:`surface_smoke_first_abort`).
+            (a) on AC-1 failure, the registry does not contain
+            ``"smoke-first-abort"`` (from
+            :func:`surface_smoke_first_abort`); OR (b) the registry
+            does not contain ``"heuristic-skipped"`` AND the plan has
+            an ``intentionally-skipped`` branch on a non-aborting AC
+            (from :func:`surface_flow_branch_skipped` — FR22c /
+            Story 13.3). Both propagate unchanged per Pattern 5.
         :exc:`loud_fail_harness.playwright_driver.PlaywrightMcpUnavailable`:
             re-raised UNCHANGED on mid-run MCP unavailability for
             ``project_type="web"``.
@@ -606,6 +969,7 @@ def iterate_acs(
     # order (which equals ac_list story-doc order per Story 4.1).
     ac_text_by_id: dict[str, str] = {ac.ac_id: ac.ac_text for ac in ac_list}
     collected: list[AcResult] = []
+    flow_branch_coverage: list[AcFlowBranchCoverage] = []
 
     for index, entry in enumerate(plan.entries):
         if project_type == "web":
@@ -641,8 +1005,19 @@ def iterate_acs(
         collected.append(ac_result)
 
         # Smoke-first abort check (FR22b — AC-1 failure only). Only
-        # status="fail" triggers; "blocked" does NOT trigger per
-        # the verbatim epic AC at epics.md line 1976.
+        # status="fail" triggers; "blocked" does NOT trigger per the
+        # verbatim epic AC at epics.md line 1976.
+        #
+        # FR22b × FR22c precedence (AC-6 / Story 13.3 — resolves the
+        # deferred-work item "FR22b × FR22c interaction at AC-1 failure
+        # unspecified", deferred-work.md line 793): smoke-first abort
+        # takes precedence over flow-branch processing. This check runs
+        # and early-returns BEFORE the per-AC flow-branch block below,
+        # so a failed AC-1's own flow_branches[] are NOT processed (no
+        # skip markers, no coverage record) and the returned result
+        # carries flow_branch_coverage == (). A broken happy path makes
+        # within-AC branch coverage moot, exactly as FR22b makes
+        # downstream-AC coverage moot.
         if entry.ac_id == "AC-1" and ac_result.status == "fail":
             emission = surface_smoke_first_abort(
                 story_id=story_id,
@@ -653,18 +1028,67 @@ def iterate_acs(
                 ac_results=tuple(collected),
                 smoke_first_abort=emission.marker_record,
                 project_type=project_type,
+                flow_branch_coverage=(),
+            )
+
+        # FR22c within-AC flow-branch processing (AC-4 / AC-8 /
+        # Story 13.3). Plan-driven and project-type-agnostic: this block
+        # reads only entry.flow_branches and has no driver dependency,
+        # so it lives ONCE in the shared loop body — never duplicated
+        # per project_type branch (AC-8). It runs for every NON-aborting
+        # AC regardless of that AC's own status (a pass / blocked AC-1
+        # and every reached AC-2..AC-N): the intentionally-skipped
+        # emissions are plan-derived and status-independent. The
+        # framework does NOT itself visit a must-visit branch — driving
+        # each must-visit branch and supplying per-branch evidence is
+        # the QA agent's run-time job (Story 13.4's agents/qa.md
+        # wrapper-prompt change); iterate_acs only emits the
+        # deterministic skip markers and surfaces the must-visit
+        # obligation as typed data (Story 13.5's CI gate reconciles it).
+        if entry.flow_branches:
+            must_visit_branch_ids: list[str] = []
+            skipped_records: list[FlowBranchSkippedEmissionRecord] = []
+            for branch in entry.flow_branches:
+                if branch.disposition == "intentionally-skipped":
+                    branch_emission = surface_flow_branch_skipped(
+                        story_id=story_id,
+                        ac_id=entry.ac_id,
+                        branch=branch,
+                        registry=registry,
+                    )
+                    skipped_records.append(branch_emission.marker_record)
+                elif branch.disposition == "must-visit":
+                    must_visit_branch_ids.append(branch.branch_id)
+                else:
+                    raise ValueError(
+                        "Unexpected FlowBranch disposition"
+                        f" {branch.disposition!r} for"
+                        f" branch_id={branch.branch_id!r}"
+                    )
+            flow_branch_coverage.append(
+                AcFlowBranchCoverage(
+                    ac_id=entry.ac_id,
+                    must_visit_branch_ids=tuple(must_visit_branch_ids),
+                    skipped=tuple(skipped_records),
+                )
             )
 
     return AcIterationResult(
         ac_results=tuple(collected),
         smoke_first_abort=None,
         project_type=project_type,
+        flow_branch_coverage=tuple(flow_branch_coverage),
     )
 
 
 __all__ = [
+    "HEURISTIC_SKIPPED_MARKER",
     "SMOKE_FIRST_ABORT_MARKER",
+    "AcFlowBranchCoverage",
     "AcIterationResult",
+    "FlowBranchSkippedDiagnosticContext",
+    "FlowBranchSkippedEmission",
+    "FlowBranchSkippedEmissionRecord",
     "MobileDriver",
     "PlanAbsentForIteration",
     "ProjectType",
@@ -672,5 +1096,6 @@ __all__ = [
     "SmokeFirstAbortEmission",
     "SmokeFirstAbortEmissionRecord",
     "iterate_acs",
+    "surface_flow_branch_skipped",
     "surface_smoke_first_abort",
 ]

@@ -252,7 +252,12 @@ class FlowBranch(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    branch_id: str = Field(min_length=1, pattern=r"^\S[^\n]*$")
+    # branch_id enters the marker-key domain in Story 13.3 — it is the
+    # `<branch-id>` component of the `heuristic-skipped: flow-branch-
+    # <branch-id>` marker. The pattern rejects leading AND trailing
+    # whitespace (and newlines) so the rendered marker key is well-formed
+    # (FR22c / Story 13.3 AC-9, resolving deferred-work.md line 5).
+    branch_id: str = Field(min_length=1, pattern=r"^\S$|^\S.*\S$")
     description: str = Field(min_length=1, pattern=r"^\S[^\n]*$")
     disposition: FlowBranchDisposition = "must-visit"
     skip_rationale: str | None = None
