@@ -591,13 +591,16 @@ def test_schema_version_bumps_non_regression() -> None:
     for the ``lad`` activation per ADR-008 / epics-phase-1.5.md Story 10.1
     AC-3; lineage 1.0 (Story 1.6 base) → 1.1 (Story 7.3) → 1.2 (Story 9.1
     mobile-mcp activation) → 1.3 (Story 9.5 mobile-mcp sub_classification
-    fields) → 1.4 (Story 10.1 lad activation)) AND "1.5" (marker-taxonomy.yaml
-    — Story 9.5 bumped 1.4 → 1.5 for the two new
+    fields) → 1.4 (Story 10.1 lad activation)) AND "1.6" (marker-taxonomy.yaml
+    — Story 13.6 bumped 1.5 → 1.6 for the ``flow-branch`` sub_classification
+    under ``heuristic-skipped`` per the FR22c within-AC flow-branch contract;
+    prior Story 9.5 bumped 1.4 → 1.5 for the two new
     ``mobile-blocked.sub_classifications`` [init-unavailable,
-    mid-run-unavailable] per Story 9.5 AC-1; prior Story 9.3 had bumped 1.3
-    → 1.4 for the ``mobile-mcp-init-unreachable`` sub-classification
-    addition; Story 10.1 introduces no marker-taxonomy bump per AC-9 closed-set
-    discipline). Verifies the Story 7.3 + Story 9.3 + Story 9.5 schema bumps,
+    mid-run-unavailable] per Story 9.5 AC-1; Story 9.3 had bumped 1.3 → 1.4
+    for the ``mobile-mcp-init-unreachable`` sub-classification addition;
+    Story 10.1 introduces no marker-taxonomy bump per AC-9 closed-set
+    discipline). Verifies the Story 7.3 + Story 9.3 + Story 9.5 +
+    Story 13.6 schema bumps,
     the Story 9.1 + Story 10.1 activation bumps landed AND the existing
     enumeration_check substrate-component-4 gate continues to pass.
     """
@@ -620,7 +623,7 @@ def test_schema_version_bumps_non_regression() -> None:
         / "marker-taxonomy.yaml"
     )
     taxonomy_data = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
-    assert taxonomy_data["schema_version"] == "1.5"
+    assert taxonomy_data["schema_version"] == "1.6"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`

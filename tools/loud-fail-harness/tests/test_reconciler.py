@@ -26,10 +26,10 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.1):
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6):
     [x] all 29 expected marker_class identifiers present         → test_taxonomy_has_29_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.2" at top level                       → test_taxonomy_declares_schema_version_1_2
+    [x] schema_version: "1.6" at top level                       → test_taxonomy_declares_schema_version_1_6
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -378,11 +378,13 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_5(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_6(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
-    # Story 9.5 bumps 1.4 → 1.5 (additive: two new sub_classifications under
+    # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
-    assert taxonomy_data.get("schema_version") == "1.5"
+    # Story 13.6 bumps 1.5 → 1.6 (additive: the flow-branch sub_classification
+    # under heuristic-skipped for the FR22c within-AC flow-branch contract).
+    assert taxonomy_data.get("schema_version") == "1.6"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:

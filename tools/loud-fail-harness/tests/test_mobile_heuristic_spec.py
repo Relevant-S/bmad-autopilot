@@ -297,15 +297,22 @@ def test_module_has_lf_line_endings_only() -> None:
 
 
 def test_heuristic_skipped_sub_classifications_unchanged_for_phase_1_5() -> None:
-    """No marker-taxonomy bump in Phase 1.5: ``heuristic-skipped``
-    sub-classifications continue to enumerate the Story 4.9 trio."""
+    """No marker-taxonomy bump in Phase 1.5: ``heuristic-skipped`` still
+    leads with the Story 4.9 exploratory-heuristic trio (``empty-state`` /
+    ``error-state`` / ``auth-boundary``) in their original order. The
+    post-Phase-1.5 ``flow-branch`` entry (Epic 13 / Story 13.6, FR22c
+    within-AC flow-branch coverage — a Phase 1 patch, not Phase 1.5) is
+    deliberately outside this Phase-1.5 no-bump witness; its presence is
+    pinned by ``test_marker_taxonomy.py``'s
+    ``test_heuristic_skipped_declares_flow_branch_sub_classification``.
+    """
     taxonomy = yaml.safe_load(MARKER_TAXONOMY_PATH.read_text(encoding="utf-8"))
     heuristic_entry = next(
         entry
         for entry in taxonomy["markers"]
         if entry["marker_class"] == "heuristic-skipped"
     )
-    assert heuristic_entry["sub_classifications"] == [
+    assert heuristic_entry["sub_classifications"][:3] == [
         "empty-state",
         "error-state",
         "auth-boundary",

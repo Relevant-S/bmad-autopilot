@@ -45,18 +45,47 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_5(taxonomy_data: dict) -> None:
-    """Story 9.5 bumps schema_version from ``"1.4"`` to ``"1.5"`` per
-    the file's own PATCH-bump rule (additive: two new sub_classifications
-    ``init-unavailable`` + ``mid-run-unavailable`` appended under
-    ``mobile-blocked`` to make the init-time vs mid-run emission paths
-    distinct in the PR bundle + status command per the verbatim epic
-    AC at ``epics-phase-1.5.md`` lines 197-204). Prior Story 9.3 bumped
-    1.3 → 1.4 for the ``mobile-mcp-init-unreachable`` sub_classification
-    under ``env-setup-failed``. The top-level 27-class closed-set is
-    preserved; no MAJOR bump per ``epics-phase-1.5.md`` line 120.
+def test_taxonomy_schema_version_is_1_6(taxonomy_data: dict) -> None:
+    """Story 13.6 bumps schema_version from ``"1.5"`` to ``"1.6"`` per
+    the file's own PATCH-bump rule (additive: one new sub_classification
+    ``flow-branch`` appended under ``heuristic-skipped`` for the FR22c
+    within-AC flow-branch coverage contract — Sprint Change Proposal
+    2026-05-20; emitted at runtime as
+    ``heuristic-skipped: flow-branch-<branch-id>`` by Story 13.3's
+    iteration contract). Prior Story 9.5 bumped 1.4 → 1.5 for the
+    ``init-unavailable`` + ``mid-run-unavailable`` sub_classifications
+    under ``mobile-blocked``; Story 9.3 bumped 1.3 → 1.4 for the
+    ``mobile-mcp-init-unreachable`` sub_classification under
+    ``env-setup-failed``. The top-level 27-class closed-set is
+    preserved; no MAJOR bump.
     """
-    assert taxonomy_data.get("schema_version") == "1.5"
+    assert taxonomy_data.get("schema_version") == "1.6"
+
+
+def test_heuristic_skipped_declares_flow_branch_sub_classification(
+    taxonomy_data: dict,
+) -> None:
+    """FR22c / Story 13.6: the ``heuristic-skipped`` marker class declares
+    the ``flow-branch`` sub_classification, appended after the three
+    pre-existing exploratory heuristics (``empty-state`` / ``error-state``
+    / ``auth-boundary``) with their order preserved. This is the regression
+    witness for Story 13.3's blocking-prerequisite gate (13.3 AC-10 /
+    Task 0.2 HALTs unless ``flow-branch`` is present here); the full-list
+    assertion pins both the addition and the append-only, no-reorder
+    discipline of Story 13.6 AC-2.
+    """
+    by_class = {
+        entry["marker_class"]: entry for entry in taxonomy_data["markers"]
+    }
+    assert "heuristic-skipped" in by_class, (
+        "taxonomy missing the heuristic-skipped marker class"
+    )
+    assert by_class["heuristic-skipped"]["sub_classifications"] == [
+        "empty-state",
+        "error-state",
+        "auth-boundary",
+        "flow-branch",
+    ]
 
 
 def test_every_marker_has_non_empty_diagnostic_pointer(
