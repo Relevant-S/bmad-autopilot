@@ -1,0 +1,39 @@
+# flow-branch-outcomes.yaml — recorded per-branch run-outcome artifact.
+#
+# Purpose: declares, per `must-visit` flow branch enumerated in this case's
+# paired `qa-behavioral-plan.md`, whether that branch's run discharged it
+# with per-branch evidence. Consumed by the FR22c flow-branch-coverage CI
+# gate (`flow_branch_coverage_gate.py`, Story 13.5) to reconcile the
+# plan-side coverage obligation against a recorded outcome.
+#
+# `intentionally-skipped` branches are NOT listed here — their discharge is
+# the gate-derived `heuristic-skipped: flow-branch-<branch-id>` marker
+# replayed through the real `surface_flow_branch_skipped`, not a recorded
+# evidence declaration. Listing an `intentionally-skipped` branch here is an
+# outcome-declaration error the gate catches.
+#
+# `ac_id` is the parsed per-AC identifier as produced by Story 13.2's plan
+# parser — `### AC-1` parses to `ac_id == "1"` — so it is quoted to stay a
+# string. Origin: FR22c (within-AC flow-branch coverage) / Sprint Change
+# Proposal 2026-05-20, Story 4.6 erratum / Story 13.5. See the corpus README
+# at `tests/fixtures/flow-branch-coverage/README.md` for the format spec.
+
+must_visit_evidence:
+  - ac_id: "1"
+    branch_id: empty-cart-add
+    evidence_present: true
+  - ac_id: "1"
+    branch_id: increment-existing
+    evidence_present: true
+  - ac_id: "1"
+    branch_id: max-quantity
+    evidence_present: true
+  - ac_id: "2"
+    branch_id: expired-card
+    evidence_present: true
+  - ac_id: "2"
+    branch_id: wrong-cvc
+    evidence_present: true
+  - ac_id: "3"
+    branch_id: guest-checkout
+    evidence_present: true

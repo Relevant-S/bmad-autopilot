@@ -1,0 +1,8 @@
+# Negative fixture (Story 13.5 AC-9): structurally malformed recorded-outcome
+# artifact — the single must_visit_evidence record omits the required
+# `evidence_present` field. A malformed fixture is a corpus-author bug, not a
+# fixture-side finding; exercises the AC-8 harness-level error (exit 2).
+
+must_visit_evidence:
+  - ac_id: "1"
+    branch_id: own-profile

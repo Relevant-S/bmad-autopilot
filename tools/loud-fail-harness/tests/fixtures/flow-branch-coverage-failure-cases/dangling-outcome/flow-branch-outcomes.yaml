@@ -1,0 +1,17 @@
+# Negative fixture (Story 13.5 AC-9): the recorded outcomes drift from the
+# paired plan. `ghost-branch` is enumerated nowhere in the plan; `skipped-branch`
+# has plan disposition `intentionally-skipped` (its discharge is the
+# `heuristic-skipped: flow-branch-skipped-branch` marker, not recorded
+# evidence). Both are dangling outcome declarations — exercises the AC-7
+# `outcome-declaration-error` finding (exit 1).
+
+must_visit_evidence:
+  - ac_id: "1"
+    branch_id: present-branch
+    evidence_present: true
+  - ac_id: "1"
+    branch_id: ghost-branch
+    evidence_present: true
+  - ac_id: "1"
+    branch_id: skipped-branch
+    evidence_present: true

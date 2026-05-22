@@ -436,3 +436,46 @@ jobs:
         # No positional arguments — the script discovers the inner repo
         # root from disk via find_repo_root.
         run: uv run bundle-assembly-failure-emission-gate
+
+      - name: Flow-branch coverage gate (story 13.5; FR22c)
+        # Architectural source: FR22c (within-AC flow-branch enumeration with
+        # skip-with-marker discipline) + Sprint Change Proposal 2026-05-20
+        # (Epic 13 — the Phase 1 patch epic closing the QA within-AC
+        # flow-branch coverage gap) + Architecture Pattern 8 (within-AC
+        # flow-branch enumeration — QA).
+        # What it enforces: per-AC, per-enumerated-flow-branch coverage
+        # reconciliation over a gate-internal fixture corpus
+        # (tools/loud-fail-harness/tests/fixtures/flow-branch-coverage/) —
+        # every must-visit branch is discharged by recorded per-branch
+        # evidence (flow-branch-outcomes.yaml); every intentionally-skipped
+        # branch is discharged by replaying the real
+        # surface_flow_branch_skipped (story 13.3) and reconciling the
+        # resulting heuristic-skipped: flow-branch-<id> marker's
+        # sub-classification against the v1.6 marker taxonomy (story 13.6).
+        # A must-visit branch with no evidence and no marker is the FR22c
+        # contract violation the gate catches. This is the Story-1.7/1.8-
+        # pattern blocking CI enforcement of the FR22c contract scaffolded by
+        # stories 13.2 (the flow_branches[] schema), 13.3 (the iteration
+        # contract), and 13.4 (the agents/qa.md wrapper prompt) — the
+        # structural counterweight to the sensor-not-advisor invariant named
+        # by Pattern 8.
+        # Exit-code semantics:
+        #   0 — every branch of every fixture case reconciled cleanly.
+        #   1 — at least one fixture-side finding (must-visit-undischarged OR
+        #       outcome-declaration-error); recoverable by fixing the fixture
+        #       plan or its flow-branch-outcomes.yaml.
+        #   2 — harness-level error (fixtures dir missing/unreadable; a plan
+        #       unparseable; a flow-branch-outcomes.yaml malformed; marker
+        #       taxonomy unreadable/malformed; or flow-branch not declared
+        #       under heuristic-skipped in the taxonomy). The harness or its
+        #       precondition is broken.
+        # Ordering rationale: runs LAST — a fixture-corpus gate over a
+        # filesystem surface (tests/fixtures/flow-branch-coverage/) distinct
+        # from every prior gate's inputs (schemas/, examples/, hooks/,
+        # agents/, runtime-captures/); running last reflects flow-branch
+        # fixture churn on top of an otherwise-clean harness suite —
+        # defense-in-depth ordering, NOT redundancy.
+        # No positional arguments — the script discovers
+        # tests/fixtures/flow-branch-coverage/ + schemas/marker-taxonomy.yaml
+        # from disk via find_repo_root.
+        run: uv run flow-branch-coverage-gate

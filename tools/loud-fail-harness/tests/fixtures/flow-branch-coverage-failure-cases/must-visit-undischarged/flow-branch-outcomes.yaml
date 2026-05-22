@@ -1,0 +1,9 @@
+# Negative fixture (Story 13.5 AC-9): the `locked-account` must-visit branch
+# has NO must_visit_evidence record — it is undischarged (no evidence, and a
+# must-visit branch carries no marker by construction). Exercises the AC-6
+# `must-visit-undischarged` contract-violation finding (exit 1).
+
+must_visit_evidence:
+  - ac_id: "1"
+    branch_id: valid-credentials
+    evidence_present: true
