@@ -1,0 +1,112 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13 → Story 9.3; FR55).
+# Mobile dispatch branch — driver=mobile per Story 9.3 qa_ac_iteration.py dispatch.
+#
+# Authored to validate against the UNMODIFIED schemas/envelope.schema.yaml
+# (additionalProperties: false) per Story 13.7 AC-4. FR22c adds NO envelope
+# field:
+#   - per-`must-visit`-branch evidence rides ONLY on the existing
+#     ac_results[i].evidence_refs array (the Story 4.7 assertion-evidence
+#     triple) — mobile-mcp-sourced artifacts (mobile_list_elements_on_screen
+#     a11y-tree JSON = Tier-1; mobile_take_screenshot PNG = Tier-2),
+#     distinguishable from the AC's main-happy-path evidence by the
+#     `branch-<branch-id>-*` path naming;
+#   - the within-AC flow-branch coverage surface is carried on the harness
+#     AcIterationResult.flow_branch_coverage model (Story 13.3), NOT here;
+#   - heuristic_skipped_emissions carries ONLY genuine FR22 cross-AC
+#     exploratory-heuristic skips — NO `flow-branch` sub_classification.
+#     The `heuristic-skipped: flow-branch-<branch-id>` markers surface in
+#     pr-bundle.md's loud-fail block. See narrative.md
+#     § FR22c surface-placement discipline.
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/main-add-to-cart-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/main-cart-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-empty-cart-add-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-empty-cart-add-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-increment-existing-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-increment-existing-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-max-quantity-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-max-quantity-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/main-reject-invalid-card-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/main-rejection-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-expired-card-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-expired-card-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-wrong-cvc-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-wrong-cvc-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/main-order-confirmation-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/main-confirmation-screen.png
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/branch-guest-checkout-elements.json
+  - _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/branch-guest-checkout-screen.png
+findings: []
+rationale: "All three ACs of the multi-branch synthetic story sample-flow-branch-mobile-001 pass via mobile-driver dispatch (Story 9.3); each AC's main flow PLUS its FR22c within-AC must-visit flow branches were driven through the mobile-MCP surface, with per-branch Tier-1 (mobile_list_elements_on_screen a11y-tree) + Tier-2 (mobile_take_screenshot) evidence captured in the owning AC's evidence_refs — within-AC flow-branch coverage is among what was verified across the iterated AC list. Two intentionally-skipped flow branches (unsupported-network, gift-receipt) and one inapplicable cross-AC exploratory heuristic (auth-boundary) were loud-failed via heuristic-skipped markers. Only the driver mechanics differ from the 13-7-web run."
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "main flow: a logged-in user adds an item to the cart and the cart line count increments"
+      - "flow-branch empty-cart-add (must-visit): adding the first item to a previously empty cart"
+      - "flow-branch increment-existing (must-visit): adding an item already in the cart increments its quantity"
+      - "flow-branch max-quantity (must-visit): adding an item already at the per-line quantity ceiling"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/main-add-to-cart-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/main-cart-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-empty-cart-add-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-empty-cart-add-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-increment-existing-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-increment-existing-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-max-quantity-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-1/branch-max-quantity-screen.png
+        tier: tier-2-outcome
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "main flow: the checkout form rejects an invalid payment card"
+      - "flow-branch expired-card (must-visit): submitting a card past its expiry date"
+      - "flow-branch wrong-cvc (must-visit): submitting a card with an incorrect CVC"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/main-reject-invalid-card-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/main-rejection-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/main-semantic-verification.json
+        tier: tier-3-semantic
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-expired-card-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-expired-card-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-wrong-cvc-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-2/branch-wrong-cvc-screen.png
+        tier: tier-2-outcome
+    semantic_verification: verified
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "main flow: an order confirmation screen renders after a successful purchase"
+      - "flow-branch guest-checkout (must-visit): confirmation render for a guest (non-logged-in) purchase"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/main-order-confirmation-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/main-confirmation-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/main-semantic-verification.json
+        tier: tier-3-semantic
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/branch-guest-checkout-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-mobile-001/run-001/ac-3/branch-guest-checkout-screen.png
+        tier: tier-2-outcome
+    semantic_verification: verified
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: auth-boundary
+    story_id: sample-flow-branch-mobile-001

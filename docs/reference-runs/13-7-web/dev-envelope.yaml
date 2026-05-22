@@ -1,0 +1,22 @@
+# Dev specialist return envelope (Story 2.8; FR51 + FR54)
+# Schema: bmad-autopilot/schemas/envelope.schema.yaml (Story 1.2)
+status: pass
+artifacts:
+  - src/cart/add_to_cart.py
+  - src/checkout/payment_card.py
+  - src/checkout/order_confirmation.py
+  - tests/test_add_to_cart.py
+  - tests/test_payment_card.py
+  - tests/test_order_confirmation.py
+findings: []
+rationale: "AC-1 (add an item to the cart), AC-2 (reject an invalid payment card), and AC-3 (order confirmation page renders) implemented for the multi-branch synthetic e-commerce story sample-flow-branch-001; each AC's main flow plus its within-AC optional/branching steps are covered by the implementation so the QA specialist's FR22c must-visit branch driving has a real surface to exercise."
+proposed_commit_message: |
+  Story sample-flow-branch-001: cart + checkout + confirmation
+
+  Implement add-to-cart (empty-cart, increment-existing, at-ceiling
+  paths), invalid-card rejection (expired, wrong-CVC, unsupported
+  network paths), and the order-confirmation page (logged-in + guest
+  paths) — the within-AC flow branches the Story 13.5 multi-branch
+  synthetic story enumerates.
+scope_expanded_to: []
+retry_mode: null

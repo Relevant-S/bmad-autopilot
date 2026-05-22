@@ -1,0 +1,82 @@
+$ /bmad-automation run sample-flow-branch-mobile-001
+
+[orchestrator] Story sample-flow-branch-mobile-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-flow-branch-mobile-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+[orchestrator] project_type=mobile read from _bmad/automation/config.yaml (Story 9.2)
+[orchestrator] review_lad disabled — 3-layer review (mobile + LAD is not a default-on combination)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: implementing AC-1 (add-to-cart) + AC-2 (invalid-card rejection) + AC-3 (order confirmation)
+[stream] Dev: writing CartScreen + CheckoutScreen + OrderConfirmationScreen + a11y-label assertion tests
+[stream] Dev: each AC's main flow plus its within-AC flow branches covered by the implementation
+[seam: dev-return] Dev returned status=pass; envelope persisted
+[hook: SubagentStop] Commit created: "Story sample-flow-branch-mobile-001: cart + checkout + confirmation screens"
+[orchestrator] proposed_commit_message captured (FR50 / NFR-O6)
+[orchestrator] Lifecycle: in-progress → review (Story 2.4 / FR5)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist (3-layer parallel pass)
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — rationale validated
+[seam: review-return] Review-BMAD returned status=pass; failed_layers=[]
+
+[seam: env-provision] Provisioning QA env (Story 4.3 + Story 9.3 / FR7)
+[stream] MobileMcpAvailabilityProbe.is_available() → True
+[stream] MobileMcpProvisioner.provision → ProvisionedEnv(env_kind=mobile, port=0, pid=0, health_url=None)
+[stream] No dev-server subprocess spawned (mobile MCP is npx-stdio-managed per ADR-007)
+
+[seam: qa-dispatch] Dispatching QA specialist (mobile dispatch branch — Story 9.3)
+[stream] QA: BPlan generation (Story 4.1 / FR23) — reused existing ## QA Behavioral Plan section
+[stream] QA: FR22c within-AC flow-branch enumeration present in plan (Story 13.4 wrapper step 3)
+[stream]   → AC-1 flow_branches: empty-cart-add (must-visit), increment-existing (must-visit), max-quantity (must-visit)
+[stream]   → AC-2 flow_branches: expired-card (must-visit), wrong-cvc (must-visit), unsupported-network (intentionally-skipped)
+[stream]   → AC-3 flow_branches: guest-checkout (must-visit), gift-receipt (intentionally-skipped)
+[stream] QA: AC-1 verification — MobileDriver dispatch (smoke-first per FR22b)
+[stream]   → launch_app(com.example.bmad.flowbranch) via mobile_launch_app
+[stream]   ✓ AC-1 main flow pass: a logged-in user adds an item to the cart
+[stream]   → FR22c must-visit branch driving (Story 13.4 wrapper step 6, mobile sub-paragraph):
+[stream]     ✓ branch empty-cart-add — drove the first-item-into-empty-cart path via mobile-mcp; Tier-1 + Tier-2 evidence captured
+[stream]     ✓ branch increment-existing — drove the increment-existing-line path via mobile-mcp; Tier-1 + Tier-2 evidence captured
+[stream]     ✓ branch max-quantity — drove the at-line-ceiling path via mobile-mcp; Tier-1 + Tier-2 evidence captured
+[stream] QA: AC-2 verification — MobileDriver dispatch
+[stream]   ✓ AC-2 main flow pass: the checkout form rejects an invalid payment card
+[stream]   → FR22c must-visit branch driving:
+[stream]     ✓ branch expired-card — drove the past-expiry-date card path via mobile-mcp; Tier-1 + Tier-2 evidence captured
+[stream]     ✓ branch wrong-cvc — drove the incorrect-CVC card path via mobile-mcp; Tier-1 + Tier-2 evidence captured
+[stream]   → FR22c intentionally-skipped branch (iterate_acs surface_flow_branch_skipped per Story 13.3):
+[stream]     • branch unsupported-network — emit heuristic-skipped: flow-branch-unsupported-network
+[stream]       (skip_rationale: "card-network gating is out of MVP scope")
+[stream] QA: AC-3 verification — MobileDriver dispatch
+[stream]   ✓ AC-3 main flow pass: an order confirmation screen renders after a successful purchase
+[stream]   → FR22c must-visit branch driving:
+[stream]     ✓ branch guest-checkout — drove the guest (non-logged-in) confirmation path via mobile-mcp; Tier-1 + Tier-2 evidence captured
+[stream]   → FR22c intentionally-skipped branch:
+[stream]     • branch gift-receipt — emit heuristic-skipped: flow-branch-gift-receipt
+[stream]       (skip_rationale: "gift-receipt rendering is deferred to a Phase 2 story")
+[stream] QA: heuristic dispatch (Story 9.4 — three MVP-parity mobile heuristics)
+[stream]   → empty-state (empty-list state) — plan declares applicable (AC-3); drove via mobile-mcp — no finding
+[stream]   → error-state (network-error state) — plan declares applicable (AC-2); drove via mobile-mcp — no finding
+[stream]   → auth-boundary (session-expiry boundary) — plan declares inapplicable; emit heuristic-skipped: auth-boundary
+[seam: qa-return] QA returned status=pass; ac_results all pass; 6 must-visit branches driven with evidence;
+                  2 flow-branch skip markers + 1 exploratory-heuristic skip marker
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-flow-branch-mobile-001/run-001.md
+[stream] Loud-fail block: 3 markers (heuristic-skipped: auth-boundary,
+         heuristic-skipped: flow-branch-unsupported-network,
+         heuristic-skipped: flow-branch-gift-receipt)
+[stream] Zero mobile-blocked markers — the mobile MCP remained reachable throughout the run.
+[stream] Cost telemetry: $1.58 (within NFR-P1 $3 target; 3-specialist partition, no lad row)
+  | dev          | $0.50 |  -    | $0.50 |
+  | qa           | $0.73 |  -    | $0.73 |
+  | review-bmad  | $0.35 |  -    | $0.35 |
+  | **Total**    | **$1.58** |
+
+run sample-flow-branch-mobile-001: complete; merge-ready bundle written.
+(6 must-visit within-AC flow branches driven through the mobile-MCP surface
+ with per-branch Tier-1 + Tier-2 evidence; 2 intentionally-skipped branches
+ loud-failed via heuristic-skipped: flow-branch-<branch-id> markers per FR22c
+ — only the driver mechanics differ from the 13-7-web run.)

@@ -1,0 +1,88 @@
+$ /bmad-automation run sample-flow-branch-001
+
+[orchestrator] Story sample-flow-branch-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-flow-branch-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+[orchestrator] project_type=web read from _bmad/automation/config.yaml (Story 9.2)
+[orchestrator] review_lad.enabled=true read from _bmad/automation/config.yaml (Story 10.4 AC-1)
+[orchestrator] review_lad.api_key_env_var=OPENROUTER_API_KEY (Story 10.5 NAME-only)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: implementing AC-1 (add-to-cart) + AC-2 (invalid-card rejection) + AC-3 (order confirmation)
+[stream] Dev: writing src/cart/add_to_cart.py + src/checkout/payment_card.py + src/checkout/order_confirmation.py
+[stream] Dev: writing tests for each AC's main flow + the within-AC flow branches
+[seam: dev-return] Dev returned status=pass; envelope persisted
+[hook: SubagentStop] Commit created: "Story sample-flow-branch-001: cart + checkout + confirmation"
+[orchestrator] proposed_commit_message captured (FR50 / NFR-O6)
+[orchestrator] Lifecycle: in-progress → review (Story 2.4 / FR5)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist (4-layer parallel pass per Story 10.4)
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean (AC-coverage gap analysis pass)
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean (boundary-condition analysis pass)
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — rationale validated against the story ACs
+[stream] Review-BMAD: layer-4 (LAD — Review-LAD wrapper) — dispatched via mcp__lad__code_review
+[stream]   → paths=[src/cart/add_to_cart.py, src/checkout/payment_card.py, src/checkout/order_confirmation.py]
+[stream]   → OPENROUTER_API_KEY env-var presence handled upstream by lad_mcp_server (post-Story-12.2)
+[stream]   → mcp__lad__code_review invoked; dual-reviewer parallel pass completed
+[stream]   → LAD layer COMPLETED — clean pass, zero findings
+[seam: review-return] Review-BMAD returned status=pass; failed_layers=[]
+[orchestrator] Bucket routing: zero findings across all four layers; clean review
+
+[seam: env-provision] Provisioning QA env (Story 4.3 / FR7)
+[stream] PlaywrightMcpAvailabilityProbe.is_available() → True
+[stream] Web env provisioned: env_kind=web, port=auto, health_url=…
+
+[seam: qa-dispatch] Dispatching QA specialist (web dispatch branch — Story 4.4)
+[stream] QA: BPlan generation (Story 4.1 / FR23) — reused existing ## QA Behavioral Plan section
+[stream] QA: FR22c within-AC flow-branch enumeration present in plan (Story 13.4 wrapper step 3)
+[stream]   → AC-1 flow_branches: empty-cart-add (must-visit), increment-existing (must-visit), max-quantity (must-visit)
+[stream]   → AC-2 flow_branches: expired-card (must-visit), wrong-cvc (must-visit), unsupported-network (intentionally-skipped)
+[stream]   → AC-3 flow_branches: guest-checkout (must-visit), gift-receipt (intentionally-skipped)
+[stream] QA: AC-1 verification — PlaywrightDriver dispatch (smoke-first per FR22b)
+[stream]   ✓ AC-1 main flow pass: logged-in user adds an item to the cart
+[stream]   → FR22c must-visit branch driving (Story 13.4 wrapper step 6):
+[stream]     ✓ branch empty-cart-add — drove the first-item-into-empty-cart path; Tier-1 + Tier-2 evidence captured
+[stream]     ✓ branch increment-existing — drove the increment-existing-line path; Tier-1 + Tier-2 evidence captured
+[stream]     ✓ branch max-quantity — drove the at-line-ceiling path; Tier-1 + Tier-2 evidence captured
+[stream] QA: AC-2 verification — PlaywrightDriver dispatch
+[stream]   ✓ AC-2 main flow pass: the checkout form rejects an invalid payment card
+[stream]   → FR22c must-visit branch driving:
+[stream]     ✓ branch expired-card — drove the past-expiry-date card path; Tier-1 + Tier-2 evidence captured
+[stream]     ✓ branch wrong-cvc — drove the incorrect-CVC card path; Tier-1 + Tier-2 evidence captured
+[stream]   → FR22c intentionally-skipped branch (iterate_acs surface_flow_branch_skipped per Story 13.3):
+[stream]     • branch unsupported-network — emit heuristic-skipped: flow-branch-unsupported-network
+[stream]       (skip_rationale: "card-network gating is out of MVP scope")
+[stream] QA: AC-3 verification — PlaywrightDriver dispatch
+[stream]   ✓ AC-3 main flow pass: an order confirmation page renders after a successful purchase
+[stream]   → FR22c must-visit branch driving:
+[stream]     ✓ branch guest-checkout — drove the guest (non-logged-in) confirmation path; Tier-1 + Tier-2 evidence captured
+[stream]   → FR22c intentionally-skipped branch:
+[stream]     • branch gift-receipt — emit heuristic-skipped: flow-branch-gift-receipt
+[stream]       (skip_rationale: "gift-receipt rendering is deferred to a Phase 2 story")
+[stream] QA: heuristic dispatch (Story 4.9 — three cross-AC exploratory heuristics)
+[stream]   → empty-state — plan declares applicable (AC-3 heuristic_applicability); drove empty-list state — no finding
+[stream]   → error-state — plan declares applicable (AC-2 heuristic_applicability); drove error state — no finding
+[stream]   → auth-boundary — plan declares inapplicable; emit heuristic-skipped: auth-boundary
+[seam: qa-return] QA returned status=pass; ac_results all pass; 6 must-visit branches driven with evidence;
+                  2 flow-branch skip markers + 1 exploratory-heuristic skip marker
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-flow-branch-001/run-001.md
+[stream] Loud-fail block: 3 markers (heuristic-skipped: auth-boundary,
+         heuristic-skipped: flow-branch-unsupported-network,
+         heuristic-skipped: flow-branch-gift-receipt)
+[stream] Cost telemetry: $2.04 (within NFR-P1 $3 target; per-specialist partition includes Review-LAD row)
+  | dev          | $0.52 |  -    | $0.52 |
+  | lad          | $0.46 |  -    | $0.46 |
+  | qa           | $0.71 |  -    | $0.71 |
+  | review-bmad  | $0.35 |  -    | $0.35 |
+  | **Total**    | **$2.04** |
+
+run sample-flow-branch-001: complete; merge-ready bundle written.
+(6 must-visit within-AC flow branches driven with per-branch Tier-1 + Tier-2
+ evidence; 2 intentionally-skipped branches loud-failed via
+ heuristic-skipped: flow-branch-<branch-id> markers per FR22c — the
+ originally-reported skip-the-optional-steps behavior is no longer
+ reproducible.)

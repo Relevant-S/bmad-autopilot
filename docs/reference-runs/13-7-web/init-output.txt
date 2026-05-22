@@ -1,0 +1,48 @@
+$ /bmad-automation init
+
+bmad-automation init: precondition checks (Story 7.3 / FR37 / FR38)
+  ✓ claude-code: available, version 2.1.32 (>=2.0.0 required)
+  ✓ bmad-core: available, version 6.2.2 (>=6.0 required)
+  ✓ tea-module: available (total-block dependency satisfied)
+  ✓ git: available, working tree clean
+  ✓ python: available, 3.12.5 (>=3.12 required)
+  ✓ node: available, 22.4.1 (>=22 required for playwright-mcp)
+  ✓ playwright-mcp: available (probe via browser_navigate("about:blank") → 200)
+  ✓ lad-mcp: configured + reachable (probe via `claude mcp list` → lad ✓ Connected);
+      OPENROUTER_API_KEY env var present (NAME-only check per NFR-S1 — VALUE
+      never read at the substrate-precondition seam; the upstream MCP server
+      reads VALUE at server-startup time via the install-handle env-var flow).
+      NOT skipped (no `LAD-skipped` marker fired at init time per Story 10.5
+      AC-3 init-time discipline — the configured-AND-API-key-present path).
+
+bmad-automation init: project-type detection (Story 9.2 / FR-P1.5-2)
+  ✓ detected project_type=web via top-level-only precedence
+    (sample-flow-branch-001 — the multi-branch synthetic e-commerce
+     cart/checkout story whose acceptance criteria carry within-AC
+     flow branches; Story 13.5's tests/fixtures/flow-branch-coverage/
+     clean/ QA Behavioral Plan is the canonical multi-branch surface
+     reused here per Story 13.7 AC-3)
+  ✓ wrote project_type: web to _bmad/automation/config.yaml
+    (write_detected_project_type via Pattern 4 atomic tempfile+os.replace)
+
+bmad-automation init: scaffolding sample story (Story 7.4 / FR39)
+  ✓ proceed-merge-stable; existing sample-flow-branch-001.md detected;
+    canonical fields preserved per Story 7.6 non-destructive guard
+    (FR41 — no overwrite of user customizations).
+
+bmad-automation init: scaffolding config + qa-runbook stubs (Story 7.5 / FR40)
+  ✓ wrote _bmad/automation/config.yaml with documented defaults
+    + review_lad section: enabled: true; api_key_env_var: OPENROUTER_API_KEY
+      (the Phase 1.5 LAD block per ADR-008 + Story 10.4 AC-1; the
+       env-var NAME is the post-Story-10.1 corrected name).
+  ✓ wrote _bmad/automation/qa-runbook.yaml with documented defaults
+  ✓ FR41 non-destructive guard: no existing user config overwritten
+
+bmad-automation init: TEA-boundary first-run orientation (Story 7.8 / FR34)
+  → TEA validates per-AC behavioral plans; the Automator exercises the running
+    product against acceptance criteria. The two are complementary, not
+    redundant. See docs/tea-vs-automator.md for the full boundary contract.
+
+bmad-automation init: complete. Run `/bmad-automation run sample-flow-branch-001`
+to exercise your first end-to-end FR22c-active LAD-enabled web loop
+(Phase 1 patch / Story 13.7 — within-AC flow-branch coverage).

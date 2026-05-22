@@ -13,8 +13,8 @@ final-validation hook per :file:`epics.md:3444` that blocks Epic 8's
 ``done`` transition until MVP gaps are remediated.
 
 What this validator asserts (per AC-2 + AC-5 verbatim):
-    Walks the canonical MVP requirement enumeration (68 FR IDs +
-    34 NFR IDs = 102 closed identifiers) against
+    Walks the canonical MVP requirement enumeration (69 FR IDs +
+    34 NFR IDs = 103 closed identifiers) against
     :file:`docs/mvp-completion-evidence.md`'s coverage matrix:
         (a) every FR/NFR ID has exactly one row;
         (b) every row's five columns are non-empty;
@@ -105,15 +105,15 @@ ARTIFACT_RELATIVE_PATH: Final[str] = "docs/mvp-completion-evidence.md"
 ROWS_BEGIN_ANCHOR: Final[str] = "<!-- coverage-rows:begin -->"
 ROWS_END_ANCHOR: Final[str] = "<!-- coverage-rows:end -->"
 
-#: The closed 68-element MVP FR enumeration (AC-2). FR29 is OMITTED
+#: The closed 69-element MVP FR enumeration (AC-2). FR29 is OMITTED
 #: per :file:`prd.md:849` (Phase-1.5 marking). Sub-letters (FR22b /
-#: FR24a / FR24b / FR48b) are independent rows, NOT compositions of
+#: FR22c / FR24a / FR24b / FR48b) are independent rows, NOT compositions of
 #: their parent FR. Tests assert this constant equals the FR IDs
 #: parsed from :file:`prd.md` minus FR29.
 MVP_FR_IDS: Final[tuple[str, ...]] = (
     "FR1", "FR2", "FR3", "FR4", "FR5", "FR6", "FR7", "FR8", "FR9", "FR10",
     "FR11", "FR12", "FR13", "FR14", "FR15", "FR16", "FR17", "FR18", "FR19", "FR20",
-    "FR21", "FR22", "FR22b", "FR23", "FR24a", "FR24b", "FR25", "FR26", "FR27", "FR28",
+    "FR21", "FR22", "FR22b", "FR22c", "FR23", "FR24a", "FR24b", "FR25", "FR26", "FR27", "FR28",
     "FR30", "FR31", "FR32", "FR33", "FR34", "FR35", "FR36", "FR37", "FR38", "FR39",
     "FR40", "FR41", "FR42", "FR43", "FR44", "FR45", "FR46", "FR47", "FR48", "FR48b",
     "FR49", "FR50", "FR51", "FR52", "FR53", "FR54", "FR55", "FR56", "FR57", "FR58",
@@ -237,7 +237,7 @@ class CoverageRow(BaseModel):
     validators enforce non-empty strings + the requirement-ID regex.
 
     Attributes:
-        requirement_id: One of the 102 IDs in :data:`MVP_FR_IDS` ∪
+        requirement_id: One of the 103 IDs in :data:`MVP_FR_IDS` ∪
             :data:`NFR_IDS`. Field validator enforces the regex
             ``^(FR\\d+[a-z]?|NFR-[A-Z]\\d+)$``; cross-enumeration
             membership is checked by :func:`audit`.
@@ -325,10 +325,10 @@ class CoverageReport(BaseModel):
         findings: All findings, ordered by ``(rule, requirement_id)``
             for byte-stable output.
         mvp_fr_count_observed: Count of FR-prefixed rows in the
-            artifact; expected ``68``.
+            artifact; expected ``69``.
         nfr_count_observed: Count of NFR-prefixed rows; expected ``34``.
         total_rows_observed: Total rows in the coverage matrix;
-            expected ``102``.
+            expected ``103``.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -567,7 +567,7 @@ def audit(
             for any relative path not resolving to an existing file
             under ``repo_root``);
         plus the row-count invariant (emit ``row-count-mismatch`` if
-        ``total_rows_observed != 102``).
+        ``total_rows_observed != 103``).
 
     Raises:
         MvpCompletionEvidenceError: only on ``"artifact-not-found"``
@@ -781,7 +781,7 @@ def render_report(report: CoverageReport) -> str:
     Mirrors :func:`pluggability_gate.format_findings` shape: per-finding
     blocks plus a summary line. The summary line on the zero-findings
     case is:
-        ``mvp-completion-evidence: 0 findings (102 rows: 68 FR + 34 NFR;
+        ``mvp-completion-evidence: 0 findings (103 rows: 69 FR + 34 NFR;
         4 journeys)``
     per AC-8 verbatim.
     """
@@ -826,7 +826,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         description=(
             "MVP completion evidence validator (story 8.7; final-MVP "
             "closing-artifact gate). Asserts docs/mvp-completion-evidence.md "
-            "has all 102 rows (68 FR + 34 NFR) populated with non-empty "
+            "has all 103 rows (69 FR + 34 NFR) populated with non-empty "
             "cells, valid journey values, and resolving evidence links per "
             "epics.md:3410 + 3425-3428. Step 4 final-validation hook per "
             "epics.md:3444."

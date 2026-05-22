@@ -156,7 +156,7 @@ def _make_artifact_text(rows: list[tuple[str, str, str, str, str]]) -> str:
 def _make_complete_rows(
     repo_root: pathlib.Path, evidence_filename: str = "ev.md"
 ) -> list[tuple[str, str, str, str, str]]:
-    """Build a 102-row valid input set + materialize the evidence file.
+    """Build a 103-row valid input set + materialize the evidence file.
 
     All rows reuse the same fixture-evidence path so the resolution
     test is straightforward. The evidence file is created under
@@ -208,8 +208,8 @@ def test_mvp_fr_ids_constant_matches_prd_enumeration() -> None:
     assert MVP_FR_IDS == expected, (
         f"MVP_FR_IDS drift: module={MVP_FR_IDS!r} prd-minus-FR29={expected!r}"
     )
-    assert len(MVP_FR_IDS) == 68, (
-        f"AC-2 expects 68 FR rows; got {len(MVP_FR_IDS)}"
+    assert len(MVP_FR_IDS) == 69, (
+        f"AC-2 expects 69 FR rows; got {len(MVP_FR_IDS)}"
     )
     assert "FR29" not in MVP_FR_IDS, (
         "FR29 is Phase-1.5 per prd.md:849 and must be OMITTED from MVP_FR_IDS"
@@ -312,7 +312,7 @@ def test_audit_emits_missing_requirement_row_when_fr_absent(
         (f.rule, f.requirement_id) for f in report.findings
     }
     assert ("missing-requirement-row", "FR1") in findings_by_rule
-    # Row count is now 101, so we also expect a row-count-mismatch.
+    # Row count is now 102, so we also expect a row-count-mismatch.
     assert any(f.rule == "row-count-mismatch" for f in report.findings)
 
 
@@ -403,7 +403,7 @@ def test_audit_emits_evidence_link_not_resolved_when_relative_path_missing(
 def test_audit_returns_zero_findings_on_complete_artifact(
     tmp_path: pathlib.Path,
 ) -> None:
-    """A complete 102-row artifact with all evidence links resolving yields 0 findings."""
+    """A complete 103-row artifact with all evidence links resolving yields 0 findings."""
     repo_root = tmp_path
     rows = _make_complete_rows(repo_root)
     artifact = tmp_path / "artifact.md"
@@ -413,8 +413,8 @@ def test_audit_returns_zero_findings_on_complete_artifact(
     assert report.findings == (), (
         f"expected 0 findings; got {report.findings!r}"
     )
-    assert report.total_rows_observed == 102
-    assert report.mvp_fr_count_observed == 68
+    assert report.total_rows_observed == 103
+    assert report.mvp_fr_count_observed == 69
     assert report.nfr_count_observed == 34
 
 

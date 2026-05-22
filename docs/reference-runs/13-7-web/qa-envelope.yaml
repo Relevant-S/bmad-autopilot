@@ -1,0 +1,114 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13; FR55).
+# Web dispatch branch — driver=playwright per Story 4.4 qa_ac_iteration.py dispatch.
+#
+# Authored to validate against the UNMODIFIED schemas/envelope.schema.yaml
+# (additionalProperties: false) per Story 13.7 AC-4. FR22c adds NO envelope
+# field:
+#   - per-`must-visit`-branch evidence rides ONLY on the existing
+#     ac_results[i].evidence_refs array (the Story 4.7 assertion-evidence
+#     triple) — distinguishable from the AC's main-happy-path evidence by
+#     the `branch-<branch-id>-*` path naming;
+#   - the within-AC flow-branch coverage surface (must_visit_branch_ids +
+#     the intentionally-skipped flow-branch records) is carried on the
+#     harness AcIterationResult.flow_branch_coverage model (Story 13.3),
+#     NOT an envelope field;
+#   - heuristic_skipped_emissions carries ONLY genuine FR22 cross-AC
+#     exploratory-heuristic skips (empty-state / error-state /
+#     auth-boundary) — NO `flow-branch` sub_classification appears here
+#     (it would fail $defs/heuristic_skipped_emission). The
+#     `heuristic-skipped: flow-branch-<branch-id>` markers surface in
+#     pr-bundle.md's loud-fail block instead. See narrative.md
+#     § FR22c surface-placement discipline.
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/main-add-to-cart-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/main-cart-line-count.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-empty-cart-add-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-empty-cart-add-state.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-increment-existing-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-increment-existing-state.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-max-quantity-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-max-quantity-state.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/main-reject-invalid-card-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/main-rejection-message.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-expired-card-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-expired-card-rejection.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-wrong-cvc-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-wrong-cvc-rejection.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/main-order-confirmation-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/main-confirmation-page.png
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/branch-guest-checkout-action.json
+  - _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/branch-guest-checkout-confirmation.png
+findings: []
+rationale: "All three ACs of the multi-branch synthetic story sample-flow-branch-001 pass via playwright-driver dispatch (Story 4.4); each AC's main flow PLUS its FR22c within-AC must-visit flow branches were driven, with per-branch Tier-1 (mechanical) + Tier-2 (outcome) evidence captured in the owning AC's evidence_refs — within-AC flow-branch coverage is among what was verified across the iterated AC list. Two intentionally-skipped flow branches (unsupported-network, gift-receipt) and one inapplicable cross-AC exploratory heuristic (auth-boundary) were loud-failed via heuristic-skipped markers."
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "main flow: a logged-in user adds an item to the cart and the cart line count increments"
+      - "flow-branch empty-cart-add (must-visit): adding the first item to a previously empty cart"
+      - "flow-branch increment-existing (must-visit): adding an item already in the cart increments its quantity"
+      - "flow-branch max-quantity (must-visit): adding an item already at the per-line quantity ceiling"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/main-add-to-cart-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/main-cart-line-count.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-empty-cart-add-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-empty-cart-add-state.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-increment-existing-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-increment-existing-state.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-max-quantity-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-1/branch-max-quantity-state.png
+        tier: tier-2-outcome
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "main flow: the checkout form rejects an invalid payment card"
+      - "flow-branch expired-card (must-visit): submitting a card past its expiry date"
+      - "flow-branch wrong-cvc (must-visit): submitting a card with an incorrect CVC"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/main-reject-invalid-card-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/main-rejection-message.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/main-semantic-verification.json
+        tier: tier-3-semantic
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-expired-card-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-expired-card-rejection.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-wrong-cvc-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-2/branch-wrong-cvc-rejection.png
+        tier: tier-2-outcome
+    semantic_verification: verified
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "main flow: an order confirmation page renders after a successful purchase"
+      - "flow-branch guest-checkout (must-visit): confirmation render for a guest (non-logged-in) purchase"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/main-order-confirmation-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/main-confirmation-page.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/main-semantic-verification.json
+        tier: tier-3-semantic
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/branch-guest-checkout-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-flow-branch-001/run-001/ac-3/branch-guest-checkout-confirmation.png
+        tier: tier-2-outcome
+    semantic_verification: verified
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: auth-boundary
+    story_id: sample-flow-branch-001

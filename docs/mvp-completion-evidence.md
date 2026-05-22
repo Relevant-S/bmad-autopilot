@@ -1,12 +1,12 @@
 # MVP Completion Evidence — Full Project Surface (Story 8.7)
 
-This artifact maps every MVP FR (68 — FR1-FR66 plus sub-letters
-`FR22b`, `FR24a`, `FR24b`, `FR48b` minus `FR29` which is Phase-1.5
+This artifact maps every MVP FR (69 — FR1-FR66 plus sub-letters
+`FR22b`, `FR22c`, `FR24a`, `FR24b`, `FR48b` minus `FR29` which is Phase-1.5
 per `_bmad-output/planning-artifacts/prd.md:849`) and every NFR
 (34 — 6 perf + 8 reliability + 6 interop + 6 security + 8
 observability per `prd.md:934-987`) to the user journey that
 exercised it, the observable behavior demonstrated, and the
-evidence link. Total: 102 rows. Authoritative reference:
+evidence link. Total: 103 rows. Authoritative reference:
 `_bmad-output/planning-artifacts/epics.md:3399-3445` (Story 8.7
 epic AC verbatim).
 
@@ -211,6 +211,7 @@ Execution date: 2026-05-10 (ISO-8601).
 | FR21 | semantic_verification: not_configured marker when Tier-3 required but tooling absent | journey-4-bail-back | Tier-3-not-configured marker contract pair exercised; emitted on stories that require semantic verification but lack tooling | docs/mvp-completion-evidence/journey-4/journey-4-narrative.md |
 | FR22 | Three exploratory heuristics (empty / error / auth) with heuristic-skipped marker | journey-1-happy-path | empty/error/auth heuristics covered in qa-envelope; not-applicable rendered as heuristic-skipped marker class | docs/mvp-completion-evidence/journey-1/qa-envelope.yaml |
 | FR22b | AC-1-first ordering with smoke-first-abort marker on AC-1 failure | journey-1-happy-path | qa-envelope ac_results ordered AC-1 first; smoke-first-abort surfaced on AC-1 failure per Story 4.6 | docs/mvp-completion-evidence/journey-1/qa-envelope.yaml |
+| FR22c | Within-AC flow-branch coverage: per-AC `flow_branches[]` enumeration with `must-visit` branches driven (per-branch evidence) and `intentionally-skipped` branches loud-failed via `heuristic-skipped: flow-branch-<id>` markers | journey-1-happy-path | 13-7 FR22c-active reference run enumerates `flow_branches[]` per AC in the QA Behavioral Plan, drives 6 `must-visit` branches with per-branch Tier-1/Tier-2 evidence, and emits `heuristic-skipped: flow-branch-unsupported-network` / `flow-branch-gift-receipt` for the `intentionally-skipped` branches per Story 13.3/13.4 (FR22c within-AC flow-branch coverage; Sprint Change Proposal 2026-05-20) | docs/reference-runs/13-7-web/pr-bundle.md |
 | FR23 | QA generates BPlan section on first run; reuses with AC-hash drift detection; resets to generated on drift | journey-4-bail-back | plan-drift-detected loud-fail marker emitted on AC-hash drift; plan_status reset to generated per Story 4.2 | docs/mvp-completion-evidence/journey-4/qa-behavioral-plan-drift-detected.yaml |
 | FR24a | Verification-failure default policy is escalate (post-TEA failures = semantic drift, not patch) | journey-2-honest-failure | QA-fail on verification routes to escalation, not patch-bucket retry, per Story 4.10 | docs/mvp-completion-evidence/journey-2/escalation-bundle.md |
 | FR24b | env-setup-failure policy is escalate-with-env-diagnostic (distinct class) | journey-2-honest-failure | env-setup-failed marker contract distinct from verification-fail per Story 4.10 contract pair | docs/mvp-completion-evidence/journey-2/journey-2-narrative.md |
