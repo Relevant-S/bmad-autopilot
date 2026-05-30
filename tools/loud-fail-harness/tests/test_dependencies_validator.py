@@ -848,7 +848,16 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # file). Structurally an orphan from the enumeration_check perspective;
     # the orphan-count increment 21 → 22 is the load-bearing witness that
     # the taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 22 orphan marker class(es)" in text
+    # Post-Story-14.5 review: marker `parallel-story-state-pollution` newly
+    # enumerated in `schemas/marker-taxonomy.yaml` via PATCH bump 1.7 → 1.8;
+    # zero `dependencies.yaml` reference, zero `escalation-bundles/*.yaml`
+    # reference, zero `orchestrator-event.yaml` decision-point reference (the
+    # marker is emitted at parallel-dispatch RUNTIME by Epic 18 Story 18.2,
+    # NOT by any init / dependency-failure-profile dispatcher). Structurally
+    # an orphan from the enumeration_check perspective, exactly like
+    # `worktree-stale-lock`; the orphan-count increment 22 → 23 is the
+    # load-bearing witness that the Story 14.5 taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 23 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 

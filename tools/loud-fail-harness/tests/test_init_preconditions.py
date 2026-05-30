@@ -609,9 +609,10 @@ def test_schema_version_bumps_non_regression() -> None:
     for the ``mobile-mcp-init-unreachable`` sub-classification addition;
     Story 10.1 introduces no marker-taxonomy bump per AC-9 closed-set
     discipline; Story 14.1 introduces no marker-taxonomy bump per AC-10
-    closed-set discipline — the ``worktree-stale-lock`` and ``parallel-
-    story-state-pollution`` markers ADR-009 names as forward-pointers land
-    in Stories 14.3 + 14.5 respectively). Verifies the Story 7.3 + Story 9.3
+    closed-set discipline — the ``worktree-stale-lock`` marker landed in
+    Story 14.3 (1.6 → 1.7) and ``parallel-story-state-pollution`` landed in
+    Story 14.5 (1.7 → 1.8), the two markers ADR-009 named as forward-
+    pointers). Verifies the Story 7.3 + Story 9.3
     + Story 9.5 + Story 13.6 schema bumps, the Story 9.1 + Story 10.1
     activation bumps + Story 14.1 git-entry bump landed AND the existing
     enumeration_check substrate-component-4 gate continues to pass.
@@ -638,7 +639,11 @@ def test_schema_version_bumps_non_regression() -> None:
     # Story 14.3 bumped 1.6 → 1.7 (additive: new top-level marker class
     # ``worktree-stale-lock`` per ADR-009 Consequence 5 + epics-phase-2.md
     # line 325 forward-pointer contract; treated as PATCH).
-    assert taxonomy_data["schema_version"] == "1.7"
+    # Story 14.5 bumped 1.7 → 1.8 (additive: new top-level marker class
+    # ``parallel-story-state-pollution`` per ADR-009 Consequence 5 +
+    # epics-phase-2.md line 353; treated as PATCH per epics-phase-2.md line 70
+    # + the Story 14.3 precedent).
+    assert taxonomy_data["schema_version"] == "1.8"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`

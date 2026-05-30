@@ -133,9 +133,40 @@
 #                            entry establishes the precedent that the epic-
 #                            level forward-pointer contract takes
 #                            precedence.
+#   1.7 → 1.8 (Story 14.5) — additive: appended `parallel-story-state-
+#                            pollution` as a NEW top-level marker class for
+#                            the Phase-2 parallel-mode cross-story state-write
+#                            pollution surface (two or more per-story worktrees
+#                            writing conflicting state to a SHARED-state
+#                            surface under `parallel_stories: true`) per ADR-009
+#                            Consequence 5 forward-pointer + epics-phase-2.md
+#                            line 353. Top-level addition (NOT folded under
+#                            `worktree-stale-lock` / `recovery-state-conflict` /
+#                            `orphan-run-state-detected`): the categorical axis
+#                            is "cross-story write-collision under concurrent
+#                            worktrees" — distinct from `worktree-stale-lock`
+#                            (single-story filesystem-lock remnant from ONE
+#                            crashed worktree), `recovery-state-conflict`
+#                            (single-run multi-store recovery disagreement,
+#                            Story 8.2), and `orphan-run-state-detected`
+#                            (run-state for a deleted story-doc); folding under
+#                            any of these would invert the established axis.
+#                            Three sub_classifications mirror the ADR-005
+#                            Phase-2 shared-state-surface inventory 1:1:
+#                            `shared-port-collision` / `shared-evidence-root-
+#                            collision` / `aggregate-run-state-cross-write`.
+#                            The top-level 31-class closed-set is the new
+#                            invariant (was 30 since Story 14.3). The bump is
+#                            treated as PATCH per epics-phase-2.md line 70
+#                            ("new Phase 2 marker classes land with PATCH or
+#                            MINOR bumps only, no MAJOR") + the Story 14.3
+#                            precedent. NO runtime emitter lands here — Epic 18
+#                            Story 18.2 wires detection into the parallel-
+#                            dispatch substrate (flip-the-switch property).
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
-schema_version: "1.7"
+# schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
+schema_version: "1.8"
 
 markers:
 
@@ -541,3 +572,40 @@ markers:
       - pid-not-alive
       - age-exceeded
       - corrupted-lock-file
+
+  # ---- Story 14.5 — Epic 14 parallel-mode cross-state pollution pre-provision -
+
+  - marker_class: parallel-story-state-pollution
+    diagnostic_pointer: |
+      Epic 14 / Story 14.5 (pre-provision) — Two or more per-story worktrees
+      running concurrently under Phase 2 parallel mode (Epic 18 / FR-P2-4,
+      `parallel_stories: true`) wrote conflicting state to a SHARED-state
+      surface. Detection-time: parallel-dispatch RUNTIME (Epic 18 altitude —
+      NOT init-time, NOT SessionStart). Severity: loud-fail /
+      practitioner-blocking — the substrate does NOT auto-resolve the
+      collision; visibility-over-enforcement per Pattern 5 + NFR-R8's
+      story-doc-canonical recovery posture; the practitioner inspects the
+      conflicting surface and decides remediation. Shared-state surfaces
+      (architecture.md ADR-005 Phase-2 extension, Story 14.5): (1) shared
+      port pool used by concurrent env provisioning (FR7 / Epic 18 Story
+      18.3); (2) shared evidence root (concurrent writes to the same
+      evidence subpath); (3) epic/sprint aggregate run-state (two worktrees
+      claiming the same story-id, or interleaved non-atomic writes to the
+      aggregate run-state landed by Story 14.4). Per-surface conflict
+      detection is specified at the contract level in ADR-005's Phase-2
+      sub-section; the DETECTION WIRING is Epic 18 Story 18.2's
+      responsibility — this story pre-provisions the marker + invariant only.
+      Distinct from `worktree-stale-lock` (single-story filesystem-lock
+      remnant from ONE crashed worktree, Story 14.3),
+      `recovery-state-conflict` (single-run multi-store recovery
+      disagreement, Story 8.2), and `orphan-run-state-detected` (run-state
+      for a deleted story-doc). Conflict context: story `{story_id}`
+      collided with `{conflicting_story_id}` on shared surface
+      `{shared_surface}`. Remediation: practitioner inspects the named
+      surface, resolves the collision (e.g., reassign port, separate
+      evidence subpath, reconcile aggregate run-state), then re-dispatches.
+    pointer_context_fields: [story_id, conflicting_story_id, shared_surface]
+    sub_classifications:
+      - shared-port-collision
+      - shared-evidence-root-collision
+      - aggregate-run-state-cross-write

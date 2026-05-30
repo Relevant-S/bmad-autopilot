@@ -1,0 +1,21 @@
+# Positive (clean) fixture for Story 14.5 parallel-story-state-pollution.
+#
+# Two concurrent per-story worktrees under Phase 2 parallel mode whose
+# shared-surface claims are pairwise-DISJOINT (distinct ports, distinct
+# evidence subpaths, distinct aggregate story-ids). No collision predicate
+# fires; no marker is expected.
+#
+# Forward-reference data: Epic 18 Story 18.2 builds its detector against
+# this shape. Story 14.5 ships NO detector code.
+mode: parallel
+parallel_stories: true
+expected_marker: null
+worktrees:
+  - story_id: 15-2-per-epic-retry-budget
+    allocated_port: 4317
+    evidence_subpath: evidence/15-2-per-epic-retry-budget
+    aggregate_claim_story_id: 15-2-per-epic-retry-budget
+  - story_id: 18-3-concurrent-env-provisioning-discipline
+    allocated_port: 4318
+    evidence_subpath: evidence/18-3-concurrent-env-provisioning-discipline
+    aggregate_claim_story_id: 18-3-concurrent-env-provisioning-discipline

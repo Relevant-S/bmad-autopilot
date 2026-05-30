@@ -45,18 +45,20 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_7(taxonomy_data: dict) -> None:
-    """Story 14.3 bumps schema_version from ``"1.6"`` to ``"1.7"`` per the
-    epics-phase-2.md line 325 forward-pointer contract (additive: new
-    top-level marker class ``worktree-stale-lock`` per ADR-009
-    Consequence 5; bump treated as PATCH per the epic-level contract —
-    the file's internal bump-rule documentation would call this a
-    MINOR for a new top-level class; the precedent is recorded in the
-    header comment block). Prior Story 13.6 bumped 1.5 → 1.6 for the
-    ``flow-branch`` sub_classification under ``heuristic-skipped``.
-    The top-level closed-set grows from 27 to 28 classes.
+def test_taxonomy_schema_version_is_1_8(taxonomy_data: dict) -> None:
+    """Story 14.5 bumps schema_version from ``"1.7"`` to ``"1.8"`` per
+    epics-phase-2.md line 70 + the Story 14.3 precedent (additive: new
+    top-level marker class ``parallel-story-state-pollution`` per ADR-009
+    Consequence 5 + epics-phase-2.md line 353; bump treated as PATCH —
+    the file's internal bump-rule documentation would call this a MINOR
+    for a new top-level class; the precedent is recorded in the header
+    comment block). Prior Story 14.3 bumped 1.6 → 1.7 for the
+    ``worktree-stale-lock`` top-level class. The top-level closed-set
+    grows by +1 (the ``parallel-story-state-pollution`` class) — the
+    authoritative count is the 31-entry ``CANONICAL_MARKER_CLASSES`` in
+    ``test_reconciler.py``.
     """
-    assert taxonomy_data.get("schema_version") == "1.7"
+    assert taxonomy_data.get("schema_version") == "1.8"
 
 
 def test_heuristic_skipped_declares_flow_branch_sub_classification(

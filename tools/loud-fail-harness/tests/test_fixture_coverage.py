@@ -43,7 +43,7 @@ Pydantic v2 frozen-model discipline:
     [x] CoverageResult is frozen (assignment raises)                → test_coverage_result_is_frozen
 
 CLI / main exit-code matrix (AC-4, AC-6):
-    [x] canonical corpus validates → exit 0 + 27/27 Summary line    → test_canonical_corpus_validates
+    [x] canonical corpus validates → exit 0 + 31/31 Summary line    → test_canonical_corpus_validates
     [x] main exits 1 on uncovered marker                            → test_main_exits_one_on_uncovered_marker
     [x] main exits 1 lists every uncovered (do-not-bail-after-first) → test_main_lists_every_uncovered_class
     [x] main exits 1 on dangling fixture                            → test_main_exits_one_on_dangling_fixture
@@ -635,12 +635,13 @@ def test_coverage_result_is_frozen() -> None:
 
 
 def test_canonical_corpus_validates() -> None:
-    """The on-disk canonical 30-fixture corpus + canonical taxonomy → exit 0
+    """The on-disk canonical 31-fixture corpus + canonical taxonomy → exit 0
     (story 2.3 added 2 markers + 2 fixtures, taking the count from 27 → 29;
-    story 14.3 added 1 marker + 1 fixture, taking the count from 29 → 30)."""
+    story 14.3 added 1 marker + 1 fixture, taking the count from 29 → 30;
+    story 14.5 added 1 marker + 1 fixture, taking the count from 30 → 31)."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "30 passing marker class(es)" in out
+    assert "31 passing marker class(es)" in out
     assert "0 uncovered marker class(es)" in out
     assert "0 dangling fixture(s)" in out
     assert "0 shape-violation finding(s)" in out

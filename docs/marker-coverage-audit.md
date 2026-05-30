@@ -25,10 +25,10 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 420
+- Total intersections: 434
 - Emitted: 40
-- Not-applicable: 380
-- Scheduled-by-story: 0
+- Not-applicable: 393
+- Scheduled-by-story: 1
 - Gaps: 0
 
 ## Coverage matrix
@@ -259,6 +259,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | orphan-run-state-detected | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
+| parallel-story-state-pollution | bundle-assembler | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only (Epic 18 Story 18.2); the bundle-assembler has no shared-state-collision code path. |
+| parallel-story-state-pollution | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; cost-telemetry is a separate observability pipeline with no shared-state-collision code path. |
+| parallel-story-state-pollution | hook-session-start | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) fires at parallel-dispatch RUNTIME (Epic 18 altitude), explicitly NOT at SessionStart; the SessionStart hook has no shared-state-collision code path. |
+| parallel-story-state-pollution | hook-stop | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the Stop hook has no shared-state-collision code path. |
+| parallel-story-state-pollution | hook-subagent-stop | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the SubagentStop hook has no shared-state-collision code path. |
+| parallel-story-state-pollution | orchestrator-dispatch-wrapper | scheduled-by-story | `n/a` | 2026-05-30 | discharging-story: 18.2 — The orchestrator parallel-dispatch substrate is where concurrent per-story worktrees collide on a shared-state surface (port pool / evidence root / aggregate run-state). The marker IS expected at this surface, but the detection emission lands in Epic 18 Story 18.2 (cross-story-state-pollution-detection-marker-emission). Story 14.5 pre-provisions the marker + invariant + fixtures only — flip-the- switch property; no runtime emitter ships here. |
+| parallel-story-state-pollution | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; lifecycle-state transitions have no shared-state- collision code path. |
+| parallel-story-state-pollution | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the parallel-dispatch altitude; the per-worktree run-state helper writes byte-isolated per-worktree run-state (Story 14.4 — explicitly NOT a shared surface) and has no shared-state-collision code path. |
+| parallel-story-state-pollution | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the state machine has no shared-state-collision code path. |
+| parallel-story-state-pollution | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the parallel-dispatch altitude; reconciliation gates are fixture-level enumeration consistency checks with no shared-state-collision code path. |
+| parallel-story-state-pollution | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the parallel-dispatch altitude; runtime reconciliation gates have no shared-state-collision code path. |
+| parallel-story-state-pollution | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the Dev specialist wrapper has no shared-state- collision code path. |
+| parallel-story-state-pollution | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the QA specialist wrapper has no shared-state- collision code path. |
+| parallel-story-state-pollution | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the Review-BMAD specialist wrapper has no shared- state-collision code path. |
 | plan-drift-detected | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | plan-drift-detected | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | plan-drift-detected | hook-session-start | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |

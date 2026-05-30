@@ -1,0 +1,30 @@
+# Negative (polluted) fixture for Story 14.5 parallel-story-state-pollution.
+#
+# Two concurrent per-story worktrees under Phase 2 parallel mode that collide
+# on a SHARED-state surface. The collision predicate fires and the expected
+# sub-classification is recorded. Both worktrees allocate the SAME port (4317)
+# — the declared colliding surface is the port pool (`shared-port-collision`).
+# Evidence subpaths and aggregate claim IDs are disjoint (single-surface
+# isolation so the fixture is a clean reference for one sub-classification).
+#
+# Forward-reference data: Epic 18 Story 18.2 builds its detector against this
+# shape and asserts it emits `parallel-story-state-pollution`. Story 14.5
+# ships NO detector code.
+mode: parallel
+parallel_stories: true
+expected_marker: parallel-story-state-pollution
+colliding_surface: shared-port
+expected_sub_classification: shared-port-collision
+collision_context:
+  story_id: 15-2-per-epic-retry-budget
+  conflicting_story_id: 18-3-concurrent-env-provisioning-discipline
+  shared_surface: shared-port
+worktrees:
+  - story_id: 15-2-per-epic-retry-budget
+    allocated_port: 4317
+    evidence_subpath: evidence/15-2-per-epic-retry-budget
+    aggregate_claim_story_id: 15-2-per-epic-retry-budget
+  - story_id: 18-3-concurrent-env-provisioning-discipline
+    allocated_port: 4317
+    evidence_subpath: evidence/18-3-concurrent-env-provisioning-discipline
+    aggregate_claim_story_id: 18-3-concurrent-env-provisioning-discipline

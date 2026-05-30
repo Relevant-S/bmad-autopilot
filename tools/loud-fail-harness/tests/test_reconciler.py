@@ -26,10 +26,10 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6):
-    [x] all 29 expected marker_class identifiers present         → test_taxonomy_has_29_canonical_markers
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8):
+    [x] all 31 expected marker_class identifiers present         → test_taxonomy_has_31_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.6" at top level                       → test_taxonomy_declares_schema_version_1_6
+    [x] schema_version: "1.8" at top level                       → test_taxonomy_declares_schema_version_1_8
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -124,6 +124,8 @@ CANONICAL_MARKER_CLASSES = [
     "trunk-branch-write-rejected",
     # Story 14.3 — Epic 14 worktree-isolation substrate (NFR-R2 + NFR-R8).
     "worktree-stale-lock",
+    # Story 14.5 — Epic 14 parallel-mode cross-state pollution pre-provision.
+    "parallel-story-state-pollution",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -362,13 +364,14 @@ def test_determinism_under_shuffle() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_taxonomy_has_30_canonical_markers(taxonomy_data: dict) -> None:
+def test_taxonomy_has_31_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 30
+    assert len(names) == 31
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
         "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
-        "Story 14.3 appended entry 30: worktree-stale-lock)"
+        "Story 14.3 appended entry 30: worktree-stale-lock; "
+        "Story 14.5 appended entry 31: parallel-story-state-pollution)"
     )
 
 
@@ -381,17 +384,21 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_7(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_8(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
     # Story 13.6 bumped 1.5 → 1.6 (additive: the flow-branch sub_classification
     # under heuristic-skipped for the FR22c within-AC flow-branch contract).
-    # Story 14.3 bumps 1.6 → 1.7 (additive: new top-level marker class
+    # Story 14.3 bumped 1.6 → 1.7 (additive: new top-level marker class
     # ``worktree-stale-lock`` per ADR-009 Consequence 5 + epics-phase-2.md
     # line 325 forward-pointer contract; treated as PATCH per the epic-level
     # contract).
-    assert taxonomy_data.get("schema_version") == "1.7"
+    # Story 14.5 bumps 1.7 → 1.8 (additive: new top-level marker class
+    # ``parallel-story-state-pollution`` per ADR-009 Consequence 5 +
+    # epics-phase-2.md line 353; treated as PATCH per epics-phase-2.md line 70
+    # + the Story 14.3 precedent).
+    assert taxonomy_data.get("schema_version") == "1.8"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -460,7 +467,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 30
+    assert len(ids) == 31  # Story 14.5 appended parallel-story-state-pollution
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 
