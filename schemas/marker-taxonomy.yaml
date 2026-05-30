@@ -98,9 +98,44 @@
 #                            no MAJOR bump (precedent: Story 9.5's 1.4 → 1.5
 #                            and Story 9.3's 1.3 → 1.4 sub_classification
 #                            additions).
+#   1.6 → 1.7 (Story 14.3) — additive: appended `worktree-stale-lock` as a
+#                            NEW top-level marker class (filesystem-
+#                            coordination-primitive remnant from a crashed
+#                            worktree's lifecycle) per ADR-009 Consequence 5
+#                            forward-pointer + epics-phase-2.md line 325
+#                            verbatim. Top-level addition (NOT folded under
+#                            `orphan-process-cleanup` sub_classifications):
+#                            (a) the categorical axis "filesystem-
+#                            coordination-primitive remnant" vs "process-
+#                            leakage" vs "story-doc-orphan run-state"
+#                            forbids folding; (b) Story 14.2's
+#                            `worktree_lifecycle.py` already pinned
+#                            `marker_class="worktree-stale-lock"` as a bare
+#                            top-level string at lines 205 / 470 / 510 / 550,
+#                            so sub-classification folding would require
+#                            re-editing 14.2's code (out of scope per Story
+#                            14.3 AC-10). Three sub_classifications mirror
+#                            the in-code `StalenessVerdict.reason` Literal
+#                            enum + the corrupted-file branch:
+#                            `pid-not-alive` / `age-exceeded` /
+#                            `corrupted-lock-file`. The top-level 28-class
+#                            closed-set is the new invariant (was 27 since
+#                            Story 1.4). The bump is treated as PATCH per
+#                            epics-phase-2.md line 325 contract verbatim
+#                            ("the bump is PATCH (no top-level class
+#                            addition — `worktree-stale-lock` is a new top-
+#                            level class only if architecture decides not
+#                            to fold under existing `orphan-process-
+#                            cleanup` parent; Story 14.3 picks one and
+#                            records the rationale)") — the file's own
+#                            bump-rule documentation above would call this
+#                            a MINOR bump for a new top-level class; this
+#                            entry establishes the precedent that the epic-
+#                            level forward-pointer contract takes
+#                            precedence.
 
-# schema PATCH bump for Story 13.6 heuristic-skipped flow-branch sub-classification
-schema_version: "1.6"
+# schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
+schema_version: "1.7"
 
 markers:
 
@@ -480,3 +515,29 @@ markers:
       trunk branch name and the orchestrator's `trunk_allowlist` configuration.
     pointer_context_fields: []
     sub_classifications: []
+
+  # ---- Story 14.3 — Epic 14 worktree-isolation substrate ---------------------
+
+  - marker_class: worktree-stale-lock
+    diagnostic_pointer: |
+      Epic 14 / Story 14.3 — Per-story worktree filesystem-lock at
+      `_bmad/automation/locks/{story_id}.lock` (PID + ISO 8601 timestamp +
+      worktree-path) detected as stale (holding PID no longer alive OR
+      record age exceeded stale_threshold_seconds; default 3600s). Surfaces
+      via SessionStart hook on resume after a crashed worktree lifecycle.
+      Distinct from `orphan-process-cleanup` (process-teardown leakage) and
+      `orphan-run-state-detected` (run-state for a deleted story-doc) per
+      the categorical axis "filesystem-coordination-primitive remnant" vs
+      "process-leakage" vs "story-doc-orphan run-state". Remediation:
+      operator inspects `_bmad/automation/locks/{story_id}.lock`, confirms
+      the holding PID is gone, then either invokes the future
+      `/bmad-automation cleanup {story_id}` command (ADR-009 forward-pointer)
+      OR deletes the lock file manually with `rm`. The substrate does NOT
+      auto-clear stale locks at SessionStart — operator-decided remediation
+      mirrors the no-auto-`--force` posture of Story 14.2's worktree
+      cleanup (NFR-R3 + Pattern 5 loud-fail doctrine).
+    pointer_context_fields: [story_id]
+    sub_classifications:
+      - pid-not-alive
+      - age-exceeded
+      - corrupted-lock-file

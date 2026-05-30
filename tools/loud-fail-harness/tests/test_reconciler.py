@@ -122,6 +122,8 @@ CANONICAL_MARKER_CLASSES = [
     # Story 2.3 — branch-lifecycle write-time guards (NFR-R3 + NFR-S3).
     "git-uncommitted-work-detected",
     "trunk-branch-write-rejected",
+    # Story 14.3 — Epic 14 worktree-isolation substrate (NFR-R2 + NFR-R8).
+    "worktree-stale-lock",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -360,12 +362,13 @@ def test_determinism_under_shuffle() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_taxonomy_has_29_canonical_markers(taxonomy_data: dict) -> None:
+def test_taxonomy_has_30_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 29
+    assert len(names) == 30
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
-        "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29)"
+        "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
+        "Story 14.3 appended entry 30: worktree-stale-lock)"
     )
 
 
@@ -378,13 +381,17 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_6(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_7(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
-    # Story 13.6 bumps 1.5 → 1.6 (additive: the flow-branch sub_classification
+    # Story 13.6 bumped 1.5 → 1.6 (additive: the flow-branch sub_classification
     # under heuristic-skipped for the FR22c within-AC flow-branch contract).
-    assert taxonomy_data.get("schema_version") == "1.6"
+    # Story 14.3 bumps 1.6 → 1.7 (additive: new top-level marker class
+    # ``worktree-stale-lock`` per ADR-009 Consequence 5 + epics-phase-2.md
+    # line 325 forward-pointer contract; treated as PATCH per the epic-level
+    # contract).
+    assert taxonomy_data.get("schema_version") == "1.7"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -453,7 +460,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 29
+    assert len(ids) == 30
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

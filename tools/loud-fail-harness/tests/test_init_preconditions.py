@@ -635,7 +635,10 @@ def test_schema_version_bumps_non_regression() -> None:
         / "marker-taxonomy.yaml"
     )
     taxonomy_data = yaml.safe_load(taxonomy_path.read_text(encoding="utf-8"))
-    assert taxonomy_data["schema_version"] == "1.6"
+    # Story 14.3 bumped 1.6 → 1.7 (additive: new top-level marker class
+    # ``worktree-stale-lock`` per ADR-009 Consequence 5 + epics-phase-2.md
+    # line 325 forward-pointer contract; treated as PATCH).
+    assert taxonomy_data["schema_version"] == "1.7"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`

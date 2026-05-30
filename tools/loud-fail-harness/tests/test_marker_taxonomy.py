@@ -45,21 +45,18 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_6(taxonomy_data: dict) -> None:
-    """Story 13.6 bumps schema_version from ``"1.5"`` to ``"1.6"`` per
-    the file's own PATCH-bump rule (additive: one new sub_classification
-    ``flow-branch`` appended under ``heuristic-skipped`` for the FR22c
-    within-AC flow-branch coverage contract — Sprint Change Proposal
-    2026-05-20; emitted at runtime as
-    ``heuristic-skipped: flow-branch-<branch-id>`` by Story 13.3's
-    iteration contract). Prior Story 9.5 bumped 1.4 → 1.5 for the
-    ``init-unavailable`` + ``mid-run-unavailable`` sub_classifications
-    under ``mobile-blocked``; Story 9.3 bumped 1.3 → 1.4 for the
-    ``mobile-mcp-init-unreachable`` sub_classification under
-    ``env-setup-failed``. The top-level 27-class closed-set is
-    preserved; no MAJOR bump.
+def test_taxonomy_schema_version_is_1_7(taxonomy_data: dict) -> None:
+    """Story 14.3 bumps schema_version from ``"1.6"`` to ``"1.7"`` per the
+    epics-phase-2.md line 325 forward-pointer contract (additive: new
+    top-level marker class ``worktree-stale-lock`` per ADR-009
+    Consequence 5; bump treated as PATCH per the epic-level contract —
+    the file's internal bump-rule documentation would call this a
+    MINOR for a new top-level class; the precedent is recorded in the
+    header comment block). Prior Story 13.6 bumped 1.5 → 1.6 for the
+    ``flow-branch`` sub_classification under ``heuristic-skipped``.
+    The top-level closed-set grows from 27 to 28 classes.
     """
-    assert taxonomy_data.get("schema_version") == "1.6"
+    assert taxonomy_data.get("schema_version") == "1.7"
 
 
 def test_heuristic_skipped_declares_flow_branch_sub_classification(

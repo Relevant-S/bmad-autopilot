@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 406
-- Emitted: 39
-- Not-applicable: 367
+- Total intersections: 420
+- Emitted: 40
+- Not-applicable: 380
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -303,7 +303,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | reconciler-mismatch-runtime | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR33 runtime reconciler-mismatch marker; this surface is not the runtime reconciliation gate. |
 | recovery-state-conflict | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
 | recovery-state-conflict | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
-| recovery-state-conflict | hook-session-start | emitted | `tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:746` | 2026-05-08 | SessionStart reattachment full implementation (Story 8.1, replaces Story 2.7 literal stub) emits recovery-state-conflict marker on schema-mismatch sub-case at hook-session-start surface via session_start_reattach.evaluate_reattach. Cross-state recovery algorithm sub-case lands at orchestrator-run-state-helper surface in Story 8.2. |
+| recovery-state-conflict | hook-session-start | emitted | `tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:946` | 2026-05-08 | SessionStart reattachment full implementation (Story 8.1, replaces Story 2.7 literal stub) emits recovery-state-conflict marker on schema-mismatch sub-case at hook-session-start surface via session_start_reattach.evaluate_reattach. Cross-state recovery algorithm sub-case lands at orchestrator-run-state-helper surface in Story 8.2. |
 | recovery-state-conflict | hook-stop | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
 | recovery-state-conflict | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
 | recovery-state-conflict | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | NFR-R2 + NFR-R8 cross-state recovery fires only at orchestrator-run-state-helper + hook-session-start (Story 8.1 / 8.2); this surface has no recovery code path. |
@@ -441,6 +441,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | walking-skeleton-bundle | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | walking-skeleton-bundle | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | walking-skeleton-bundle | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
+| worktree-stale-lock | bundle-assembler | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude after a crashed worktree leaves a stale lock file; this surface has no recovery / lock-inspection code path. |
+| worktree-stale-lock | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude; cost-telemetry is a separate observability pipeline with no lock-inspection code path. |
+| worktree-stale-lock | hook-session-start | emitted | `tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:1042` | 2026-05-30 | Story 14.3 — SessionStart's fifth ``ReattachOutcome.action`` branch (``worktree-stale-lock-detected``) emits the marker via :func:`marker_wiring.record_marker_with_context` when the per-story file-lock probe returns ``stale``. Operator-decided remediation mirrors Story 14.2's no-auto-``--force`` posture (NFR-R3 + NFR-R7). |
+| worktree-stale-lock | hook-stop | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; Stop hook has no lock-inspection code path. |
+| worktree-stale-lock | hook-subagent-stop | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; SubagentStop hook has no lock-inspection code path. |
+| worktree-stale-lock | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; the orchestrator dispatch wrapper operates downstream of reattachment and has no lock-inspection code path. |
+| worktree-stale-lock | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; lifecycle-state transitions have no lock-inspection code path. |
+| worktree-stale-lock | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; run-state helpers consume the lock-inspection results but do not emit the marker (sensor-not- advisor: the substrate library RAISES typed exceptions; SessionStart EMITS the marker on the resume branch). |
+| worktree-stale-lock | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; the state machine consumes the marker downstream but does not emit it. |
+| worktree-stale-lock | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; reconciliation gates are fixture-level enumeration consistency checks with no lock- inspection code path. |
+| worktree-stale-lock | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; runtime reconciliation gates have no lock-inspection code path. |
+| worktree-stale-lock | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; Dev specialist wrapper has no lock-inspection code path. |
+| worktree-stale-lock | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; QA specialist wrapper has no lock-inspection code path. |
+| worktree-stale-lock | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-30 | Per-story file-lock staleness marker (Story 14.3) fires only at the SessionStart altitude on resume; Review-BMAD specialist wrapper has no lock-inspection code path. |
 
 ## Regeneration triggers
 

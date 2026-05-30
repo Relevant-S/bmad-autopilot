@@ -82,7 +82,9 @@ outcome's ``action`` enum.
 from __future__ import annotations
 
 import argparse
+import datetime
 import logging
+import os
 import pathlib
 import re
 import subprocess
@@ -101,6 +103,12 @@ from .lifecycle_state_machine import TERMINAL_STATES
 from .marker_wiring import record_marker_with_context
 from .no_destructive_resume_guard import Verdict, can_dispatch
 from .run_state import CurrentState, RunState
+from .story_file_lock import (
+    DEFAULT_STALE_THRESHOLD_SECONDS,
+    LockInspectionResult,
+    inspect_lock as _inspect_story_file_lock,
+    is_stale as _evaluate_story_file_lock_staleness,
+)
 
 if TYPE_CHECKING:
     from .specialist_dispatch import MarkerClassRegistry
@@ -112,10 +120,12 @@ __all__ = [
     "ReattachOutcome",
     "ReattachRequest",
     "SessionStartReattachError",
+    "WORKTREE_STALE_LOCK_MARKER_CLASS",
     "detect_run_state",
     "evaluate_reattach",
     "main",
     "render_recovery_state_conflict_diagnostic",
+    "render_worktree_stale_lock_diagnostic",
     "validate_run_state_schema",
 ]
 
@@ -133,6 +143,19 @@ RUN_STATE_RELATIVE_PATH: Final[str] = "_bmad/automation/run-state.yaml"
 RECOVERY_STATE_CONFLICT_MARKER_CLASS: Final[
     Literal["recovery-state-conflict"]
 ] = "recovery-state-conflict"
+
+#: Story 14.3 marker class enumerated in ``schemas/marker-taxonomy.yaml`` at
+#: schema_version 1.7. Emitted on the fifth ``ReattachOutcome.action`` branch
+#: (``worktree-stale-lock-detected``) when SessionStart resumes after a
+#: crashed worktree leaves a stale lock file at
+#: ``_bmad/automation/locks/<story-id>.lock``. Distinct from
+#: ``orphan-process-cleanup`` (process-teardown leakage) and
+#: ``orphan-run-state-detected`` (run-state for a deleted story-doc) per the
+#: categorical axis "filesystem-coordination-primitive remnant" vs
+#: "process-leakage" vs "story-doc-orphan run-state".
+WORKTREE_STALE_LOCK_MARKER_CLASS: Final[
+    Literal["worktree-stale-lock"]
+] = "worktree-stale-lock"
 
 
 # TODO: future story may promote _NEXT_SPECIALIST_BY_STATE to
@@ -312,7 +335,15 @@ _ReattachAction = Literal[
     "reattach-clean",
     "reattach-with-marker",
     "anomaly-branch-missing",
+    "worktree-stale-lock-detected",
 ]
+
+#: Story 14.3 — typed return of :func:`_probe_story_file_lock`. Three
+#: discriminator strings paralleling the staleness sub-classifications;
+#: ``"absent"`` indicates the lock file does not exist on disk (silent —
+#: NOT an anomaly; SessionStart on a non-parallel-mode story has no
+#: lock by design).
+_StoryFileLockProbeStatus = Literal["fresh", "stale", "absent"]
 
 
 class ReattachOutcome(BaseModel):
@@ -345,7 +376,15 @@ class ReattachOutcome(BaseModel):
         current_state: The ``current_state`` field from the parsed
             run-state when readable; ``None`` otherwise.
         marker_class: Set to ``"recovery-state-conflict"`` when
-            ``action == "reattach-with-marker"``; ``None`` otherwise.
+            ``action == "reattach-with-marker"``; set to
+            ``"worktree-stale-lock"`` when
+            ``action == "worktree-stale-lock-detected"`` (Story 14.3);
+            ``None`` otherwise.
+        lock_path: (Story 14.3) The on-disk path of the stale lock file when
+            ``action == "worktree-stale-lock-detected"``; ``None`` on all
+            other branches. Carried on the outcome so diagnostic renderers
+            receive a self-contained object rather than requiring a separate
+            ``lock_path`` argument.
         diagnostic: The rendered marker diagnostic per AC-6; ``None`` on
             the silent branches.
         validation_failures: JSON-pointer-style paths of fields that
@@ -363,7 +402,10 @@ class ReattachOutcome(BaseModel):
     current_branch: str | None = None
     dispatched_specialist: str | None = None
     current_state: str | None = None
-    marker_class: Literal["recovery-state-conflict"] | None = None
+    marker_class: (
+        Literal["recovery-state-conflict", "worktree-stale-lock"] | None
+    ) = None
+    lock_path: pathlib.Path | None = None
     diagnostic: str | None = None
     validation_failures: tuple[str, ...] = ()
 
@@ -578,6 +620,143 @@ def render_recovery_state_conflict_diagnostic(outcome: "ReattachOutcome") -> str
     )
 
 
+def render_worktree_stale_lock_diagnostic(outcome: "ReattachOutcome") -> str:
+    """Story 14.3 — pure deterministic formatter for the
+    ``worktree-stale-lock-detected`` diagnostic prose.
+
+    Reads ``outcome.lock_path``; raises :exc:`ValueError` when ``None``
+    (caller must populate ``lock_path`` on the outcome before rendering).
+
+    Composition (paralleling
+    :func:`render_recovery_state_conflict_diagnostic` shape):
+
+    1. ``worktree-stale-lock: `` literal prefix.
+    2. ``stale lock file=<lock-path>`` clause.
+    3. ``branch=<branch>; specialist=<specialist>; state=<state>`` clause
+       (mirrors ``reattach-clean`` line for operator-context).
+    4. ``remediation:`` clause naming the two operator paths verbatim —
+       (a) the future ``/bmad-automation cleanup <story-id>`` command
+       (ADR-009 forward-pointer; Story 14.6 reference fixture witnesses
+       the wiring) AND (b) manual ``rm <lock-path>`` after confirming
+       the holding PID is gone.
+    5. Pointer-to-marker-taxonomy clause:
+       ``see schemas/marker-taxonomy.yaml worktree-stale-lock entry for
+       marker class definition``.
+    """
+    lock_path = outcome.lock_path
+    if lock_path is None:
+        raise ValueError(
+            "render_worktree_stale_lock_diagnostic: outcome.lock_path is None; "
+            "caller must set lock_path on the ReattachOutcome before rendering "
+            "the stale-lock diagnostic"
+        )
+    return (
+        "worktree-stale-lock: "
+        f"stale lock file={lock_path!s}; "
+        f"branch={outcome.branch_name}; "
+        f"specialist={outcome.dispatched_specialist}; "
+        f"state={outcome.current_state}; "
+        "remediation: "
+        "(a) `/bmad-automation cleanup <story-id>` once Story 14.6 lands, "
+        f"(b) manually `rm {lock_path!s}` after confirming the holding "
+        "PID is no longer alive (the substrate does NOT auto-clear stale "
+        "locks at SessionStart — operator-decided per NFR-R3 + Pattern "
+        "5 loud-fail doctrine); "
+        "see schemas/marker-taxonomy.yaml worktree-stale-lock entry for "
+        "marker class definition"
+    )
+
+
+def _probe_story_file_lock(
+    project_root: pathlib.Path,
+    story_id: str,
+    *,
+    lock_inspector: Callable[
+        [str], LockInspectionResult | None
+    ] | None = None,
+    staleness_probe: Callable[
+        [LockInspectionResult], bool
+    ] | None = None,
+) -> tuple[
+    Literal["fresh", "stale", "absent"], LockInspectionResult | None
+]:
+    """Story 14.3 — probe the per-story file-lock state for the
+    ``reattach-clean`` path.
+
+    Pattern 6 dependency-injection: tests supply ``lock_inspector`` +
+    ``staleness_probe`` so the SessionStart unit tests do not need to
+    construct on-disk lock files. Production default composes
+    :func:`story_file_lock.inspect_lock` +
+    :func:`story_file_lock.is_stale` against the project-root-derived
+    locks directory.
+
+    Returns a ``(status, inspection_result)`` tuple where ``status`` is
+    one of ``"fresh"`` / ``"stale"`` / ``"absent"`` and
+    ``inspection_result`` is the :class:`LockInspectionResult` carrying
+    the on-disk record (``None`` when ``status == "absent"``).
+    """
+    if lock_inspector is None:
+        locks_root = project_root / "_bmad" / "automation" / "locks"
+
+        def _default_inspector(
+            sid: str,
+        ) -> LockInspectionResult | None:
+            return _inspect_story_file_lock(
+                sid, locks_root=locks_root, repo_root=project_root
+            )
+
+        lock_inspector = _default_inspector
+
+    inspection = lock_inspector(story_id)
+    if inspection is None:
+        return ("absent", None)
+
+    if inspection.parse_error is not None or inspection.record is None:
+        # Corrupted lock file is treated as stale at the SessionStart
+        # altitude — the substrate signals; operator decides remediation.
+        return ("stale", inspection)
+
+    if staleness_probe is not None:
+        is_stale_result = staleness_probe(inspection)
+    else:
+        verdict = _evaluate_story_file_lock_staleness(
+            inspection.record,
+            stale_threshold_seconds=DEFAULT_STALE_THRESHOLD_SECONDS,
+            pid_probe=_default_pid_probe_for_session_start,
+            clock=_default_clock_for_session_start,
+        )
+        is_stale_result = verdict.is_stale
+
+    if is_stale_result:
+        return ("stale", inspection)
+    return ("fresh", inspection)
+
+
+def _default_pid_probe_for_session_start(pid: int) -> bool:
+    """SessionStart's default PID probe — mirror of
+    :func:`story_file_lock._default_pid_probe` (duplicated rather than
+    imported so :mod:`story_file_lock` retains a clean public surface
+    + the two modules' defaults stay independent if the SessionStart
+    altitude grows host-aware sensing in a future story).
+    """
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _default_clock_for_session_start() -> datetime.datetime:
+    """SessionStart's default UTC clock; same shape as
+    :func:`story_file_lock._default_clock`.
+    """
+    return datetime.datetime.now(tz=datetime.timezone.utc)
+
+
 # --------------------------------------------------------------------------- #
 # Helpers for the partial-parse + git probe paths.                             #
 # --------------------------------------------------------------------------- #
@@ -679,6 +858,11 @@ def evaluate_reattach(
     *,
     run_state: RunState | None = None,
     marker_registry: "MarkerClassRegistry | None" = None,
+    story_file_lock_probe: Callable[
+        [pathlib.Path, str],
+        tuple[Literal["fresh", "stale", "absent"], LockInspectionResult | None],
+    ]
+    | None = None,
 ) -> tuple[ReattachOutcome, RunState | None]:
     """Composite SessionStart-reattachment decision.
 
@@ -694,11 +878,11 @@ def evaluate_reattach(
     ``action`` enum — SessionStart SIGNALS reattachment, the dispatch
     decision lives downstream.
 
-    The four branches:
+    The five branches (Story 14.3 adds the fifth):
 
     1. No run-state file → ``no-run-state-found`` (silent normal startup).
-    2. File present, validation succeeds, branch present (or git unavailable)
-       → ``reattach-clean``.
+    2. File present, validation succeeds, branch present (or git unavailable),
+       per-story lock fresh / absent → ``reattach-clean``.
     3. File present, validation succeeds, but the named branch is missing
        from a git repo where probing succeeded → ``anomaly-branch-missing``
        (observability-only; NO marker emitted).
@@ -706,15 +890,28 @@ def evaluate_reattach(
        ``recovery-state-conflict`` marker emitted via
        :func:`record_marker_with_context` when ``run_state`` AND
        ``marker_registry`` are both supplied.
+    5. (Story 14.3) File present, validation succeeds, branch present,
+       per-story lock stale → ``worktree-stale-lock-detected``;
+       ``worktree-stale-lock`` marker emitted via
+       :func:`record_marker_with_context` when ``run_state`` AND
+       ``marker_registry`` are both supplied.
 
     Args:
         request: The typed input.
         run_state: Optional runtime ``RunState``. Threaded through the
-            marker emission path on the schema-mismatch branch; ``None``
-            (test-without-runtime) suppresses emission and the second
-            tuple-element is ``None``.
+            marker emission path on the marker-emitting branches;
+            ``None`` (test-without-runtime) suppresses emission and the
+            second tuple-element is ``None``.
         marker_registry: Optional marker registry. Same nullability
             semantics as ``run_state``.
+        story_file_lock_probe: (Story 14.3) Optional dependency-
+            injection seam for the per-story lock-staleness probe;
+            tests inject stubs to exercise the
+            ``worktree-stale-lock-detected`` branch without an on-disk
+            lock file. ``None`` (production default) composes the
+            real :func:`story_file_lock.inspect_lock` +
+            :func:`story_file_lock.is_stale` via
+            :func:`_probe_story_file_lock`.
 
     Returns:
         A tuple ``(ReattachOutcome, RunState | None)``.
@@ -744,9 +941,7 @@ def evaluate_reattach(
             run_state,
         )
 
-    # Branches 2/3/4 — file exists; validate.
-    # The third return element carries the detected schema_version directly,
-    # eliminating a second file read on the validation-failure path.
+    # Branches 2/3/4/5 — file exists; validate.
     parsed_run_state, validation_failures, detected_schema_version = (
         validate_run_state_schema(detected)
     )
@@ -767,16 +962,11 @@ def evaluate_reattach(
             validation_failures=validation_failures,
         )
         diagnostic = render_recovery_state_conflict_diagnostic(outcome)
-        # Re-build with the rendered diagnostic populated. Pydantic frozen
-        # discipline: model_copy with update.
         outcome = outcome.model_copy(update={"diagnostic": diagnostic})
 
         if run_state is None or marker_registry is None:
             return (outcome, run_state)
 
-        # AC-6: pointer_context_fields is empty per the taxonomy (lines
-        # 372-380), so the context dict is empty. The diagnostic IS the
-        # rendered output; no template interpolation.
         next_run_state = record_marker_with_context(
             run_state=run_state,
             marker_class=RECOVERY_STATE_CONFLICT_MARKER_CLASS,
@@ -786,16 +976,13 @@ def evaluate_reattach(
         )
         return (outcome, next_run_state)
 
-    # Branches 2/3 — validation succeeded.
-    assert parsed_run_state is not None  # narrows for mypy; validated above.
+    # Branches 2/3/5 — validation succeeded.
+    assert parsed_run_state is not None
     branch_name = parsed_run_state.branch_name
     dispatched_specialist = parsed_run_state.dispatched_specialist
     current_state = parsed_run_state.current_state
     detected_schema_version = parsed_run_state.schema_version
 
-    # Probe whether the named branch exists. None means git unavailable
-    # (treated as no-anomaly per AC-3); False means branch missing
-    # (anomaly); True means branch present.
     branch_exists = _probe_branch_exists(
         request.project_root, branch_name, request.git_runner
     )
@@ -827,13 +1014,52 @@ def evaluate_reattach(
             run_state,
         )
 
+    # Story 14.3 Branch 5 — per-story file-lock staleness check.
+    # Gated downstream of the existing branches per AC-7. The probe
+    # fires only when (a) the run-state file exists AND validates,
+    # (b) the named branch exists OR git is unavailable, and
+    # (c) the parsed run-state carries a non-empty story_id.
+    probe = (
+        story_file_lock_probe
+        if story_file_lock_probe is not None
+        else _probe_story_file_lock
+    )
+    lock_status, lock_inspection = probe(
+        request.project_root, parsed_run_state.story_id
+    )
+    if lock_status == "stale" and lock_inspection is not None:
+        stale_outcome = ReattachOutcome(
+            action="worktree-stale-lock-detected",
+            run_state_path=detected,
+            detected_schema_version=detected_schema_version,
+            current_schema_version=current_schema_version,
+            branch_name=branch_name,
+            current_branch=current_branch,
+            dispatched_specialist=dispatched_specialist,
+            current_state=current_state,
+            marker_class=WORKTREE_STALE_LOCK_MARKER_CLASS,
+            lock_path=lock_inspection.lock_path,
+            diagnostic=None,
+            validation_failures=(),
+        )
+        rendered = render_worktree_stale_lock_diagnostic(stale_outcome)
+        stale_outcome = stale_outcome.model_copy(
+            update={"diagnostic": rendered}
+        )
+
+        if run_state is None or marker_registry is None:
+            return (stale_outcome, run_state)
+
+        next_run_state = record_marker_with_context(
+            run_state=run_state,
+            marker_class=WORKTREE_STALE_LOCK_MARKER_CLASS,
+            sub_classification=None,
+            context=None,
+            marker_registry=marker_registry,
+        )
+        return (stale_outcome, next_run_state)
+
     # Story 8.6 AC-4 — canonical no-destructive-resume substrate guard.
-    # SessionStart's job is to SIGNAL reattachment, not to dispatch; the
-    # verdict is informational at this seam — the deny diagnostic is
-    # enriched into the outcome's diagnostic field but does NOT alter
-    # the outcome's action enum. Gated on (a) non-terminal current_state
-    # and (b) a previously-dispatched specialist (i.e., the reattach
-    # would IMPLICITLY re-dispatch on the next loop tick).
     can_dispatch_diagnostic: str | None = None
     if (
         current_state is not None
@@ -850,7 +1076,8 @@ def evaluate_reattach(
             if not verdict.allow:
                 can_dispatch_diagnostic = verdict.diagnostic
 
-    # Branch 2 — reattach-clean (branch present OR git unavailable).
+    # Branch 2 — reattach-clean (branch present OR git unavailable;
+    # per-story lock fresh OR absent).
     return (
         ReattachOutcome(
             action="reattach-clean",
@@ -904,7 +1131,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     Exit codes per AC-9:
         * ``0`` — silent (no run-state) OR clean reattach OR anomaly
-          (diagnostic only) OR schema-mismatch (marker emitted).
+          (diagnostic only) OR schema-mismatch (marker emitted) OR
+          worktree-stale-lock (marker emitted; Story 14.3).
         * ``1`` — substrate-level error inside the harness itself
           (e.g., ``RunState`` model fails to import; this is the
           ``harness-level error`` exit per Pattern 5; never used for
@@ -923,19 +1151,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     project_root = args.project_root
     if not project_root.is_absolute():
-        # Hook supplies an absolute path (git rev-parse --show-toplevel ||
-        # pwd both yield absolute); resolve defensively.
         project_root = project_root.resolve()
 
-    # The CLI does NOT load run_state from disk — Story 8.1's substrate is
-    # READ-ONLY against run-state per AC-5; the marker emission via
-    # marker_wiring.record_marker_with_context() requires a RunState in
-    # memory, which the CLI does not have. This is consistent with the
-    # AC-6 flow: when the CLI runs at hook time, the marker class is
-    # surfaced via the rendered stderr diagnostic (the orchestrator skill
-    # consumes the structured prefix and re-emits the marker in-process
-    # against the live RunState at the next /bmad-automation invocation
-    # per Story 8.2's recovery algorithm).
     try:
         request = ReattachRequest(project_root=project_root)
     except ValueError as exc:
@@ -947,11 +1164,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             request, run_state=None, marker_registry=None
         )
     except SessionStartReattachError as exc:
-        # Substrate-level loud-fail — print the diagnostic; exit 1.
         print(f"session-start: harness-level error: {exc}", file=sys.stderr)
         return 1
 
-    # Render the per-branch stderr line per AC-2/3/5/6.
     if outcome.action == "no-run-state-found":
         print(
             "session-start: no in-flight Automator run detected; normal startup",
@@ -975,14 +1190,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if outcome.action == "anomaly-branch-missing":
-        # diagnostic populated by evaluate_reattach already starts with
-        # "session-start: anomaly:" per AC-3.
         print(outcome.diagnostic, file=sys.stderr)
         return 0
 
+    if outcome.action == "worktree-stale-lock-detected":
+        # Story 14.3 — fifth branch; diagnostic already starts with the
+        # ``worktree-stale-lock:`` marker-class-prefixed line.
+        print(f"session-start: {outcome.diagnostic}", file=sys.stderr)
+        return 0
+
     # outcome.action == "reattach-with-marker" — schema-mismatch branch.
-    # Prefix the rendered diagnostic with the hook-name discipline per
-    # AC-6 + Story 2.7's diagnostic-format precedent.
     print(f"session-start: {outcome.diagnostic}", file=sys.stderr)
     return 0
 

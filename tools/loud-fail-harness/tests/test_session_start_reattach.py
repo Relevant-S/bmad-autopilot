@@ -67,6 +67,7 @@ from loud_fail_harness.session_start_reattach import (
     RECOVERY_STATE_CONFLICT_MARKER_CLASS,
     RUN_STATE_RELATIVE_PATH,
     RUN_STATE_SCHEMA_CURRENT_VERSION,
+    WORKTREE_STALE_LOCK_MARKER_CLASS,
     ReattachOutcome,
     ReattachRequest,
     SessionStartReattachError,
@@ -74,7 +75,12 @@ from loud_fail_harness.session_start_reattach import (
     evaluate_reattach,
     main,
     render_recovery_state_conflict_diagnostic,
+    render_worktree_stale_lock_diagnostic,
     validate_run_state_schema,
+)
+from loud_fail_harness.story_file_lock import (
+    LockInspectionResult,
+    LockRecord,
 )
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
@@ -891,3 +897,167 @@ def test_evaluate_reattach_skips_can_dispatch_on_terminal_run_state(
     assert outcome.current_state == "done"
     # can_dispatch must NOT be invoked on terminal states.
     assert captured == []
+
+
+# --------------------------------------------------------------------------- #
+# Story 14.3 — worktree-stale-lock-detected branch                            #
+# --------------------------------------------------------------------------- #
+
+
+def _make_lock_inspection(
+    *,
+    story_id: str = "8-1-test",
+    lock_path: pathlib.Path | None = None,
+    record: LockRecord | None = None,
+) -> LockInspectionResult:
+    """Build a clean :class:`LockInspectionResult` for probe-injection tests."""
+    import datetime as _dt
+
+    path = (
+        lock_path
+        if lock_path is not None
+        else pathlib.Path("/tmp/locks") / f"{story_id}.lock"
+    )
+    rec = (
+        record
+        if record is not None
+        else LockRecord(
+            schema_version="1.0",
+            story_id=story_id,
+            pid=99999,
+            started_at=_dt.datetime(
+                2026, 5, 30, 12, 0, 0, tzinfo=_dt.timezone.utc
+            ),
+            worktree_path=pathlib.Path("/tmp/wt"),
+            hostname="crashed-host",
+        )
+    )
+    return LockInspectionResult(
+        story_id=story_id,
+        lock_path=path,
+        exists=True,
+        record=rec,
+        parse_error=None,
+    )
+
+
+def test_evaluate_reattach_emits_worktree_stale_lock_branch_when_lock_is_stale(
+    tmp_project: pathlib.Path,
+    marker_registry: MarkerClassRegistry,
+) -> None:
+    _write_run_state_file(tmp_project)
+    _run_git(
+        "checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project
+    )
+
+    inspection = _make_lock_inspection()
+
+    def _stub_probe(
+        project_root: pathlib.Path, story_id: str
+    ) -> tuple[str, LockInspectionResult | None]:
+        return ("stale", inspection)
+
+    request = ReattachRequest(project_root=tmp_project)
+    run_state = _make_run_state()
+    outcome, next_run_state = evaluate_reattach(
+        request,
+        run_state=run_state,
+        marker_registry=marker_registry,
+        story_file_lock_probe=_stub_probe,
+    )
+
+    assert outcome.action == "worktree-stale-lock-detected"
+    assert outcome.marker_class == "worktree-stale-lock"
+    assert outcome.marker_class == WORKTREE_STALE_LOCK_MARKER_CLASS
+    assert outcome.diagnostic is not None
+    assert "worktree-stale-lock:" in outcome.diagnostic
+    # Marker emitted via record_marker_with_context.
+    assert next_run_state is not None
+    assert "worktree-stale-lock" in next_run_state.active_markers
+
+
+def test_evaluate_reattach_returns_reattach_clean_when_lock_is_fresh(
+    tmp_project: pathlib.Path,
+) -> None:
+    _write_run_state_file(tmp_project)
+    _run_git(
+        "checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project
+    )
+
+    inspection = _make_lock_inspection()
+
+    def _stub_probe(
+        project_root: pathlib.Path, story_id: str
+    ) -> tuple[str, LockInspectionResult | None]:
+        return ("fresh", inspection)
+
+    request = ReattachRequest(project_root=tmp_project)
+    outcome, _ = evaluate_reattach(
+        request, story_file_lock_probe=_stub_probe
+    )
+
+    assert outcome.action == "reattach-clean"
+    assert outcome.marker_class is None
+
+
+def test_evaluate_reattach_returns_reattach_clean_when_lock_is_absent(
+    tmp_project: pathlib.Path,
+) -> None:
+    _write_run_state_file(tmp_project)
+    _run_git(
+        "checkout", "-b", "bmad-automation/story/8-1-test", cwd=tmp_project
+    )
+
+    def _stub_probe(
+        project_root: pathlib.Path, story_id: str
+    ) -> tuple[str, LockInspectionResult | None]:
+        return ("absent", None)
+
+    request = ReattachRequest(project_root=tmp_project)
+    outcome, _ = evaluate_reattach(
+        request, story_file_lock_probe=_stub_probe
+    )
+
+    assert outcome.action == "reattach-clean"
+    assert outcome.marker_class is None
+
+
+def test_worktree_stale_lock_marker_class_constant_value() -> None:
+    assert WORKTREE_STALE_LOCK_MARKER_CLASS == "worktree-stale-lock"
+
+
+def test_reattach_outcome_action_literal_has_five_members() -> None:
+    annotation = ReattachOutcome.model_fields["action"].annotation
+    args = getattr(annotation, "__args__", ())
+    assert set(args) == {
+        "no-run-state-found",
+        "reattach-clean",
+        "reattach-with-marker",
+        "anomaly-branch-missing",
+        "worktree-stale-lock-detected",
+    }
+    assert len(args) == 5
+
+
+def test_render_worktree_stale_lock_diagnostic() -> None:
+    lock_path = pathlib.Path("/tmp/_bmad/automation/locks/8-1-test.lock")
+    outcome = ReattachOutcome(
+        action="worktree-stale-lock-detected",
+        run_state_path=pathlib.Path("/tmp/_bmad/automation/run-state.yaml"),
+        detected_schema_version="1.3",
+        current_schema_version=RUN_STATE_SCHEMA_CURRENT_VERSION,
+        branch_name="bmad-automation/story/8-1-test",
+        current_branch="bmad-automation/story/8-1-test",
+        dispatched_specialist="dev",
+        current_state="in-progress",
+        marker_class=WORKTREE_STALE_LOCK_MARKER_CLASS,
+        lock_path=lock_path,
+        diagnostic=None,
+        validation_failures=(),
+    )
+    rendered = render_worktree_stale_lock_diagnostic(outcome)
+    assert "worktree-stale-lock:" in rendered
+    assert str(lock_path) in rendered
+    assert "/bmad-automation cleanup" in rendered
+    assert f"rm {lock_path!s}" in rendered
+    assert "schemas/marker-taxonomy.yaml" in rendered

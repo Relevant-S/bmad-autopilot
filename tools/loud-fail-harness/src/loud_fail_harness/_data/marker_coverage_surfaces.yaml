@@ -2096,7 +2096,7 @@ verdicts:
   - marker_class: recovery-state-conflict
     surface_name: hook-session-start
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:746
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:946
     rationale: |-
       SessionStart reattachment full implementation (Story 8.1, replaces Story 2.7
       literal stub) emits recovery-state-conflict marker on schema-mismatch sub-case
@@ -3061,3 +3061,122 @@ verdicts:
       Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has
       no code path that produces this skip-event.
     audit_date: "2026-05-05"
+  - marker_class: worktree-stale-lock
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude after a crashed worktree leaves a stale lock
+      file; this surface has no recovery / lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude; cost-telemetry is a separate observability
+      pipeline with no lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: hook-session-start
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/session_start_reattach.py:1042
+    rationale: |-
+      Story 14.3 — SessionStart's fifth ``ReattachOutcome.action`` branch
+      (``worktree-stale-lock-detected``) emits the marker via
+      :func:`marker_wiring.record_marker_with_context` when the per-story
+      file-lock probe returns ``stale``. Operator-decided remediation
+      mirrors Story 14.2's no-auto-``--force`` posture (NFR-R3 + NFR-R7).
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; Stop hook has no lock-inspection
+      code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; SubagentStop hook has no
+      lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; the orchestrator dispatch wrapper
+      operates downstream of reattachment and has no lock-inspection code
+      path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; lifecycle-state transitions have
+      no lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; run-state helpers consume the
+      lock-inspection results but do not emit the marker (sensor-not-
+      advisor: the substrate library RAISES typed exceptions; SessionStart
+      EMITS the marker on the resume branch).
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; the state machine consumes the
+      marker downstream but does not emit it.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; reconciliation gates are
+      fixture-level enumeration consistency checks with no lock-
+      inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; runtime reconciliation gates have
+      no lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; Dev specialist wrapper has no
+      lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; QA specialist wrapper has no
+      lock-inspection code path.
+    audit_date: "2026-05-30"
+  - marker_class: worktree-stale-lock
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Per-story file-lock staleness marker (Story 14.3) fires only at the
+      SessionStart altitude on resume; Review-BMAD specialist wrapper has
+      no lock-inspection code path.
+    audit_date: "2026-05-30"

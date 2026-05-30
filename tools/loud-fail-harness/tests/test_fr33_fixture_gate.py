@@ -545,7 +545,7 @@ def test_pr_introduces_reconciler_regression(
 
     rc, out, _ = _capture_main([])
     assert rc == 1
-    assert "29 reconciliation-mismatch finding(s)" in out
+    assert "30 reconciliation-mismatch finding(s)" in out
     # Spot-check that several canonical fixtures appear
     for fixture_stem in (
         "heuristic-skipped",
@@ -846,11 +846,12 @@ def test_gate_result_is_frozen() -> None:
 
 
 def test_canonical_corpus_validates() -> None:
-    """The canonical 29-fixture corpus + canonical schemas → exit 0 (story
-    2.3 added 2 markers + 2 fixtures, taking the count from 27 → 29)."""
+    """The canonical 30-fixture corpus + canonical schemas → exit 0 (story
+    2.3 added 2 markers + 2 fixtures (27 → 29); story 14.3 added 1 marker
+    + 1 fixture (29 → 30))."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "Summary: 29 passing fixture(s)" in out
+    assert "Summary: 30 passing fixture(s)" in out
     assert "0 reconciliation-mismatch finding(s)" in out
     assert "0 harness-bug finding(s)" in out
     assert "0 dangling-event-class finding(s)" in out

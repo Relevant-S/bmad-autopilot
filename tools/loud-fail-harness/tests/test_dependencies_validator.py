@@ -839,7 +839,16 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # If a future story adds markers to marker-taxonomy.yaml or new
     # marker_class references to dependencies.yaml or to schemas/escalation-
     # bundles/*.yaml, update this count accordingly.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 21 orphan marker class(es)" in text
+    # Post-Story-14.3 review: marker `worktree-stale-lock` newly enumerated
+    # in `schemas/marker-taxonomy.yaml` via PATCH bump 1.6 → 1.7; zero
+    # `dependencies.yaml` reference (the marker is SessionStart-emission,
+    # NOT a dependency-failure-profile dispatch surface — emitted by
+    # `session_start_reattach.evaluate_reattach`'s fifth branch when a
+    # crashed worktree leaves a stale `_bmad/automation/locks/<story-id>.lock`
+    # file). Structurally an orphan from the enumeration_check perspective;
+    # the orphan-count increment 21 → 22 is the load-bearing witness that
+    # the taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 22 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
