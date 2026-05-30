@@ -662,6 +662,26 @@ def test_schema_version_bumps_non_regression() -> None:
     classes = load_marker_taxonomy(taxonomy_path)
     assert "env-setup-failed" in classes
 
+    # Story 14.4 landed two NEW run-state-family cell-1 schemas at
+    # schema_version "1.0" (epic-run-state.yaml + sprint-run-state.yaml);
+    # run-state.yaml itself is byte-unchanged at "1.3" (the per-worktree
+    # run-state reuses it verbatim — only the on-disk path differs). The
+    # version-history witness asserts the two new schemas explicitly so a
+    # future bump is an explicit additive change.
+    schemas_dir = taxonomy_path.parent
+    epic_schema = yaml.safe_load(
+        (schemas_dir / "epic-run-state.yaml").read_text(encoding="utf-8")
+    )
+    sprint_schema = yaml.safe_load(
+        (schemas_dir / "sprint-run-state.yaml").read_text(encoding="utf-8")
+    )
+    run_state_schema = yaml.safe_load(
+        (schemas_dir / "run-state.yaml").read_text(encoding="utf-8")
+    )
+    assert epic_schema["schema_version"] == "1.0"
+    assert sprint_schema["schema_version"] == "1.0"
+    assert run_state_schema["schema_version"] == "1.3"
+
     # Substrate-component-4 enumeration-equivalence gate continues to
     # pass — both schema bumps preserve cross-file consistency.
     result = subprocess.run(

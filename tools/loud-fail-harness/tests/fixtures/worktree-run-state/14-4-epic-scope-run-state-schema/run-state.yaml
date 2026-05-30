@@ -1,0 +1,16 @@
+# Per-worktree run-state fixture (AC-5). This is a RunState-conformant
+# document (the EXISTING per-story `schemas/run-state.yaml` shape, UNCHANGED)
+# placed at a path mirroring the per-worktree addressing convention
+# (`worktrees/<story-id>/run-state.yaml`) per ADR-009 Consequence 6. No new
+# schema; only the on-disk path differs from the per-story default.
+schema_version: "1.3"
+story_id: "14-4-epic-scope-run-state-schema"
+run_id: "run-14-4-worktree-001"
+current_state: "in-progress"
+branch_name: "bmad-automation/story/14-4-epic-scope-run-state-schema"
+dispatched_specialist: null
+last_envelope: null
+pending_qa_dispatch_payload: null
+retry_history: []
+active_markers: []
+cost_to_date_by_specialist: {}

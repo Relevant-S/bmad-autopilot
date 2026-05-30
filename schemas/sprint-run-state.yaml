@@ -1,0 +1,237 @@
+# Sprint-run-state schema (cell-1 architectural-core artifact).
+#
+# Contract anchors:
+#   - Story 14.4 (this schema's authoring; epics-phase-2.md line 476 forward-
+#     pointer — "sprint-run-state transitions ... schema landed in Epic 14
+#     Story 14.4"). Sprint-run-state is the orchestrator-domain canonical
+#     cache of flow-control state at SPRINT scope for the sprint loop (Epic 16
+#     / FR-P2-2). It is a higher-altitude AGGREGATE cache over the per-epic
+#     epic-run-state documents (and the per-story run-state documents for
+#     unassigned stories) — reconstructable from the per-epic + per-story
+#     story-docs + sprint-status.yaml on recovery per ADR-005's three-store
+#     model; it does NOT introduce a fourth canonical store (NFR-R8).
+#   - FR-P2-2 (PRD lines 944-947) — sprint orchestration over epics + per-story
+#     fallback for unassigned stories; the orchestrator advances sprint
+#     lifecycle states; `current_state` is the Automator's view (Epic 16
+#     Story 16.1).
+#   - FR-P2-1 (PRD lines 944-947) — sequential epic orchestration; this
+#     schema's `per_epic_status` field uses the `EpicCurrentState` enum
+#     sourced verbatim from Epic 15 ACs (co-versioned — see Co-versioning
+#     notes below; a change to `epic-run-state.yaml`'s lifecycle enum
+#     triggers reconciliation review with this schema).
+#   - FR45 (PRD line 908; epics-phase-2.md line 71) — "the run-state schema
+#     extends with `epic-run-state.yaml` and `sprint-run-state.yaml`
+#     variants". This file is the sprint-run-state variant.
+#   - NFR-R1 (PRD line 980) — atomic run-state writes; sprint-run-state writes
+#     land in Epic 16; Story 14.4 lands the SHAPE only.
+#   - NFR-R2 (PRD line 981) — crash recovery; the `current_state` enum + the
+#     per-epic-status aggregate make duplicate-advance detectable on recovery
+#     at sprint altitude.
+#   - NFR-R8 (PRD line 987) — cross-state consistency; sprint-run-state is an
+#     aggregate cache, not a canonical store.
+#   - ADR-003 Consequence 1 (architecture.md lines 310-315) — substrate-
+#     component closure at FIVE. This schema is a cell-1 run-state-FAMILY
+#     ARTIFACT, NOT a sixth substrate component. The Pydantic mirror lives in
+#     the substrate-LIBRARY `epic_run_state.py` (sibling of `run_state.py`).
+#   - ADR-005 Consequence 6 (architecture.md line 529) — temp-file-plus-
+#     atomic-rename; sprint-run-state inherits this when its write path lands
+#     (Epic 16).
+#   - ADR-009 Consequence 6 (architecture.md ~line 790) — worktree filesystem
+#     location; see the per-worktree run-state addressing note in
+#     `epic-run-state.yaml`.
+#   - Pattern 1 (architecture.md File-naming section) — `<kebab-name>.yaml`
+#     cell-1 file-naming; snake_case structural keys; kebab-case identifier
+#     values (current_state enum, per_epic_status enum).
+#   - Pattern 4 (architecture.md state-update discipline) — sprint-run-state
+#     writes go through the atomic-write helper layer (Epic 16).
+#
+# This file encodes a contract validated by CI; modify with care.
+# Customization may break harness reconciliation checks.
+#
+# Versioning discipline (mirrors run-state.yaml lines 88-101):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming an existing field                         → MAJOR version bump
+#   - Removing a required field                          → MAJOR version bump
+#   - Tightening a constraint (e.g. enum reduction,
+#     stricter regex, lower maxItems)                    → MAJOR version bump
+#   - Loosening a constraint (e.g. enum extension,
+#     looser regex, higher maxItems)                     → MINOR version bump
+#   - Adding or refining a sub-property under an
+#     existing field (without renaming the parent)       → PATCH version bump
+#   - Documentation-only changes (description text,
+#     comment-block edits)                               → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Co-versioned-on-bump with `epic-run-state.yaml`: this schema's
+#     `per_epic_status` field's value enum mirrors `epic-run-state.yaml`'s
+#     `current_state` enum (`EpicCurrentState`). A change to the epic
+#     lifecycle enum in `epic-run-state.yaml` triggers reconciliation review
+#     with this schema.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/sprint-run-state.yaml"
+schema_version: "1.0"
+title: "Sprint-Run-State"
+description: >-
+  Orchestrator-domain canonical cache of flow-control state for the sprint
+  loop (Epic 16 / FR-P2-2). A higher-altitude aggregate cache over the
+  per-epic epic-run-state documents (plus the per-story run-state documents
+  for unassigned stories); reconstructable from the per-epic + per-story
+  story-docs + sprint-status.yaml on recovery per ADR-005. Writes use temp-
+  file-plus-atomic-rename per NFR-R1 and ADR-005 Consequence 6 (the write
+  path lands in Epic 16). See the contract-header comment block above for the
+  full FR/NFR/ADR anchor set and the versioning discipline.
+
+type: object
+required:
+  - schema_version
+  - sprint_id
+  - run_id
+  - current_state
+  - epic_ids
+  - per_epic_status
+  - unassigned_story_ids
+  - per_sprint_retry_budget
+  - active_markers
+additionalProperties: false
+
+properties:
+  schema_version:
+    type: string
+    enum: ["1.0"]
+    description: >-
+      Schema version of this sprint-run-state document. Closed enum at the
+      Phase-2 introduction; a future bump requires an explicit additive change
+      rather than silent acceptance. Mirrors the `run-state.yaml` closed-enum
+      posture.
+
+  sprint_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-sprint identifier, the key into the BMAD sprint artifact
+      (or sprint-status.yaml). Free-form by BMAD convention; not regex-
+      constrained here.
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain identifier correlating the sprint dispatch with the
+      sprint-run-state.yaml record per ADR-005 Consequence 1. Distinguishes
+      successive runs against the same sprint_id.
+
+  current_state:
+    type: string
+    enum:
+      - sprint-in-progress
+      - sprint-paused-on-escalation
+      - sprint-paused-on-budget
+      - sprint-complete
+    description: >-
+      Sprint lifecycle state per Epic 16 Stories 16.1 / 16.2. The four members
+      mirror the epic lifecycle one scope up: `sprint-in-progress` (active
+      sequential epic dispatch), `sprint-paused-on-escalation` (a contained
+      epic paused on escalation; sprint enters paused state at the next epic-
+      completion boundary — sensor-not-advisor), `sprint-paused-on-budget`
+      (per-sprint retry budget exhausted per Story 16.2), `sprint-complete`
+      (all contained epics + unassigned stories reached a terminal state).
+      Enum members are kebab-case per Pattern 1.
+
+  epic_ids:
+    type: array
+    description: >-
+      Ordered list of the BMAD epic identifiers contained in this sprint, in
+      sprint-defined execution order (Story 16.1 — "epics execute sequentially
+      ... ordering is sprint-defined or epic-id ascending as fallback").
+    items:
+      type: string
+      minLength: 1
+
+  per_epic_status:
+    type: object
+    description: >-
+      Map of epic_id → epic lifecycle status, the sprint-altitude aggregate of
+      the contained epic-run-state `current_state` values (Story 16.4 — the
+      per-epic status the `status --sprint` query surfaces). Keys are epic_id
+      strings (parallel to `epic_ids` items; dynamic, so the closed-object
+      discipline lives on the VALUE schema's closed enum). Values are the four
+      closed `EpicCurrentState` members (byte-identical to
+      `epic-run-state.yaml`'s `current_state` enum — co-versioned).
+    additionalProperties:
+      type: string
+      enum:
+        - epic-in-progress
+        - epic-paused-on-escalation
+        - epic-paused-on-budget
+        - epic-complete
+
+  unassigned_story_ids:
+    type: array
+    description: >-
+      Ordered list of the ready-for-dev story identifiers in this sprint that
+      are NOT assigned to any contained epic — the per-story fallback dispatch
+      surface per Story 16.1 line 475 ("unassigned stories execute via Phase
+      1's per-story loop"). Possibly empty (a sprint whose stories are all
+      epic-assigned is conformant).
+    items:
+      type: string
+      minLength: 1
+
+  per_sprint_retry_budget:
+    $ref: "#/$defs/per_sprint_retry_budget"
+    description: >-
+      The per-sprint retry budget aggregate per Story 16.2 (separate from the
+      per-epic and per-story budgets). Exhaustion drives the
+      `sprint-paused-on-budget` transition + the escalation-rate-threshold
+      marker (Epic 16 enumerates the marker; Story 14.4 adds ZERO markers).
+
+  active_markers:
+    type: array
+    description: >-
+      Loud-fail marker-class string identifiers currently active at sprint
+      scope; resolved against schemas/marker-taxonomy.yaml at runtime by the
+      Epic 16 orchestrator. Possibly empty. This schema does NOT validate that
+      items are members of the taxonomy — enumeration_check territory.
+    items:
+      type: string
+      minLength: 1
+
+$defs:
+  per_sprint_retry_budget:
+    type: object
+    additionalProperties: false
+    required:
+      - multiplier
+      - epic_count
+      - effective_budget
+      - consumed
+    properties:
+      multiplier:
+        type: integer
+        minimum: 1
+        description: >-
+          Per-sprint retry-budget multiplier (integer ≥1) per Story 16.2,
+          mirroring the per-epic multiplier one scope up.
+      epic_count:
+        type: integer
+        minimum: 0
+        description: >-
+          Number of epics the budget is computed against (parallels
+          len(epic_ids)).
+      effective_budget:
+        type: integer
+        minimum: 0
+        description: >-
+          The effective per-sprint budget (multiplier × epic_count, mirroring
+          the per-epic computation one scope up).
+      consumed:
+        type: integer
+        minimum: 0
+        description: >-
+          Retry attempts consumed against the per-sprint budget so far.
+          Reaches `effective_budget` at the `sprint-paused-on-budget`
+          transition.

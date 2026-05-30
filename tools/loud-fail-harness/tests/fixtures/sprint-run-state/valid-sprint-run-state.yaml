@@ -1,0 +1,18 @@
+schema_version: "1.0"
+sprint_id: "sprint-phase-2"
+run_id: "run-sprint-phase-2-001"
+current_state: "sprint-in-progress"
+epic_ids:
+  - "epic-15"
+  - "epic-16"
+per_epic_status:
+  "epic-15": "epic-in-progress"
+  "epic-16": "epic-complete"
+unassigned_story_ids:
+  - "14-6-epic-14-reference-fixture-substrate-smoke"
+per_sprint_retry_budget:
+  multiplier: 2
+  epic_count: 2
+  effective_budget: 4
+  consumed: 0
+active_markers: []
