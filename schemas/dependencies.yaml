@@ -60,11 +60,11 @@
 # code in the harness MUST treat absence as MVP rather than as missing data.
 #
 # Canonical entry order (preserve verbatim — re-ordering loses architectural
-# narrative semantics): MVP-required dependencies first (claude-code,
+# narrative semantics): MVP-required dependencies first (git, claude-code,
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
 # (mobile-mcp, lad).
 
-schema_version: "1.4"
+schema_version: "1.5"
 # schema_version 1.1 → 1.2: mobile-mcp activated from phase: "1.5" gate;
 # version_floor pinned to 0.0.54 per ADR-007 (Story 9.1, 2026-05-11).
 # schema_version 1.2 → 1.3: mobile-mcp init + runtime profiles declare
@@ -86,8 +86,24 @@ schema_version: "1.4"
 #                           not to bmad-autopilot. After Story 12.2 each profile's
 #                           `sub_classifications:` list shrinks to its remaining
 #                           `unconfigured` entry (`silent: true`).
+# schema_version 1.4 → 1.5: git added as MVP dependency entry (version_floor "2.5";
+#                           profile total-block at init + runtime) per ADR-009
+#                           worktree-vs-branch boundary decision. Phase-2 worktree-
+#                           lifecycle substrate (Stories 14.2–14.6) depends on
+#                           git ≥ 2.5 worktree primitive. Story 14.1, 2026-05-25.
 
 dependencies:
+  git:
+    version_floor: "2.5"
+    version_ceiling_policy: "tracked-against-git-releases; primitive-deprecation triggers version-pin review"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "git v2.5+ required (worktree primitive). Run `git --version` to check."
+        marker_class: env-setup-failed
+      runtime:
+        profile: total-block
+
   claude-code:
     version_floor: "2.1.32"
     version_ceiling_policy: "tracked-against-current-releases; primitive-deprecation triggers version-pin review"

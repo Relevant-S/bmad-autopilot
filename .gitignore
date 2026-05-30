@@ -15,3 +15,6 @@ _bmad-output/qa-evidence/
 
 # Retry history (FR13/NFR-R5 — _bmad-output/retry-history/{story-id}/{round-id}/)
 _bmad-output/retry-history/
+
+# Per-story worktrees (Story 14.2 / ADR-009 — _bmad/automation/worktrees/<story-id>/)
+_bmad/automation/worktrees/

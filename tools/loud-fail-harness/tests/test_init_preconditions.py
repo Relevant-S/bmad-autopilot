@@ -41,7 +41,9 @@ from loud_fail_harness.init_preconditions import (
     PreconditionRun,
     ProjectType,
     _dispatch_graceful_degrade,
+    default_git_version_reader,
     format_init_diagnostic,
+    git_precondition_probe_factory,
     lad_precondition_probe_factory,
     run_init_preconditions,
 )
@@ -79,6 +81,7 @@ def _passing_probes(
     return PreconditionProbeRegistry(
         claude_code=lambda: _passing_probe(claude_version),
         bmad_core=lambda: _passing_probe(bmad_version),
+        git=lambda: _passing_probe(),
         tea_module=lambda: _passing_probe(),
         playwright_mcp=lambda: _passing_probe(),
         mobile_mcp=lambda: _passing_probe(),
@@ -96,6 +99,7 @@ def _failing_for(name: str, **overrides: object) -> PreconditionProbeRegistry:
     fields = {
         "claude_code": base.claude_code,
         "bmad_core": base.bmad_core,
+        "git": base.git,
         "tea_module": base.tea_module,
         "playwright_mcp": base.playwright_mcp,
         "mobile_mcp": base.mobile_mcp,
@@ -177,6 +181,7 @@ def test_total_block_fail_claude_code_below_version_floor(
             available=True, version_observed="2.1.31"
         ),
         bmad_core=base.bmad_core,
+        git=base.git,
         tea_module=base.tea_module,
         playwright_mcp=base.playwright_mcp,
         mobile_mcp=base.mobile_mcp,
@@ -306,6 +311,7 @@ def test_total_block_aggregated_halt_multiple_deps_fail(
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
         bmad_core=lambda: _failing_probe(),
+        git=base.git,
         tea_module=lambda: _failing_probe(),
         playwright_mcp=base.playwright_mcp,
         mobile_mcp=base.mobile_mcp,
@@ -398,6 +404,7 @@ def test_opt_in_skip_lad_unconfigured_silent(
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
         bmad_core=base.bmad_core,
+        git=base.git,
         tea_module=base.tea_module,
         playwright_mcp=base.playwright_mcp,
         mobile_mcp=base.mobile_mcp,
@@ -439,6 +446,7 @@ def test_aggregated_diagnostic_no_umbrella_marker(
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
         bmad_core=lambda: _failing_probe(),
+        git=base.git,
         tea_module=lambda: _failing_probe(),
         playwright_mcp=base.playwright_mcp,
         mobile_mcp=base.mobile_mcp,
@@ -587,11 +595,12 @@ def test_load_dependencies_sdn001_failure_propagates_unchanged(
 
 def test_schema_version_bumps_non_regression() -> None:
     """AC-9 case 15: the on-disk canonical schemas at HEAD parse with
-    schema_version "1.4" (dependencies.yaml — Story 10.1 bumped 1.3 → 1.4
-    for the ``lad`` activation per ADR-008 / epics-phase-1.5.md Story 10.1
-    AC-3; lineage 1.0 (Story 1.6 base) → 1.1 (Story 7.3) → 1.2 (Story 9.1
-    mobile-mcp activation) → 1.3 (Story 9.5 mobile-mcp sub_classification
-    fields) → 1.4 (Story 10.1 lad activation)) AND "1.6" (marker-taxonomy.yaml
+    schema_version "1.5" (dependencies.yaml — Story 14.1 bumped 1.4 → 1.5
+    for the ``git`` MVP dependency entry addition per ADR-009 worktree-vs-
+    branch boundary decision; lineage 1.0 (Story 1.6 base) → 1.1 (Story 7.3)
+    → 1.2 (Story 9.1 mobile-mcp activation) → 1.3 (Story 9.5 mobile-mcp
+    sub_classification fields) → 1.4 (Story 10.1 lad activation) → 1.5
+    (Story 14.1 git entry addition)) AND "1.6" (marker-taxonomy.yaml
     — Story 13.6 bumped 1.5 → 1.6 for the ``flow-branch`` sub_classification
     under ``heuristic-skipped`` per the FR22c within-AC flow-branch contract;
     prior Story 9.5 bumped 1.4 → 1.5 for the two new
@@ -599,9 +608,12 @@ def test_schema_version_bumps_non_regression() -> None:
     mid-run-unavailable] per Story 9.5 AC-1; Story 9.3 had bumped 1.3 → 1.4
     for the ``mobile-mcp-init-unreachable`` sub-classification addition;
     Story 10.1 introduces no marker-taxonomy bump per AC-9 closed-set
-    discipline). Verifies the Story 7.3 + Story 9.3 + Story 9.5 +
-    Story 13.6 schema bumps,
-    the Story 9.1 + Story 10.1 activation bumps landed AND the existing
+    discipline; Story 14.1 introduces no marker-taxonomy bump per AC-10
+    closed-set discipline — the ``worktree-stale-lock`` and ``parallel-
+    story-state-pollution`` markers ADR-009 names as forward-pointers land
+    in Stories 14.3 + 14.5 respectively). Verifies the Story 7.3 + Story 9.3
+    + Story 9.5 + Story 13.6 schema bumps, the Story 9.1 + Story 10.1
+    activation bumps + Story 14.1 git-entry bump landed AND the existing
     enumeration_check substrate-component-4 gate continues to pass.
     """
     import subprocess
@@ -610,7 +622,7 @@ def test_schema_version_bumps_non_regression() -> None:
     from loud_fail_harness.reconciler import load_marker_taxonomy
 
     raw = load_dependencies()
-    assert raw["schema_version"] == "1.4"
+    assert raw["schema_version"] == "1.5"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field
@@ -676,6 +688,7 @@ def test_extended_fixture_graceful_degrade_branch_structural(
     probes = PreconditionProbeRegistry(
         claude_code=lambda: _passing_probe("2.1.32"),
         bmad_core=lambda: _passing_probe("6.0"),
+        git=lambda: _passing_probe(),
         tea_module=lambda: _passing_probe(),
         playwright_mcp=lambda: _passing_probe(),
         mobile_mcp=lambda: _passing_probe(),
@@ -728,9 +741,11 @@ def test_project_type_parametrized_over_three_types(
             marker_registry=runtime_marker_registry,
             run_state=_make_run_state(),
         )
-        # Always the same six top-level deps (declaration order).
+        # Always the same seven top-level deps (declaration order).
+        # Story 14.1 added `git` as the first MVP entry per ADR-009.
         deps = [r.dependency for r in run.results]
         assert deps == [
+            "git",
             "claude-code",
             "bmad-core",
             "tea-module",
@@ -1094,6 +1109,7 @@ def test_lad_precondition_probe_disabled_emits_zero_lad_skipped_markers(
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
         bmad_core=base.bmad_core,
+        git=base.git,
         tea_module=base.tea_module,
         playwright_mcp=base.playwright_mcp,
         mobile_mcp=base.mobile_mcp,
@@ -1136,6 +1152,7 @@ def test_config_review_lad_omitted_block_emits_zero_lad_skipped_markers(
     probes = PreconditionProbeRegistry(
         claude_code=base.claude_code,
         bmad_core=base.bmad_core,
+        git=base.git,
         tea_module=base.tea_module,
         playwright_mcp=base.playwright_mcp,
         mobile_mcp=base.mobile_mcp,
@@ -1153,3 +1170,91 @@ def test_config_review_lad_omitted_block_emits_zero_lad_skipped_markers(
     assert lad.marker_class is None
     assert run.run_state is not None
     assert "LAD-skipped" not in run.run_state.active_markers
+
+
+# --------------------------------------------------------------------------- #
+# Story 14.2 AC-8 — git_precondition_probe_factory + registry field tests     #
+# --------------------------------------------------------------------------- #
+
+
+def test_precondition_probe_registry_has_git_field() -> None:
+    """Story 14.2 AC-8 field-set extension witness. The registry's field
+    set must include ``git`` as a required field after Story 14.2's
+    deferral resolution per Story 14.1 Review Finding #3 ("the probe
+    registration belongs to the story that adds the
+    `worktree-lifecycle` library (Story 14.2+)")."""
+    assert "git" in PreconditionProbeRegistry.model_fields
+    assert PreconditionProbeRegistry.model_fields["git"].is_required()
+
+
+def test_git_precondition_probe_factory_returns_callable() -> None:
+    """Mirrors Story 10.5's ``test_lad_precondition_probe_factory_returns_callable``
+    posture: the factory returns a zero-arg callable."""
+    probe = git_precondition_probe_factory(
+        read_git_version=lambda: "git version 2.50.0",
+    )
+    assert callable(probe)
+
+
+def test_git_precondition_probe_factory_pass_on_modern_git() -> None:
+    """``git --version`` reports >= 2.5.0 -> ``available=True``."""
+    probe = git_precondition_probe_factory(
+        read_git_version=lambda: "git version 2.50.0",
+    )
+    result = probe()
+    assert result.available is True
+    assert result.sub_classification is None
+
+
+def test_git_precondition_probe_factory_halt_on_legacy_git() -> None:
+    """``git --version`` reports < 2.5.0 -> ``available=False`` ->
+    :func:`_dispatch_total_block` halts init with the
+    ``dependencies.yaml#git.profiles.init.diagnostic`` text."""
+    probe = git_precondition_probe_factory(
+        read_git_version=lambda: "git version 2.4.0",
+    )
+    result = probe()
+    assert result.available is False
+
+
+def test_git_precondition_probe_factory_halt_on_missing_git() -> None:
+    """git binary not on PATH -> ``FileNotFoundError`` -> ``available=False``."""
+    def _raise() -> str:
+        raise FileNotFoundError("git not on PATH")
+
+    probe = git_precondition_probe_factory(read_git_version=_raise)
+    result = probe()
+    assert result.available is False
+    assert result.evidence is None
+
+
+def test_git_precondition_probe_factory_halt_on_malformed_output() -> None:
+    """Reader returns a string that does not parse as a version ->
+    ``available=False`` rather than a silent pass per AC-8."""
+    probe = git_precondition_probe_factory(
+        read_git_version=lambda: "weird output",
+    )
+    result = probe()
+    assert result.available is False
+
+
+def test_default_git_version_reader_uses_subprocess_list_form() -> None:
+    """NFR-S3 hygiene witness: the production-default reader uses
+    list-form ``args`` (NEVER ``shell=True``); shell-injection-safe
+    by construction. Smoke-calls the production reader (CI runners
+    have git on PATH per the activated ``git`` entry in
+    ``dependencies.yaml``)."""
+    import ast as _ast
+    import inspect as _inspect
+
+    source = _inspect.getsource(default_git_version_reader)
+    tree = _ast.parse(source)
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Call):
+            for kw in node.keywords:
+                if kw.arg == "shell" and isinstance(kw.value, _ast.Constant):
+                    assert kw.value.value is not True, (
+                        "default_git_version_reader must never use shell=True (NFR-S3)"
+                    )
+    out = default_git_version_reader()
+    assert out.startswith("git version "), f"unexpected git --version output: {out!r}"

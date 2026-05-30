@@ -5,9 +5,26 @@
 #   * `by_project_type` with a missing project-type key (per AC-7 — the
 #     dispatcher records `outcome="silent"` rather than crashing).
 
-schema_version: "1.4"
+schema_version: "1.5"
 
 dependencies:
+  # Story 14.1: git MVP dependency entry — version_floor "2.5" pinned per
+  # ADR-009 (worktree primitive shipped Git 2.5, July 2015). Both init +
+  # runtime profiles total-block; operator-actionable `git --version`
+  # diagnostic at init. Exercises substrate component 5 fixture-coverage on
+  # the new MVP dependency that the Phase-2 worktree-lifecycle substrate
+  # (Stories 14.2–14.6) depends on.
+  git:
+    version_floor: "2.5"
+    version_ceiling_policy: "tracked-against-git-releases; primitive-deprecation triggers version-pin review"
+    profiles:
+      init:
+        profile: total-block
+        diagnostic: "git v2.5+ required (worktree primitive). Run `git --version` to check."
+        marker_class: env-setup-failed
+      runtime:
+        profile: total-block
+
   claude-code:
     version_floor: "2.1.32"
     version_ceiling_policy: "tracked-against-current-releases"

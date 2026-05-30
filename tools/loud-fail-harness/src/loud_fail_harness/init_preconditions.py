@@ -106,6 +106,8 @@ __all__ = [
     "PreconditionRun",
     "PreconditionProbeRegistry",
     "ProjectType",
+    "default_git_version_reader",
+    "git_precondition_probe_factory",
     "lad_precondition_probe_factory",
     "run_init_preconditions",
     "format_init_diagnostic",
@@ -313,11 +315,16 @@ class PreconditionProbeRegistry(BaseModel):
 
     The registry's field set covers every top-level dependency
     identifier currently declared in ``dependencies.yaml``
-    (``claude-code``, ``bmad-core``, ``tea-module``, ``playwright-mcp``,
-    ``mobile-mcp``, ``lad``). When ``dependencies.yaml`` adds a new
-    dependency in a future MINOR-bump, this registry's field set is
-    extended additively (with a corresponding migration in the
-    orchestrator skill's probe instantiation).
+    (``claude-code``, ``bmad-core``, ``git``, ``tea-module``,
+    ``playwright-mcp``, ``mobile-mcp``, ``lad``). When
+    ``dependencies.yaml`` adds a new dependency in a future MINOR-bump,
+    this registry's field set is extended additively (with a
+    corresponding migration in the orchestrator skill's probe
+    instantiation). Story 14.2 added the ``git`` field per Story 14.1
+    Review Finding #3 (the `git` entry was activated in
+    `dependencies.yaml` by Story 14.1 but the probe registration was
+    deferred to "the story that adds the `worktree-lifecycle` library
+    (Story 14.2+)").
 
     All fields are required so the test suite cannot accidentally
     forget a dependency probe; the dispatcher fails loudly on a
@@ -329,6 +336,7 @@ class PreconditionProbeRegistry(BaseModel):
 
     claude_code: PreconditionProbe
     bmad_core: PreconditionProbe
+    git: PreconditionProbe
     tea_module: PreconditionProbe
     playwright_mcp: PreconditionProbe
     mobile_mcp: PreconditionProbe
@@ -430,6 +438,159 @@ def lad_precondition_probe_factory(
             available=True,
             sub_classification=None,
             evidence=None,
+        )
+
+    return _probe
+
+
+
+# --------------------------------------------------------------------------- #
+# git precondition probe factory (story 14.2 AC-8)                            #
+# --------------------------------------------------------------------------- #
+
+
+def default_git_version_reader() -> str:
+    """Production-default ``read_git_version`` callable wrapping
+    ``subprocess.run(["git", "--version"], …)``.
+
+    Mirrors the :func:`default_working_tree_probe` factory-shape pattern
+    at ``branch_lifecycle.py:522`` (Pattern 6 dependency-injection):
+    the factory exposes the production callable as a module-scope
+    function so tests can either inject a deterministic stub OR
+    delegate to this default at choosing.
+
+    NFR-S3 hygiene: list-form ``args`` (NEVER ``shell=True``);
+    shell-injection-safe by construction.
+
+    Returns:
+        The raw stdout of ``git --version`` (e.g.,
+        ``"git version 2.45.1"``), stripped of trailing whitespace.
+
+    Raises:
+        FileNotFoundError: ``git`` binary not on ``PATH``. The factory
+            (:func:`git_precondition_probe_factory`) catches this and
+            surfaces ``available=False`` so :func:`_dispatch_total_block`
+            halts init with the diagnostic from
+            ``dependencies.yaml#git.profiles.init.diagnostic``.
+        subprocess.CalledProcessError: ``git --version`` exited non-zero
+            (uncommon — typical git binaries always respond to
+            ``--version``). The factory does NOT catch this; it
+            propagates as a programmer-error signal (the operator's
+            git is broken at a level the substrate does not paper
+            over).
+    """
+    import subprocess as _subprocess
+
+    result = _subprocess.run(
+        ["git", "--version"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def git_precondition_probe_factory(
+    *,
+    read_git_version: Callable[[], str] | None = None,
+) -> PreconditionProbe:
+    """Construct the git precondition probe per Story 14.2 AC-8.
+
+    The factory composes a single optional injected callable
+    (Pattern 6 dependency-injection) into a zero-argument
+    :data:`PreconditionProbe` callable returning a
+    :class:`PreconditionProbeResult` shaped to the SDN-001 dispatch
+    contract at ``schemas/dependencies.yaml#git.profiles.init``
+    (``profile: total-block``; ``marker_class: env-setup-failed``;
+    operator-actionable diagnostic
+    ``"git v2.5+ required (worktree primitive). Run `git --version`
+    to check."``):
+
+        * ``read_git_version()`` raises :exc:`FileNotFoundError` (git
+          binary not on ``PATH``) → ``PreconditionProbeResult(
+          available=False, sub_classification=None, evidence=None)``
+          → :func:`_dispatch_total_block` halts init.
+        * Version string parses as ≥ ``(2, 5, 0)`` →
+          ``PreconditionProbeResult(available=True, …)`` → init
+          proceeds.
+        * Version string parses as < ``(2, 5, 0)`` →
+          ``PreconditionProbeResult(available=False, …)`` → halt
+          with the same diagnostic.
+        * Malformed output (no numeric tokens parseable) →
+          ``PreconditionProbeResult(available=False, …)``. The
+          substrate refuses to silently treat an unparseable
+          ``git --version`` as a pass.
+
+    Version-parsing discipline (per AC-8): split the output by
+    whitespace; take the third token (the canonical ``"git version
+    <X>.<Y>.<Z>[.<extra>]"`` shape places the numeric component at
+    index 2); parse the leading ``MAJOR.MINOR[.PATCH]`` components
+    via ``re.match(r"(\\d+)\\.(\\d+)(?:\\.(\\d+))?", token)``;
+    comparator is plain tuple comparison against ``(2, 5, 0)``. No
+    ``packaging.version`` dependency required — the version surface
+    here is intentionally tiny and stdlib-only.
+
+    Args:
+        read_git_version: Pattern-6-injected zero-arg callable returning
+            the raw ``git --version`` stdout string. Production callers
+            pass :func:`default_git_version_reader` (the factory's
+            implicit default when this argument is ``None``); test
+            callers inject deterministic stubs (e.g.,
+            ``lambda: "git version 2.50.0"``).
+
+    Returns:
+        A zero-argument :data:`PreconditionProbe` callable that
+        returns a :class:`PreconditionProbeResult`. The returned probe
+        is intended to be registered against
+        :attr:`PreconditionProbeRegistry.git` per Story 14.2 AC-8.
+    """
+    reader: Callable[[], str] = (
+        read_git_version if read_git_version is not None else default_git_version_reader
+    )
+
+    import re as _re
+    import subprocess as _subprocess
+
+    _version_token_pattern = _re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
+    _floor: tuple[int, int, int] = (2, 5, 0)
+
+    def _probe() -> PreconditionProbeResult:
+        try:
+            raw = reader()
+        except (FileNotFoundError, _subprocess.CalledProcessError):
+            return PreconditionProbeResult(
+                available=False,
+                sub_classification=None,
+                evidence=None,
+            )
+        tokens = raw.split()
+        if len(tokens) < 3:
+            return PreconditionProbeResult(
+                available=False,
+                sub_classification=None,
+                evidence=raw or None,
+            )
+        match = _version_token_pattern.match(tokens[2])
+        if match is None:
+            return PreconditionProbeResult(
+                available=False,
+                sub_classification=None,
+                evidence=raw or None,
+            )
+        major = int(match.group(1))
+        minor = int(match.group(2))
+        patch = int(match.group(3)) if match.group(3) is not None else 0
+        observed: tuple[int, int, int] = (major, minor, patch)
+        if observed < _floor:
+            return PreconditionProbeResult(
+                available=False,
+                sub_classification=None,
+                evidence=raw or None,
+            )
+        return PreconditionProbeResult(
+            available=True,
+            sub_classification=None,
+            evidence=raw or None,
         )
 
     return _probe

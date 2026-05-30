@@ -805,7 +805,7 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     assert rc == 0, f"enumeration-check failed: stdout={out.getvalue()!r} stderr={err.getvalue()!r}"
 
     text = out.getvalue()
-    # Post-Story-12.2: 13 passing + 21 orphans, no deferral note.
+    # Post-Story-14.1 review (marker_class: env-setup-failed added to git init): 14 passing + 21 orphans, no deferral note.
     # Story 12.2 (Sprint Change Proposal 2026-05-18 — validation-
     # responsibility-boundary correction) retired the two
     # `configured-but-api-key-missing` `emits_marker: LAD-skipped`
@@ -818,7 +818,7 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # consumer; it lands in the orphan bucket → orphan count rises
     # from 20 to 21.
     # The 13 passing references break down as:
-    #   dependencies.yaml: env-setup-failed ×4 (claude-code init +
+    #   dependencies.yaml: env-setup-failed ×5 (git init + claude-code init +
     #                        bmad-core init + tea-module init +
     #                        playwright-mcp web runtime),
     #                       mobile-blocked ×2 (mobile-mcp mobile init
@@ -830,7 +830,7 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     #                        smoke-first-abort ×1,
     #                        retry-budget-exhausted ×1,
     #                        scope-assertion-violation ×1 = 6 refs
-    # Total: 13 references. Orphans: 21 (LAD-skipped joins the orphan
+    # Total: 14 references. Orphans: 21 (LAD-skipped joins the orphan
     # bucket post-Story-12.2 since the dependencies.yaml emission
     # references were retired; the substrate-side emission via
     # `four_layer_review_dispatch._LAD_MID_RUN_MCP_UNAVAILABLE_DIAGNOSTIC`
@@ -839,7 +839,7 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # If a future story adds markers to marker-taxonomy.yaml or new
     # marker_class references to dependencies.yaml or to schemas/escalation-
     # bundles/*.yaml, update this count accordingly.
-    assert "Summary: 13 passing reference(s), 0 missing reference(s), 21 orphan marker class(es)" in text
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 21 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
@@ -901,8 +901,16 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.4"
+    assert raw["schema_version"] == "1.5"
     deps = raw["dependencies"]
+    # Story 14.1 AC-6: git entry present with version_floor "2.5";
+    # both init + runtime profiles total-block; operator-actionable
+    # diagnostic prose names `git --version` per ADR-009.
+    assert "git" in deps
+    assert deps["git"]["version_floor"] == "2.5"
+    assert deps["git"]["profiles"]["init"]["profile"] == "total-block"
+    assert deps["git"]["profiles"]["runtime"]["profile"] == "total-block"
+    assert "git --version" in deps["git"]["profiles"]["init"]["diagnostic"]
     # Story 10.1: lad activated — phase: "1.5" removed; all six dependencies
     # are now phase-free (mobile-mcp activated by Story 9.1; lad by Story 10.1).
     assert "phase" not in deps["claude-code"]
@@ -953,6 +961,32 @@ def test_load_dependencies_returns_dict() -> None:
         deps["mobile-mcp"]["by_project_type"]["mobile"]["profiles"]["runtime"]["marker_class"]
         == "mobile-blocked"
     )
+
+
+def test_extended_fixture_git_entry_state() -> None:
+    """Story 14.1 AC-7 — git-entry fixture witness (ADR-009 activation).
+
+    Loads the Story 7.3 extended fixture (which now includes a Story 14.1
+    git MVP-dependency entry) and verifies the activated shape: version_floor
+    "2.5", both init + runtime profiles total-block, operator-actionable
+    `git --version` diagnostic at init. Substrate component 5 (fixture-
+    coverage) exercises the new MVP-dependency row's structural validity;
+    the validator returns zero findings on the fixture.
+    """
+    fixture_path = (
+        pathlib.Path(__file__).resolve().parent
+        / "fixtures"
+        / "init_preconditions"
+        / "dependencies-fixture-extended.yaml"
+    )
+    raw = load_dependencies(fixture_path)
+    assert validate_dependencies(raw, str(fixture_path)) == []
+    deps = raw["dependencies"]
+    assert "git" in deps
+    assert deps["git"]["version_floor"] == "2.5"
+    assert deps["git"]["profiles"]["init"]["profile"] == "total-block"
+    assert deps["git"]["profiles"]["runtime"]["profile"] == "total-block"
+    assert "git --version" in deps["git"]["profiles"]["init"]["diagnostic"]
 
 
 def test_extended_fixture_mobile_mcp_activated_state() -> None:
