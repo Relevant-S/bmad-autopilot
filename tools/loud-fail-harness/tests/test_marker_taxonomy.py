@@ -45,20 +45,53 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_8(taxonomy_data: dict) -> None:
-    """Story 14.5 bumps schema_version from ``"1.7"`` to ``"1.8"`` per
-    epics-phase-2.md line 70 + the Story 14.3 precedent (additive: new
-    top-level marker class ``parallel-story-state-pollution`` per ADR-009
-    Consequence 5 + epics-phase-2.md line 353; bump treated as PATCH —
-    the file's internal bump-rule documentation would call this a MINOR
-    for a new top-level class; the precedent is recorded in the header
-    comment block). Prior Story 14.3 bumped 1.6 → 1.7 for the
-    ``worktree-stale-lock`` top-level class. The top-level closed-set
-    grows by +1 (the ``parallel-story-state-pollution`` class) — the
-    authoritative count is the 31-entry ``CANONICAL_MARKER_CLASSES`` in
-    ``test_reconciler.py``.
+def test_taxonomy_schema_version_is_1_9(taxonomy_data: dict) -> None:
+    """Story 15.1 bumps schema_version from ``"1.8"`` to ``"1.9"`` per the
+    file's documented MINOR-bump rule for a new OPTIONAL field — the
+    ``lifetime`` field (``transient`` | ``durable``, default ``durable``)
+    added to the ``worktree-stale-lock`` entry per AC-6. This is a new
+    top-level field, NOT a new marker class; the 31-class closed-set is
+    preserved (the authoritative count is the 31-entry
+    ``CANONICAL_MARKER_CLASSES`` in ``test_reconciler.py``). Prior Story
+    14.5 bumped 1.7 → 1.8 for the ``parallel-story-state-pollution``
+    top-level class.
     """
-    assert taxonomy_data.get("schema_version") == "1.8"
+    assert taxonomy_data.get("schema_version") == "1.9"
+
+
+def test_worktree_stale_lock_declares_transient_lifetime(
+    taxonomy_data: dict,
+) -> None:
+    """Story 15.1 AC-6: the ``worktree-stale-lock`` entry — and ONLY it —
+    carries ``lifetime: transient``; the field is the structural source of
+    the transient/durable axis the epic-run-state write-back filter
+    consults at runtime (no hardcoded class list).
+    """
+    by_class = {entry["marker_class"]: entry for entry in taxonomy_data["markers"]}
+    assert by_class["worktree-stale-lock"].get("lifetime") == "transient"
+
+
+def test_lifetime_field_is_optional_and_defaults_durable(
+    taxonomy_data: dict,
+) -> None:
+    """Story 15.1 AC-6: ``lifetime`` is an OPTIONAL field — every entry
+    other than ``worktree-stale-lock`` omits it (inheriting the ``durable``
+    default), preserving the Story 1.4 marker-permanence rule for durable
+    markers. Any entry that DOES declare ``lifetime`` declares one of the
+    two closed-enum values.
+    """
+    for entry in taxonomy_data["markers"]:
+        marker_class = entry["marker_class"]
+        if "lifetime" not in entry:
+            continue
+        assert entry["lifetime"] in {"transient", "durable"}, (
+            f"{marker_class}: lifetime must be 'transient' or 'durable'"
+        )
+        if marker_class != "worktree-stale-lock":
+            assert entry["lifetime"] == "durable", (
+                f"{marker_class}: only worktree-stale-lock is transient at "
+                f"Story 15.1; an explicit lifetime here must be 'durable'"
+            )
 
 
 def test_heuristic_skipped_declares_flow_branch_sub_classification(

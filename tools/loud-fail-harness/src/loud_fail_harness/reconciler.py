@@ -230,3 +230,53 @@ def load_marker_taxonomy(path: pathlib.Path | None = None) -> set[str]:
             )
         result.add(mc)
     return result
+
+
+def load_marker_lifetimes(path: pathlib.Path | None = None) -> dict[str, str]:
+    """Return a ``marker_class`` → ``lifetime`` map from the marker-taxonomy
+    YAML file, defaulting every entry that omits ``lifetime`` to ``"durable"``.
+
+    Sibling of :func:`load_marker_taxonomy` (same parse machinery; same
+    default-path resolution via :func:`find_repo_root` at function-call time).
+    Added by Story 15.1 (AC-6) so the epic-run-state write-back filter can
+    source the transient/durable axis structurally from the taxonomy rather
+    than from a hardcoded class list — a future transient marker is covered
+    with zero filter edits.
+
+    ``lifetime`` is an optional field (Story 15.1 MINOR bump 1.8 → 1.9): an
+    entry without it inherits ``"durable"`` (preserving the Story 1.4
+    marker-permanence rule for durable markers). A present-but-invalid
+    ``lifetime`` value raises ``RuntimeError`` (Pattern 5 loud-fail — a typo
+    in the taxonomy must not silently degrade to ``durable``).
+    """
+    if path is None:
+        path = find_repo_root() / "schemas" / "marker-taxonomy.yaml"
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not isinstance(raw.get("markers"), list):
+        raise RuntimeError(
+            f"marker-taxonomy file at {path} is malformed: "
+            "expected top-level mapping with a 'markers' list"
+        )
+    result: dict[str, str] = {}
+    for i, entry in enumerate(raw["markers"]):
+        if not isinstance(entry, dict) or "marker_class" not in entry:
+            raise RuntimeError(
+                f"marker-taxonomy file at {path} is malformed: "
+                f"entry {i} must be a mapping with a 'marker_class' key; "
+                f"got: {entry!r}"
+            )
+        mc = entry["marker_class"]
+        if not isinstance(mc, str):
+            raise RuntimeError(
+                f"marker-taxonomy file at {path} is malformed: "
+                f"entry {i} has non-string marker_class value: {mc!r}"
+            )
+        lifetime = entry.get("lifetime", "durable")
+        if lifetime not in ("transient", "durable"):
+            raise RuntimeError(
+                f"marker-taxonomy file at {path} is malformed: "
+                f"entry {i} ({mc!r}) has invalid lifetime {lifetime!r} "
+                "(expected 'transient' or 'durable')"
+            )
+        result[mc] = lifetime
+    return result

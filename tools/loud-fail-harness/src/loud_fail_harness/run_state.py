@@ -617,6 +617,42 @@ def _serialize_run_state(state: RunState) -> str:
     return yaml.safe_dump(payload, sort_keys=False, default_flow_style=False)
 
 
+def atomic_write_text(target_path: pathlib.Path, body: str) -> None:
+    """Write ``body`` to ``target_path`` via temp-file-plus-atomic-rename
+    (the NFR-R1 atomicity primitive).
+
+    Pipeline: write ``body`` to a collision-resistant temp file
+    (``<target_path>.tmp.<pid>.<token_hex>``); ``os.fsync`` the temp file's
+    contents before close; ``os.replace`` the temp path over
+    ``target_path`` (atomic on POSIX per ``os.replace`` semantics). On any
+    exception between ``os.open`` and the successful ``os.replace`` the temp
+    file is unlinked (``missing_ok=True``) before re-raising — so on failure
+    either the prior version is on disk and no temp file remains, or the
+    prior version is on disk and the temp file is gone after cleanup. Never
+    a partial-state file at ``target_path``.
+
+    This is the SINGLE-SOURCED implementation of the temp-file-plus-atomic-
+    rename invariant shared by every run-state-family writer (Pattern 4):
+    :func:`advance_run_state` (per-story) and
+    :func:`loud_fail_harness.epic_run_state.advance_epic_run_state`
+    (epic-scope + per-worktree write-back) both compose it rather than
+    re-implementing the OS dance.
+    """
+    temp_path = target_path.with_name(
+        f"{target_path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
+    )
+    try:
+        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(body)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temp_path, target_path)
+    except BaseException:
+        temp_path.unlink(missing_ok=True)
+        raise
+
+
 def advance_run_state(
     run_state_path: pathlib.Path,
     next_state: RunState,
@@ -700,46 +736,24 @@ def advance_run_state(
             cause=callback_result, attempted_next_state=next_state
         )
 
-    # Step 3: serialize + write to temp file + fsync + atomic-rename.
-    body = _serialize_run_state(next_state)
-    temp_path = run_state_path.with_name(
-        f"{run_state_path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
-    )
-    try:
-        # Write + fsync + close in a single managed scope.
-        fd = os.open(
-            temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644
-        )
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(body)
-            fh.flush()
-            os.fsync(fh.fileno())
-        # Atomic rename; on POSIX this is the NFR-R1 atomicity
-        # primitive. If the prior file at run_state_path existed, it
-        # is replaced atomically; if it did not, the temp file is
-        # renamed into place atomically.
-        os.replace(temp_path, run_state_path)
-    except BaseException:
-        # Clean up the temp file if anything between os.open and the
-        # successful os.replace failed. ``missing_ok=True`` because
-        # the failure may have happened before the temp file was
-        # created (very narrow window) or after a partial write.
-        temp_path.unlink(missing_ok=True)
-        raise
+    # Step 3: serialize + write via the shared atomic-write primitive
+    # (temp-file-plus-atomic-rename per NFR-R1).
+    atomic_write_text(run_state_path, _serialize_run_state(next_state))
 
     return AdvanceResult(next_state=next_state, wrote_path=run_state_path)
 
 
 __all__ = [
-    "RunState",
-    "RetryAttempt",
-    "CostToDateBySpecialist",
-    "LastRetryDirective",
-    "StoryDocCallback",
-    "StoryDocCallbackResult",
-    "StoryDocCallbackBlocked",
     "AdvanceResult",
-    "RunStateAdvanceBlocked",
-    "advance_run_state",
+    "CostToDateBySpecialist",
     "DEFAULT_RUN_STATE_PATH",
+    "LastRetryDirective",
+    "RetryAttempt",
+    "RunState",
+    "RunStateAdvanceBlocked",
+    "StoryDocCallback",
+    "StoryDocCallbackBlocked",
+    "StoryDocCallbackResult",
+    "advance_run_state",
+    "atomic_write_text",
 ]

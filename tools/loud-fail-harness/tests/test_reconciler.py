@@ -26,10 +26,10 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8):
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9):
     [x] all 31 expected marker_class identifiers present         → test_taxonomy_has_31_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.8" at top level                       → test_taxonomy_declares_schema_version_1_8
+    [x] schema_version: "1.9" at top level                       → test_taxonomy_declares_schema_version_1_9
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -64,6 +64,13 @@ load_marker_taxonomy helper (Task 3 surface):
     [x] malformed file raises RuntimeError (loud-fail)           → test_load_marker_taxonomy_malformed_raises
     [x] entry missing marker_class raises RuntimeError           → test_load_marker_taxonomy_entry_missing_marker_class_raises
 
+load_marker_lifetimes helper (Story 15.1 AC-6 surface):
+    [x] default path returns dict with worktree-stale-lock → transient    → test_load_marker_lifetimes_default_path
+    [x] explicit path override loads alternate file                        → test_load_marker_lifetimes_explicit_path
+    [x] all entries without lifetime field default to durable              → test_load_marker_lifetimes_defaults_to_durable
+    [x] present-but-invalid lifetime value raises RuntimeError            → test_load_marker_lifetimes_invalid_lifetime_raises
+    [x] missing file raises FileNotFoundError (loud-fail)                  → test_load_marker_lifetimes_missing_file_raises
+
 Coverage gate (AC-6):
     [x] reconciler.py module-level statement coverage ≥ 90%      → review-enforced; not a CI gate
 
@@ -86,6 +93,7 @@ from loud_fail_harness.reconciler import (
     Marker,
     MatchedPair,
     SkipEvent,
+    load_marker_lifetimes,
     load_marker_taxonomy,
     reconcile,
 )
@@ -384,7 +392,7 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_8(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_9(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
@@ -394,11 +402,15 @@ def test_taxonomy_declares_schema_version_1_8(taxonomy_data: dict) -> None:
     # ``worktree-stale-lock`` per ADR-009 Consequence 5 + epics-phase-2.md
     # line 325 forward-pointer contract; treated as PATCH per the epic-level
     # contract).
-    # Story 14.5 bumps 1.7 → 1.8 (additive: new top-level marker class
+    # Story 14.5 bumped 1.7 → 1.8 (additive: new top-level marker class
     # ``parallel-story-state-pollution`` per ADR-009 Consequence 5 +
     # epics-phase-2.md line 353; treated as PATCH per epics-phase-2.md line 70
     # + the Story 14.3 precedent).
-    assert taxonomy_data.get("schema_version") == "1.8"
+    # Story 15.1 bumps 1.8 → 1.9 (additive: OPTIONAL `lifetime` field on the
+    # worktree-stale-lock entry; new top-level field, not a new class — the
+    # 31-class closed-set below is unchanged; MINOR bump per the file's
+    # documented additive-optional-field rule).
+    assert taxonomy_data.get("schema_version") == "1.9"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -508,6 +520,83 @@ def test_load_marker_taxonomy_entry_missing_marker_class_raises(tmp_path: pathli
     )
     with pytest.raises(RuntimeError, match="malformed"):
         load_marker_taxonomy(fixture)
+
+
+# --------------------------------------------------------------------------- #
+# load_marker_lifetimes helper (Story 15.1 AC-6)                              #
+# --------------------------------------------------------------------------- #
+
+
+def test_load_marker_lifetimes_default_path() -> None:
+    """Default path resolution returns the real taxonomy; worktree-stale-lock
+    is the sole transient entry at Story 15.1."""
+    lifetimes = load_marker_lifetimes()
+    assert isinstance(lifetimes, dict)
+    assert lifetimes.get("worktree-stale-lock") == "transient"
+    assert all(v in ("transient", "durable") for v in lifetimes.values())
+
+
+def test_load_marker_lifetimes_explicit_path(tmp_path: pathlib.Path) -> None:
+    """Explicit path override is consumed; entries without ``lifetime`` default
+    to ``"durable"``."""
+    fixture = tmp_path / "mini-taxonomy.yaml"
+    fixture.write_text(
+        "schema_version: \"0.0\"\n"
+        "markers:\n"
+        "  - marker_class: alpha\n"
+        "    lifetime: transient\n"
+        "    diagnostic_pointer: a\n"
+        "    sub_classifications: []\n"
+        "  - marker_class: beta\n"
+        "    diagnostic_pointer: b\n"
+        "    sub_classifications: []\n",
+        encoding="utf-8",
+    )
+    lifetimes = load_marker_lifetimes(fixture)
+    assert lifetimes == {"alpha": "transient", "beta": "durable"}
+
+
+def test_load_marker_lifetimes_defaults_to_durable(tmp_path: pathlib.Path) -> None:
+    """All entries in a taxonomy that omits the ``lifetime`` field get
+    ``"durable"`` — the marker-permanence default (Story 1.4)."""
+    fixture = tmp_path / "no-lifetime.yaml"
+    fixture.write_text(
+        "schema_version: \"0.0\"\n"
+        "markers:\n"
+        "  - marker_class: x\n"
+        "    diagnostic_pointer: x\n"
+        "    sub_classifications: []\n"
+        "  - marker_class: y\n"
+        "    diagnostic_pointer: y\n"
+        "    sub_classifications: []\n",
+        encoding="utf-8",
+    )
+    lifetimes = load_marker_lifetimes(fixture)
+    assert lifetimes == {"x": "durable", "y": "durable"}
+
+
+def test_load_marker_lifetimes_invalid_lifetime_raises(tmp_path: pathlib.Path) -> None:
+    """A present-but-invalid ``lifetime`` value raises ``RuntimeError``
+    (Pattern 5 loud-fail — a typo must not silently degrade to durable)."""
+    fixture = tmp_path / "bad-lifetime.yaml"
+    fixture.write_text(
+        "schema_version: \"0.0\"\n"
+        "markers:\n"
+        "  - marker_class: alpha\n"
+        "    lifetime: permanent\n"
+        "    diagnostic_pointer: a\n"
+        "    sub_classifications: []\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="invalid lifetime"):
+        load_marker_lifetimes(fixture)
+
+
+def test_load_marker_lifetimes_missing_file_raises(tmp_path: pathlib.Path) -> None:
+    """A path that does not exist surfaces a ``FileNotFoundError`` (loud-fail;
+    not swallowed into a silent empty dict)."""
+    with pytest.raises(FileNotFoundError):
+        load_marker_lifetimes(tmp_path / "nonexistent.yaml")
 
 
 # --------------------------------------------------------------------------- #

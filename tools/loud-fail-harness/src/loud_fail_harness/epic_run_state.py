@@ -40,12 +40,26 @@ What this library provides:
 
 What this library enforces:
     * **NFR-R1** (PRD line 980) — atomic run-state writes. All run-state-
-      family writes inherit the temp-file-plus-atomic-rename contract. This
-      module lands SHAPES + a PATH helper, not WRITE paths: per-worktree
-      writes reuse the existing path-parameterized
-      :func:`loud_fail_harness.run_state.advance_run_state` (it already
-      accepts an arbitrary ``run_state_path``); epic/sprint write paths land
-      in Epic 15/16.
+      family writes inherit the temp-file-plus-atomic-rename contract. Story
+      14.4 landed the SHAPES + a PATH helper; Story 15.1 lands the epic-scope
+      WRITE path :func:`advance_epic_run_state` (the 4th atomic-write consumer
+      story 14.4 AC-6 forward-pointed) by composing the single-sourced
+      :func:`loud_fail_harness.run_state.atomic_write_text` primitive — NOT a
+      re-implementation of the OS rename dance. Per-worktree write-backs reuse
+      the existing path-parameterized
+      :func:`loud_fail_harness.run_state.advance_run_state` (wrapped here by
+      :func:`advance_worktree_run_state`, which layers the transient-marker
+      filter); the sprint write path lands in Epic 16.
+    * **NFR-R2 transient-marker discipline** (Story 15.1 AC-6) — a persisted
+      (epic OR per-worktree) run-state carries ONLY durable markers. Both
+      write paths filter out every marker whose taxonomy ``lifetime`` is
+      ``transient`` before the atomic rename (:func:`filter_transient_markers`,
+      sourced structurally from ``marker-taxonomy.yaml`` via
+      :func:`loud_fail_harness.reconciler.load_marker_lifetimes` — never a
+      hardcoded class list). Transient condition-markers (e.g.
+      ``worktree-stale-lock``) are recomputed each cycle from live state by
+      ``evaluate_reattach`` (left UNCHANGED), so a persisted-then-re-fed state
+      never makes a transient marker go sticky.
     * **NFR-R8** (PRD line 987) — cross-state consistency: story-doc
       canonical, run-state cache, at EVERY scope. The epic-run-state and
       sprint-run-state documents are higher-altitude AGGREGATE caches
@@ -66,9 +80,15 @@ What this library enforces:
 
 ## Sensor-not-advisor (PRD-level invariant)
 
-The models are pure data shapes. This module does NOT emit markers, does NOT
-log, does NOT print, does NOT write to disk. :func:`worktree_run_state_path`
-is a pure function (path arithmetic only). Same posture as 2.2 / 14.2 / 14.3.
+The models are pure data shapes; the helpers do NOT emit markers, do NOT log,
+do NOT print, do NOT decide flow. :func:`worktree_run_state_path` is a pure
+function (path arithmetic only). The Story 15.1 write helpers
+(:func:`advance_epic_run_state` / :func:`advance_worktree_run_state`) write the
+run-state CACHE to disk via the atomic-write primitive — the same posture as
+``run_state.advance_run_state`` (a mechanical persistence helper, not a flow
+advisor). The transient-marker filter is a mechanical STRIP, not a marker
+emission: it never adds a marker, only omits transient ones from the persisted
+view. Same posture as 2.2 / 14.2 / 14.3.
 
 ## ``find_repo_root()`` discipline (Epic 1 retro Action #1 resolution)
 
@@ -83,10 +103,12 @@ use ``tmp_path``; the orchestrator knows its own root) never reach
 ## FR62 pluggability classification
 
 This module is a *substrate-shared library* per ADR-003's substrate-vs-
-specialist boundary. It references the per-story
-:class:`loud_fail_harness.run_state.RunState` shape (the per-worktree run-
-state document type) in prose only — the per-worktree document is THAT model,
-unchanged. Substrate cross-composition is permitted; the FR62 gate
+specialist boundary. Story 15.1 adds real composition imports of
+:func:`loud_fail_harness.run_state.atomic_write_text` /
+:func:`~loud_fail_harness.run_state.advance_run_state` /
+:class:`~loud_fail_harness.run_state.RunState` and of
+:func:`loud_fail_harness.reconciler.load_marker_lifetimes` — substrate→
+substrate cross-composition, which is permitted; the FR62 gate
 (:mod:`loud_fail_harness.pluggability_gate`) audits ``agents/*.md`` specialist-
 wrapper cross-references, not substrate libraries. The reverse direction
 (``run_state`` → ``epic_run_state``) is FORBIDDEN — it would couple the
@@ -120,13 +142,61 @@ encoding and the JSON-Schema encoding cannot drift).
 
 from __future__ import annotations
 
+import json
 import pathlib
 from collections.abc import Mapping
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+import yaml
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from loud_fail_harness._shared import find_repo_root
+from loud_fail_harness.reconciler import load_marker_lifetimes
+from loud_fail_harness.run_state import (
+    AdvanceResult,
+    RunState,
+    StoryDocCallback,
+    advance_run_state,
+    atomic_write_text,
+)
+
+#: User-installation runtime path for epic-run-state per ADR-009 Consequence 6's
+#: ``_bmad/automation/`` umbrella — co-located with the per-story
+#: ``_bmad/automation/run-state.yaml`` (``run_state.DEFAULT_RUN_STATE_PATH``).
+#: Relative ``pathlib.Path`` (not anchored to any filesystem root); callers
+#: anchor it against their own root (the user's BMAD project root, or a test
+#: ``tmp_path``). Computed lazily-via-literal — no ``find_repo_root()`` at
+#: module import time per Epic 1 retrospective Action #1. The epic-run-state
+#: document is an AGGREGATE CACHE (ADR-005 / NFR-R8), NOT a fourth canonical
+#: store; this path names where that cache lives on disk.
+DEFAULT_EPIC_RUN_STATE_PATH: pathlib.Path = pathlib.Path(
+    "_bmad/automation/epic-run-state.yaml"
+)
+
+
+def _reject_unclean_text(value: str, field_label: str) -> str:
+    """Reject whitespace-only and embedded-newline string inputs (Epic 14
+    retrospective Action #2 input-hardening — applied proactively to the
+    externally-constructed epic-run-state model so the gap that recurred
+    unaddressed across Epics 13 + 14 does not recur on ``advance_epic_run_state``'s
+    inputs).
+
+    ``min_length=1`` at the Pydantic field level rejects the empty string but
+    NOT ``"   "`` (passes ``min_length``) nor ``"epic-15\\n"`` (an embedded
+    newline that would corrupt the on-disk YAML line-structure). This helper
+    closes both. Returns ``value`` unchanged on success so it composes inside
+    a validator.
+    """
+    if not value.strip():
+        raise ValueError(
+            f"{field_label} must not be whitespace-only; got {value!r}"
+        )
+    if "\n" in value or "\r" in value:
+        raise ValueError(
+            f"{field_label} must not contain embedded newlines; got {value!r}"
+        )
+    return value
+
 
 #: Closed enum for :attr:`EpicRunState.current_state` (and the value type of
 #: :attr:`SprintRunState.per_epic_status`). The four epic lifecycle states are
@@ -255,6 +325,26 @@ class EpicRunState(BaseModel):
     per_epic_cost_partition: PerEpicCostPartition
     active_markers: tuple[str, ...]
 
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> EpicRunState:
+        """Input-hardening (Epic 14 retro Action #2). The ``min_length=1``
+        field constraints reject the empty string but not whitespace-only or
+        embedded-newline values; ``story_ids`` carries no duplicate-rejection.
+        Both gaps recurred unaddressed across Epics 13 + 14; this validator
+        closes them at the model boundary so every ``advance_epic_run_state``
+        input is structurally clean (no scattered consumer-side checks).
+        """
+        _reject_unclean_text(self.epic_id, "EpicRunState.epic_id")
+        _reject_unclean_text(self.run_id, "EpicRunState.run_id")
+        for story_id in self.story_ids:
+            _reject_unclean_text(story_id, "EpicRunState.story_ids[]")
+        if len(self.story_ids) != len(set(self.story_ids)):
+            raise ValueError(
+                "EpicRunState.story_ids must not contain duplicates; got "
+                f"{self.story_ids!r}"
+            )
+        return self
+
 
 class SprintRunState(BaseModel):
     """Orchestrator-domain canonical cache of flow-control state at SPRINT
@@ -333,14 +423,222 @@ def worktree_run_state_path(
     return worktrees_root / story_id / "run-state.yaml"
 
 
+def _serialize_epic_run_state(state: EpicRunState) -> str:
+    """Render an :class:`EpicRunState` as the canonical on-disk YAML body.
+
+    Mirrors ``run_state._serialize_run_state`` 1:1: ``model_dump_json`` →
+    ``json.loads`` → ``yaml.safe_dump(sort_keys=False)`` so the JSON roundtrip
+    canonicalizes Python types into JSON-Schema-compatible primitives and
+    Pydantic's field-declaration order is preserved (load-bearing for
+    byte-stable output + ``schemas/epic-run-state.yaml`` structural agreement).
+    """
+    json_str = state.model_dump_json(by_alias=False, exclude_none=False)
+    payload: dict[str, Any] = json.loads(json_str)
+    return yaml.safe_dump(payload, sort_keys=False, default_flow_style=False)
+
+
+def _base_marker_class(marker: str) -> str:
+    """Extract the base ``marker_class`` from a possibly sub-classified marker
+    string (Pattern 2 ``base`` or ``base: sub``). The ``lifetime`` axis is a
+    property of the base class, so a sub-classified emission
+    (``worktree-stale-lock: pid-not-alive``) resolves to the same lifetime as
+    the bare class.
+    """
+    return marker.split(": ", 1)[0]
+
+
+def filter_transient_markers(
+    active_markers: tuple[str, ...],
+    transient_marker_classes: frozenset[str],
+) -> tuple[str, ...]:
+    """Return ``active_markers`` with every marker whose base class is in
+    ``transient_marker_classes`` removed, order-preserving (Story 15.1 AC-6).
+
+    Pure function — the single mechanism BOTH run-state-family write paths
+    (:func:`advance_epic_run_state`, :func:`advance_worktree_run_state`)
+    compose so a future transient marker is covered by adding ONE taxonomy
+    field, with zero filter edits.
+    """
+    return tuple(
+        marker
+        for marker in active_markers
+        if _base_marker_class(marker) not in transient_marker_classes
+    )
+
+
+def _resolve_transient_marker_classes(
+    transient_marker_classes: frozenset[str] | None,
+    taxonomy_path: pathlib.Path | None,
+) -> frozenset[str]:
+    """Resolve the transient-class set, preferring an explicit injection.
+
+    Callers (the epic loop) typically load the set ONCE per run and inject it
+    into every write; tests inject a deterministic set. When ``None``, the set
+    is sourced from the taxonomy at function-call time (no ``find_repo_root()``
+    at import time per Epic 1 retro Action #1).
+    """
+    if transient_marker_classes is not None:
+        return transient_marker_classes
+    lifetimes = load_marker_lifetimes(taxonomy_path)
+    return frozenset(
+        marker_class
+        for marker_class, lifetime in lifetimes.items()
+        if lifetime == "transient"
+    )
+
+
+class EpicRunStateAdvanceResult(BaseModel):
+    """Return shape of a successful :func:`advance_epic_run_state` call.
+
+    Frozen + field-declaration-order JSON serialization (parallel to
+    ``run_state.AdvanceResult``). Carries the PERSISTED state (post-filter, so
+    callers thread the on-disk truth forward without re-reading), the on-disk
+    path written, and the transient markers that were stripped before the write
+    (loud-visibility — the caller can surface "these transient markers were
+    not persisted" rather than the strip being silent).
+
+    Field declaration order is load-bearing for byte-stable
+    ``model_dump_json()`` output.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    next_state: EpicRunState
+    wrote_path: pathlib.Path
+    filtered_markers: tuple[str, ...]
+
+
+def advance_epic_run_state(
+    epic_run_state_path: pathlib.Path,
+    next_state: EpicRunState,
+    *,
+    transient_marker_classes: frozenset[str] | None = None,
+    taxonomy_path: pathlib.Path | None = None,
+) -> EpicRunStateAdvanceResult:
+    """Advance epic-run-state to ``next_state``, atomically, after stripping
+    every transient-lifetime marker from ``active_markers`` (AC-3 + AC-6).
+
+    The epic-scope sibling of ``run_state.advance_run_state``. Unlike the
+    per-story helper, this takes NO story-doc callback: the epic-run-state
+    document is an AGGREGATE CACHE (NFR-R8 / ADR-005), not a canonical store,
+    so there is no story-doc to write-first at epic scope — the per-story
+    story-docs are the canonical writes the per-story loop already performs
+    (NFR-R8 canonical-write-first is honored one scope down; the epic cache is
+    reconstructable from those).
+
+    Execution order:
+
+        1. Resolve the transient-class set (injected, or sourced from the
+           taxonomy at call time — taxonomy-sourced, never hardcoded).
+        2. Strip transient markers from ``next_state.active_markers`` via
+           :func:`filter_transient_markers`. If nothing was stripped, the
+           input state is persisted unchanged; otherwise a ``model_copy`` with
+           the filtered tuple is persisted (the input instance is never
+           mutated — frozen-model discipline).
+        3. Serialize + write via ``run_state.atomic_write_text`` (the
+           single-sourced temp-file-plus-atomic-rename primitive — NFR-R1). On
+           any OS-layer failure the temp file is unlinked and the prior file is
+           left intact (never a partial-state file at ``epic_run_state_path``).
+
+    Args:
+        epic_run_state_path: Caller-controlled on-disk path for the epic-run-
+            state cache (the orchestrator anchors
+            :data:`DEFAULT_EPIC_RUN_STATE_PATH` against its project root; tests
+            use ``tmp_path``). The helper does NOT compute this from
+            ``find_repo_root()``.
+        next_state: The :class:`EpicRunState` to advance to (its input
+            identifiers are hardened at construction per the model validator).
+        transient_marker_classes: Optional pre-resolved transient-class set.
+            When ``None``, resolved from the taxonomy.
+        taxonomy_path: Optional explicit ``marker-taxonomy.yaml`` path used
+            only when ``transient_marker_classes is None``.
+
+    Returns:
+        :class:`EpicRunStateAdvanceResult` with the PERSISTED (post-filter)
+        state, the on-disk path, and the stripped markers.
+
+    Raises:
+        OSError: The temp-write or atomic-rename failed at the OS layer; the
+            temp file is unlinked before re-raise and the prior cache is
+            unchanged.
+    """
+    resolved = _resolve_transient_marker_classes(
+        transient_marker_classes, taxonomy_path
+    )
+    kept = filter_transient_markers(next_state.active_markers, resolved)
+    filtered = tuple(
+        marker for marker in next_state.active_markers if marker not in kept
+    )
+    persisted_state = (
+        next_state
+        if kept == next_state.active_markers
+        else next_state.model_copy(update={"active_markers": kept})
+    )
+    atomic_write_text(
+        epic_run_state_path, _serialize_epic_run_state(persisted_state)
+    )
+    return EpicRunStateAdvanceResult(
+        next_state=persisted_state,
+        wrote_path=epic_run_state_path,
+        filtered_markers=filtered,
+    )
+
+
+def advance_worktree_run_state(
+    run_state_path: pathlib.Path,
+    next_state: RunState,
+    *,
+    story_doc_callback: StoryDocCallback,
+    transient_marker_classes: frozenset[str] | None = None,
+    taxonomy_path: pathlib.Path | None = None,
+) -> AdvanceResult:
+    """Write back a per-worktree :class:`~loud_fail_harness.run_state.RunState`
+    with the same transient-marker filter the epic-run-state path applies
+    (AC-6 "any per-worktree write-back the epic loop performs filters out every
+    transient marker").
+
+    Thin composition over ``run_state.advance_run_state``: strip transient
+    markers from ``next_state.active_markers`` first (so a recovery-recomputed
+    ``worktree-stale-lock`` never gets persisted into a per-worktree run-state
+    and made sticky), then delegate the canonical-write-first + atomic-rename
+    to the unchanged per-story helper. The story-doc callback contract is
+    preserved verbatim (NFR-R8 canonical-write-first still applies at the
+    per-worktree story scope).
+
+    Sequential Story 15.1 does not itself drive per-worktree write-backs
+    (worktrees are the parallel-mode Epic 18 surface); this helper is the
+    structural surface the epic loop / Epic 18 composes when it does, and the
+    second witness site for the AC-7 strip-witness smoke.
+    """
+    resolved = _resolve_transient_marker_classes(
+        transient_marker_classes, taxonomy_path
+    )
+    kept = filter_transient_markers(next_state.active_markers, resolved)
+    persisted_state = (
+        next_state
+        if kept == next_state.active_markers
+        else next_state.model_copy(update={"active_markers": kept})
+    )
+    return advance_run_state(
+        run_state_path=run_state_path,
+        next_state=persisted_state,
+        story_doc_callback=story_doc_callback,
+    )
+
+
 __all__ = [
+    "DEFAULT_EPIC_RUN_STATE_PATH",
     "EpicCurrentState",
     "EpicRunState",
+    "EpicRunStateAdvanceResult",
     "PerEpicCostPartition",
     "PerEpicRetryBudget",
     "PerSprintRetryBudget",
     "PerStoryStatus",
     "SprintCurrentState",
     "SprintRunState",
+    "advance_epic_run_state",
+    "advance_worktree_run_state",
+    "filter_transient_markers",
     "worktree_run_state_path",
 ]

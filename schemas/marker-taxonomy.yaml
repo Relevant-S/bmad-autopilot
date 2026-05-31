@@ -163,10 +163,33 @@
 #                            precedent. NO runtime emitter lands here — Epic 18
 #                            Story 18.2 wires detection into the parallel-
 #                            dispatch substrate (flip-the-switch property).
+#   1.8 → 1.9 (Story 15.1) — additive: appended an OPTIONAL `lifetime` field
+#                            (`transient` | `durable`, default `durable`) to a
+#                            single marker entry (`worktree-stale-lock` →
+#                            `transient`); every other entry inherits the
+#                            `durable` default by omission, preserving the
+#                            Story 1.4 marker-permanence rule for durable
+#                            markers. `lifetime` is the structural source of
+#                            the transient/durable axis the Epic 15
+#                            epic-run-state write-back filter consults at
+#                            runtime (AC-6) so a persisted (epic OR per-worktree)
+#                            run-state never carries a transient
+#                            condition-marker — recomputed each cycle from live
+#                            state by `evaluate_reattach` (NFR-R2 "transient
+#                            signal, not sticky state"). Additive-optional-field
+#                            → MINOR bump per the file's documented bump rule
+#                            (a new top-level field, not a new marker class —
+#                            the 31-class closed-set is preserved). No
+#                            `pointer_context_fields` change, no
+#                            `sub_classifications` change, no class rename;
+#                            ADR-003 substrate-component-4 enumeration-
+#                            equivalence is unaffected (it audits marker_class
+#                            membership, not entry sub-fields).
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
-schema_version: "1.8"
+# schema MINOR bump for Story 15.1 optional `lifetime` field (transient/durable axis; default durable) — additive optional field per the documented bump rule
+schema_version: "1.9"
 
 markers:
 
@@ -568,6 +591,16 @@ markers:
       mirrors the no-auto-`--force` posture of Story 14.2's worktree
       cleanup (NFR-R3 + Pattern 5 loud-fail doctrine).
     pointer_context_fields: [story_id]
+    # Story 15.1 (AC-6): `worktree-stale-lock` is a TRANSIENT condition-marker —
+    # a derived view of live filesystem-lock state recomputed each cycle by
+    # `evaluate_reattach`, NOT durable history. The Epic 15 epic-run-state
+    # write-back filter (`advance_epic_run_state`) consults this `lifetime`
+    # field at runtime and excludes every `transient`-lifetime marker before
+    # the atomic rename, so a persisted run-state can never make this marker
+    # go sticky (NFR-R2). Every other entry omits `lifetime` and inherits the
+    # `durable` default — durable markers are never stripped (Story 1.4
+    # marker-permanence rule).
+    lifetime: transient
     sub_classifications:
       - pid-not-alive
       - age-exceeded

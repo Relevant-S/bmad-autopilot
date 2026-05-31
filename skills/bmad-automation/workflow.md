@@ -8,12 +8,15 @@ Orchestrate the seam-transition flow for the BMAD Agent Development Automator: r
 
 The skill dispatches to one of four sub-step files based on the slash command the practitioner typed. Sub-step files contain the per-command prose the LLM follows at runtime; only `run` is fully thickened at this story's landing — `status`, `resume`, and `init` are literal stubs whose full implementations land in later epics.
 
-| Slash command                      | Sub-step file        | Status (epic 2.5 landing)                           | Full implementation owner       |
-| ---------------------------------- | -------------------- | --------------------------------------------------- | ------------------------------- |
-| `/bmad-automation run <story-id>`  | `steps/run.md`       | Thickened — six-step entry sequence per AC-2        | This story (Story 2.5)          |
-| `/bmad-automation status [<id>]`   | `steps/status.md`    | Thickened — single-story inspection per Story 8.4   | This story (Story 8.4) + Story 8.5 (no-args listing) |
-| `/bmad-automation resume [<id>]`   | `steps/resume.md`    | Thickened — resume protocol per Story 8.3           | This story (Story 8.3)          |
-| `/bmad-automation init`            | `steps/init.md`      | Literal stub — emits not-yet-implemented diagnostic | Stories 7.1-7.9                 |
+| Slash command                       | Sub-step file        | Status (epic 2.5 landing)                           | Full implementation owner       |
+| ----------------------------------- | -------------------- | --------------------------------------------------- | ------------------------------- |
+| `/bmad-automation run <story-id>`   | `steps/run.md`       | Thickened — six-step entry sequence per AC-2        | This story (Story 2.5)          |
+| `/bmad-automation run --epic <id>`  | `steps/run-epic.md`  | Thickened — sequential epic loop per Story 15.1     | This story (Story 15.1); Stories 15.2-15.5 thicken |
+| `/bmad-automation status [<id>]`    | `steps/status.md`    | Thickened — single-story inspection per Story 8.4   | This story (Story 8.4) + Story 8.5 (no-args listing) |
+| `/bmad-automation resume [<id>]`    | `steps/resume.md`    | Thickened — resume protocol per Story 8.3           | This story (Story 8.3)          |
+| `/bmad-automation init`             | `steps/init.md`      | Literal stub — emits not-yet-implemented diagnostic | Stories 7.1-7.9                 |
+
+**`run` invocation-form routing (Story 15.1).** The `run` subcommand has two invocation forms distinguished by the `--epic` flag. `/bmad-automation run <story-id>` (no flag) routes to `steps/run.md`'s per-story six-step entry sequence — UNCHANGED from Phase 1; the `--epic` flag is purely additive (the per-story path is bit-identical with or without epic support present, per Story 15.1 AC-2 / the Story 10.4 AC-5 bit-identity precedent). `/bmad-automation run --epic <epic-id>` routes to `steps/run-epic.md`'s sequential epic loop, which drives each contained `ready-for-dev` story through the SAME unchanged per-story sequence. Parse the presence of `--epic` first; dispatch to the matching sub-step file.
 
 When dispatching, read the matching sub-step file in full BEFORE executing any of its instructions. The stub files explicitly forbid functional logic — do not infer behavior from the heading alone.
 

@@ -447,6 +447,7 @@ def test_module_all_exports() -> None:
         "AdvanceResult",
         "RunStateAdvanceBlocked",
         "advance_run_state",
+        "atomic_write_text",
         "DEFAULT_RUN_STATE_PATH",
     }
     assert set(run_state_module.__all__) == expected
