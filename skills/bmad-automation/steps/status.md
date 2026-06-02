@@ -30,10 +30,11 @@ Exit-code semantics per Story 8.4 AC-1 / AC-12:
 
 ## Branch on argument presence
 
-The slash command `/bmad-automation status [<id>]` accepts an OPTIONAL story-id argument. The runtime branches on argument presence:
+The slash command `/bmad-automation status [<id>] [--epic <epic-id>]` accepts an OPTIONAL story-id argument OR an `--epic <epic-id>` flag. The runtime branches on argument presence:
 
+- **With `--epic <epic-id>`** (epic-scope inspection per Story 15.4) — invoke `bmad-automation-status-epic --epic <epic-id>` per the `## Epic-scope inspection protocol` section near the end of this file. The single-story + no-args protocols are bypassed entirely on this branch.
 - **With `<story-id>`** (single-story inspection per Story 8.4) — invoke `bmad-automation-status <story-id>` per the `## Substrate invocation` section above AND follow the `## Branch on outcome` protocol below.
-- **Without `<story-id>`** (no-args multi-story listing per Story 8.5) — invoke `bmad-automation-status-list` per the `## No-args multi-story listing protocol` section near the end of this file. The single-story protocol is bypassed entirely on this branch.
+- **Without any argument** (no-args multi-story listing per Story 8.5, with per-epic grouping per Story 15.4) — invoke `bmad-automation-status-list` per the `## No-args multi-story listing protocol` section near the end of this file. The single-story protocol is bypassed entirely on this branch.
 
 ## Branch on outcome
 
@@ -116,6 +117,10 @@ Branch on the parsed `outcome.action`:
 - **`listing-found`** (exit 0) — substrate prints the rendered listing (human-readable per `render_story_listing_human` OR JSON per `render_story_listing_json` depending on `--json`); the orchestrator skill surfaces verbatim. Orphan rows have already had their `orphan-run-state-detected` markers emitted by the substrate via `marker_recorder` per AC-3; no further action.
 - **`listing-empty`** (exit 0) — substrate prints the empty-listing message `(no stories with non-terminal automator state found)` via `render_listing_empty_message`; the orchestrator skill surfaces verbatim. No marker emission (no orphan ⇒ no `orphan-run-state-detected`); silent success.
 
+### Per-epic grouping (Story 15.4 — additive)
+
+The no-args listing additionally discovers the epic-run-state cache(s) under `_bmad/automation/` (at Epic 15 scope, the single `epic-run-state.yaml`) and GROUPS the per-story rows whose `story_id ∈ EpicRunState.story_ids` under a per-epic header surfacing the epic's `epic_id` + non-terminal `current_state` (a `## Epics` section with `### <epic-id> [<state>]` sub-headers). Per-story rows that are NOT a member of any discovered epic render UNGROUPED in the `## Stories` section exactly as before. Terminal `epic-complete` epics are omitted from the grouping headers (mirroring the per-story non-terminal filter). This is PURELY ADDITIVE: a project that never ran `run --epic` has byte-identical no-args human + JSON output (no `## Epics` section; no `epic_groups` key) — the bit-identity guard. The `orphan-run-state-detected` emission, the empty-listing steady state, and the read-only run-state invariant are UNCHANGED.
+
 ### Loud-fail discipline
 
 - Substrate-level errors (exit code 2) propagate to the orchestrator skill which surfaces them to the practitioner. The multi-story listing does NOT auto-retry on substrate-level errors. Pattern 5 chained-exception discipline is observed inside the substrate (`MultiStoryStatusError` analogous in shape to `StatusCommandError`).
@@ -127,9 +132,47 @@ The no-args listing IS a write surface for the `orphan-run-state-detected` marke
 
 The substrate is read-only against run-state contents per AC-6: every run-state file's mtime + sha256 are byte-identical before/after `enumerate_stories` invocation (the structural witness is `tests/test_multi_story_status.py::test_enumerate_stories_does_not_mutate_run_state_files`).
 
+## Epic-scope inspection protocol
+
+When the practitioner invokes `/bmad-automation status --epic <epic-id>`, dispatch to the Story 15.4 epic-status substrate. THIS is structurally distinct from the single-story and no-args protocols above — all three share the `/bmad-automation status` slash command and dispatch on argument presence per the `## Branch on argument presence` section near the top.
+
+### Goal
+
+Surface — read-only, with NO state mutation (FR48 + NFR-O4 at epic scope; zero write surface) — the epic lifecycle state (`epic-in-progress` / `epic-paused-on-escalation` / `epic-paused-on-budget` / `epic-complete`), the per-story status list (in the epic-defined cache order), the per-epic retry-budget consumption (used / total), the per-epic `active_markers` inline, per-story marker presence (projected from Story 8.4's `status_command.inspect_story` per contained story — NFR-R8: no fourth canonical store), and pointers to the epic-run-state file + the epic-level PR bundle. The canonical Python composition is `epic_status_command.inspect_epic`; this prose IS the LLM-runtime protocol naming what each step is for.
+
+### Substrate invocation
+
+```bash
+uv --directory bmad-autopilot/tools/loud-fail-harness/ run bmad-automation-status-epic --epic <epic-id> --project-root <absolute-path>
+```
+
+Optional flags:
+
+- `--json` — emit the canonical `EpicInspection` model serialization (`model_dump_json(indent=2)`; field declaration order is load-bearing for byte-stable output) instead of the human-readable render.
+- `--epic-run-state-path <path>` — override the default (`<project_root>/_bmad/automation/epic-run-state.yaml`). Production runs leave this unset.
+- `--repo-root <path>` — override the default (`<project_root>`), used to compute the epic-PR-bundle pointer.
+
+Exit-code semantics per Story 15.4 AC-1 / AC-6 (mirroring Story 8.4's 0/1/2 split):
+
+- **`0`** — `epic-status-found` (silent success; the rendered inspection is printed to stdout).
+- **`1`** — `epic-status-no-run-state` (no cache at the resolved path) OR `epic-id-mismatch` (the cache is for a different epic). Both are named-invariant diagnostics to stderr (`no-in-flight-epic-run-found-for-epic-id` / `epic-id-mismatch`), NOT markers.
+- **`2`** — harness-level error inside the substrate per Pattern 5 (malformed cache parse, Pydantic validation failure, unexpected exception).
+
+### Branch on outcome
+
+- **`epic-status-found`** (exit 0) — the rendered output (human or JSON) is on stdout; surface it verbatim. The human render carries: `## Epic lifecycle state` (state + `epic_id` + `run_id`); `## Per-story status` (one row per cache `story_ids` entry — `story_id → per_story_status`, with `markers=<count>` for dispatched stories and a `(not yet dispatched — no per-story run-state)` annotation for stories the epic loop has not dispatched yet — AC-3 graceful degrade); `## Per-epic retry budget` (the consumption line `Consumed <n> of <budget> ...`); `## Active loud-fail markers` (the per-epic `active_markers` alphabetical via `marker_wiring.compute_alphabetical_marker_order`, `(no active markers)` placeholder when empty); `## Pointers` (the epic-run-state file path + the epic-level PR-bundle path). For full per-story marker/retry-history detail, drill into the epic-PR-bundle pointer (its per-story rows point to each story's own canonical artifact).
+- **`epic-status-no-run-state`** / **`epic-id-mismatch`** (exit 1) — surface the named-invariant diagnostic verbatim (it already includes the remediation pointers: start a fresh epic run via `/bmad-automation run --epic <epic-id>`; list all in-flight stories/epics via no-args `/bmad-automation status`). Do NOT proceed to dispatch. Do NOT auto-start a fresh epic run — that is `/bmad-automation run --epic`'s job (`steps/run-epic.md`).
+
+### Mutation surface
+
+The `--epic` path has ZERO write surface — even less than the no-args listing (which emits `orphan-run-state-detected`). It NEVER writes the epic-run-state (no `advance_epic_run_state`), NEVER invokes `cross_state_recovery`, NEVER dispatches specialists, NEVER mutates story-docs / sprint-status / per-specialist logs / `events.jsonl` / `deferred-work.md`, NEVER touches the git working tree, and emits NO marker class. The per-story marker projection reuses Story 8.4's read-only `inspect_story` UNCHANGED. The structural witness asserts the epic-run-state file's mtime + sha256 are byte-identical before/after (`tests/test_epic_status_command.py::test_inspect_epic_does_not_mutate_cache`).
+
 ## Cross-references
 
-- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py` — the no-args multi-story enumeration substrate (Story 8.5).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py` — the no-args multi-story enumeration substrate (Story 8.5; extended with additive per-epic grouping in Story 15.4).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/epic_status_command.py` — the read-only `status --epic` epic-status substrate (Story 15.4; `inspect_epic` + renderers + `bmad-automation-status-epic` CLI).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/epic_run_state.py` — `EpicRunState` cache model + the read-only `load_epic_run_state` public loader (Story 15.4 Task 1).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_epic.py` — `compute_epic_bundle_path` (the epic-PR-bundle pointer surfaced by `status --epic`).
 - `bmad-autopilot/schemas/marker-taxonomy.yaml:382` — the `orphan-run-state-detected` marker class registration (Story 1.4 v1 27-class taxonomy).
 - `_bmad-output/planning-artifacts/epics.md:3331-3363` — Story 8.5 epic AC.
 - `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/status_command.py` — the substrate library (Story 8.4).

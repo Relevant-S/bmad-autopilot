@@ -148,7 +148,13 @@ from collections.abc import Mapping
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
 
 from loud_fail_harness._shared import find_repo_root
 from loud_fail_harness.reconciler import load_marker_lifetimes
@@ -626,11 +632,91 @@ def advance_worktree_run_state(
     )
 
 
+class EpicRunStateNotFound(Exception):
+    """Pre-condition: no epic-run-state cache file at the resolved path.
+
+    The read-only status path (Story 15.4 ``epic_status_command.inspect_epic``)
+    maps this to a named-invariant exit-1 halt (``epic-status-no-run-state``),
+    NOT a marker — mirroring Story 8.4's ``no-in-flight-run-found-for-story-id``
+    posture. Distinct from
+    :class:`loud_fail_harness.bundle_assembly_epic.EpicRunStateNotFound` (the
+    assembler's own pre-condition type, left unchurned per Story 15.4 Task 1);
+    THIS public loader is the status path's clean home.
+    """
+
+    def __init__(self, path: pathlib.Path) -> None:
+        self.path = path
+        super().__init__(f"epic-run-state cache not found at {path}")
+
+
+class EpicRunStateParseError(Exception):
+    """A present-but-malformed epic-run-state cache.
+
+    Raised on a YAML error, a non-mapping top level, or a shape that fails
+    :class:`EpicRunState` validation. The status caller maps this to exit 2
+    (Pattern 5 harness-level error); the chained cause is preserved via
+    ``from exc``.
+    """
+
+    def __init__(self, path: pathlib.Path, *, cause: str) -> None:
+        self.path = path
+        self.cause = cause
+        super().__init__(
+            f"epic-run-state cache at {path} failed to parse/validate: {cause}"
+        )
+
+
+def load_epic_run_state(epic_run_state_path: pathlib.Path) -> EpicRunState:
+    """Read + Pydantic-validate the epic-run-state cache YAML (read-only).
+
+    The single-sourced public loader for the read-only status path (Story
+    15.4 AC-1). Returns the validated :class:`EpicRunState`; NEVER writes
+    (no :func:`advance_epic_run_state`, no mutation). Distinct from
+    :func:`loud_fail_harness.bundle_assembly_epic._load_epic_run_state` (the
+    assembler-tuned loader, Story 15.3 — left unchurned per Story 15.4 Task 1
+    so 15.3 behaviour is unchanged).
+
+    Raises:
+        EpicRunStateNotFound: no file at ``epic_run_state_path`` (pre-condition;
+            the caller maps to exit 1).
+        EpicRunStateParseError: present-but-malformed (unreadable, YAML error,
+            non-mapping top level, or :class:`EpicRunState` validation failure;
+            the caller maps to exit 2).
+    """
+    if not epic_run_state_path.is_file():
+        raise EpicRunStateNotFound(epic_run_state_path)
+    try:
+        text = epic_run_state_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise EpicRunStateNotFound(epic_run_state_path) from exc
+    except OSError as exc:
+        raise EpicRunStateParseError(
+            epic_run_state_path, cause=f"unreadable: {exc}"
+        ) from exc
+    try:
+        raw = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise EpicRunStateParseError(
+            epic_run_state_path, cause=f"YAML error: {exc}"
+        ) from exc
+    if not isinstance(raw, Mapping):
+        raise EpicRunStateParseError(
+            epic_run_state_path,
+            cause="did not parse to a YAML mapping at top level",
+        )
+    try:
+        return EpicRunState.model_validate(dict(raw))
+    except ValidationError as exc:
+        raise EpicRunStateParseError(epic_run_state_path, cause=str(exc)) from exc
+
+
 __all__ = [
     "DEFAULT_EPIC_RUN_STATE_PATH",
     "EpicCurrentState",
     "EpicRunState",
     "EpicRunStateAdvanceResult",
+    "EpicRunStateNotFound",
+    "EpicRunStateParseError",
     "PerEpicCostPartition",
     "PerEpicRetryBudget",
     "PerSprintRetryBudget",
@@ -640,5 +726,6 @@ __all__ = [
     "advance_epic_run_state",
     "advance_worktree_run_state",
     "filter_transient_markers",
+    "load_epic_run_state",
     "worktree_run_state_path",
 ]

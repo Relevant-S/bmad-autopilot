@@ -46,6 +46,14 @@ AC-1 / AC-12 — CLI smoke (4):
     [x] test_main_exits_zero_on_listing_found_with_json_flag
     [x] test_main_exits_zero_on_listing_empty
     [x] test_main_exits_two_on_substrate_error
+
+Story 15.4 AC-5 — additive per-epic grouping (7):
+    [x] test_no_epic_run_state_json_omits_epic_groups
+    [x] test_no_epic_run_state_human_omits_epics_section
+    [x] test_epic_grouping_present_when_cache_exists
+    [x] test_epic_complete_omitted_from_grouping
+    [x] test_per_story_run_state_not_treated_as_epic_cache
+    [x] test_enumerate_stories_does_not_mutate_epic_run_state_file
 """
 
 from __future__ import annotations
@@ -260,6 +268,7 @@ def _list_marker_recorder():
 def test_module_exports_documented_public_api() -> None:
     """The module's __all__ enumerates the AC-1 public API."""
     expected = {
+        "EpicGroupSummary",
         "ListingOutcome",
         "ListingRequest",
         "MultiStoryStatusError",
@@ -956,3 +965,164 @@ def test_find_repo_root_not_at_module_collection_time() -> None:
             assert name != "find_repo_root", (
                 "find_repo_root() must not be called at module collection time"
             )
+
+
+# --------------------------------------------------------------------------- #
+# Story 15.4 AC-5 — additive per-epic grouping                                #
+# --------------------------------------------------------------------------- #
+
+
+def _write_epic_run_state_file(
+    project_root: pathlib.Path,
+    *,
+    epic_id: str = "epic-15",
+    run_id: str = "run-epic-15-001",
+    current_state: str = "epic-in-progress",
+    story_ids: tuple[str, ...] = ("15-1-foo", "15-2-bar"),
+    filename: str = "epic-run-state.yaml",
+) -> pathlib.Path:
+    path = project_root / "_bmad" / "automation" / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    story_ids_yaml = "\n".join(f"  - {sid}" for sid in story_ids)
+    per_status = "\n".join(f"  {sid}: in-progress" for sid in story_ids)
+    per_cost = "\n".join(f"    {sid}: 0.0" for sid in story_ids)
+    path.write_text(
+        "schema_version: '1.0'\n"
+        f"epic_id: {epic_id}\n"
+        f"run_id: {run_id}\n"
+        f"current_state: {current_state}\n"
+        f"story_ids:\n{story_ids_yaml}\n"
+        f"per_story_status:\n{per_status}\n"
+        "per_epic_retry_budget:\n"
+        "  multiplier: 2\n"
+        f"  story_count: {len(story_ids)}\n"
+        "  effective_budget: 4\n"
+        "  consumed: 0\n"
+        "per_epic_cost_partition:\n"
+        f"  per_story_cost:\n{per_cost}\n"
+        "  epic_cost_total: 0.0\n"
+        "active_markers: []\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_no_epic_run_state_json_omits_epic_groups(tmp_project: pathlib.Path) -> None:
+    """AC-5 bit-identity guard: with NO epic-run-state cache, the JSON output
+    carries no ``epic_groups`` key (byte-identical to Story 8.5's)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert outcome.listing.epic_groups == ()
+    assert "epic_groups" not in render_story_listing_json(outcome.listing)
+
+
+def test_no_epic_run_state_human_omits_epics_section(
+    tmp_project: pathlib.Path,
+) -> None:
+    """AC-5 bit-identity guard: with NO epic-run-state cache, the human output
+    carries no ``## Epics`` section."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    human = render_story_listing_human(outcome.listing)
+    assert "## Epics" not in human
+    assert "## Stories" in human
+
+
+def test_epic_grouping_present_when_cache_exists(
+    tmp_project: pathlib.Path,
+) -> None:
+    _write_sprint_status(
+        tmp_project,
+        {"15-1-foo": "in-progress", "15-2-bar": "review", "9-9-other": "in-progress"},
+    )
+    _write_epic_run_state_file(
+        tmp_project, story_ids=("15-1-foo", "15-2-bar")
+    )
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    listing = outcome.listing
+    assert len(listing.epic_groups) == 1
+    grp = listing.epic_groups[0]
+    assert grp.epic_id == "epic-15"
+    assert grp.current_state == "epic-in-progress"
+    assert grp.story_ids == ("15-1-foo", "15-2-bar")
+
+    human = render_story_listing_human(listing)
+    assert "## Epics" in human
+    assert "### epic-15 [epic-in-progress]" in human
+    # member rows render under the epic header; the non-member story is
+    # ungrouped in ## Stories.
+    epics_idx = human.index("## Epics")
+    stories_idx = human.index("## Stories")
+    assert human.index("15-1-foo", epics_idx) < stories_idx
+    assert human.index("9-9-other") > stories_idx
+
+    json_out = render_story_listing_json(listing)
+    assert "epic_groups" in json_out
+
+
+def test_epic_complete_omitted_from_grouping(tmp_project: pathlib.Path) -> None:
+    """AC-5: terminal ``epic-complete`` epics are omitted from grouping
+    headers (mirroring the per-story non-terminal filter)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    _write_epic_run_state_file(
+        tmp_project, current_state="epic-complete", story_ids=("15-1-foo",)
+    )
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert outcome.listing.epic_groups == ()
+    human = render_story_listing_human(outcome.listing)
+    assert "## Epics" not in human
+    # The member story still renders ungrouped.
+    assert "15-1-foo" in human
+
+
+def test_per_story_run_state_not_treated_as_epic_cache(
+    tmp_project: pathlib.Path,
+) -> None:
+    """A per-story ``run-state.yaml`` sharing the automation dir is NOT a
+    valid epic-run-state cache and must not appear as a grouping."""
+    _write_run_state_yaml(tmp_project, story_id="15-1-foo")
+    _write_story_doc(tmp_project, "15-1-foo")
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert outcome.listing.epic_groups == ()
+
+
+def test_enumerate_stories_does_not_mutate_epic_run_state_file(
+    tmp_project: pathlib.Path,
+) -> None:
+    """AC-5 structural witness: the epic-run-state file's mtime + sha256 are
+    byte-identical before/after enumerate_stories (read-only invariant extends
+    to the additive _discover_epic_groups path)."""
+    import hashlib
+
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    epic_path = _write_epic_run_state_file(tmp_project, story_ids=("15-1-foo",))
+    before = (
+        epic_path.stat().st_mtime_ns,
+        hashlib.sha256(epic_path.read_bytes()).hexdigest(),
+    )
+    request = ListingRequest(
+        project_root=tmp_project,
+        inspect_story_fn=_stub_inspect_fn({}),
+    )
+    enumerate_stories(request)
+    after = (
+        epic_path.stat().st_mtime_ns,
+        hashlib.sha256(epic_path.read_bytes()).hexdigest(),
+    )
+    assert after == before

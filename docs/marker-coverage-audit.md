@@ -266,7 +266,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | orphan-run-state-detected | hook-subagent-stop | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
-| orphan-run-state-detected | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py:747` | 2026-05-10 |  |
+| orphan-run-state-detected | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py:817` | 2026-05-10 |  |
 | orphan-run-state-detected | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |

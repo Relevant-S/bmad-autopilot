@@ -114,10 +114,17 @@ from typing import Any, ClassVar, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from .epic_run_state import (
+    EpicCurrentState,
+    EpicRunStateNotFound,
+    EpicRunStateParseError,
+    load_epic_run_state,
+)
 from .run_state import CurrentState
 from .status_command import StatusOutcome, StatusRequest, StoryInspection, inspect_story
 
 __all__ = [
+    "EpicGroupSummary",
     "ListingOutcome",
     "ListingRequest",
     "MultiStoryStatusError",
@@ -332,6 +339,24 @@ class StoryRowSummary(BaseModel):
     is_orphan: bool = False
 
 
+class EpicGroupSummary(BaseModel):
+    """A discovered non-terminal epic's grouping header (Story 15.4 AC-5).
+
+    Frozen per Pattern 4; field declaration order is load-bearing for
+    byte-stable :meth:`model_dump_json` output. Surfaces the epic's
+    ``epic_id`` + non-terminal ``current_state`` + member ``story_ids`` (in
+    the epic-defined cache order Story 15.1 seeded). Terminal
+    ``epic-complete`` epics are NEVER constructed (omitted at discovery time,
+    mirroring the per-story non-terminal filter).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    epic_id: str
+    current_state: EpicCurrentState
+    story_ids: tuple[str, ...]
+
+
 class StoryListing(BaseModel):
     """The canonical multi-story listing payload per AC-1.
 
@@ -342,6 +367,12 @@ class StoryListing(BaseModel):
     Orphan rows interleave with normal rows by lexicographic ordering;
     the ``is_orphan`` field discriminates them visually in the renderer
     per AC-4.
+
+    ``epic_groups`` (Story 15.4 AC-5) is a PURELY ADDITIVE field carrying
+    discovered non-terminal epic groupings. It defaults to ``()`` so a
+    project that never ran ``run --epic`` has byte-identical no-args output
+    (the renderers omit the field/section entirely when it is empty — the
+    bit-identity guard).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -349,6 +380,7 @@ class StoryListing(BaseModel):
     rows: tuple[StoryRowSummary, ...]
     orphan_count: int
     total_count: int
+    epic_groups: tuple[EpicGroupSummary, ...] = ()
 
 
 _ListingAction = Literal["listing-found", "listing-empty"]
@@ -514,6 +546,55 @@ def _discover_sprint_status_candidates(
             continue
         candidates.add(key)
     return candidates
+
+
+def _discover_epic_groups(
+    automation_dir: pathlib.Path,
+) -> tuple["EpicGroupSummary", ...]:
+    """Walk ``automation_dir`` for epic-run-state cache(s) and project each
+    non-terminal cache to an :class:`EpicGroupSummary` (Story 15.4 AC-5).
+
+    The walk is a non-recursive ``*.yaml`` glob consistent with
+    :func:`_discover_run_state_candidates` (so Epic 18's per-worktree
+    expansion is additive). At Epic 15 scope this is the single
+    ``epic-run-state.yaml``. A ``*.yaml`` that is NOT an epic-run-state cache
+    (e.g. the per-story ``run-state.yaml``) fails
+    :func:`epic_run_state.load_epic_run_state` validation and is skipped at
+    DEBUG — it is not an epic-run-state file. Terminal ``epic-complete`` epics
+    are omitted from the grouping headers (mirroring the per-story
+    non-terminal filter).
+    """
+    if not automation_dir.is_dir():
+        return ()
+    groups: list[EpicGroupSummary] = []
+    for path in sorted(automation_dir.glob("*.yaml")):
+        try:
+            cache = load_epic_run_state(path)
+        except EpicRunStateNotFound as exc:
+            _logger.debug(
+                "candidate %r not found or disappeared (race) — skipping: %r",
+                path,
+                exc,
+            )
+            continue
+        except EpicRunStateParseError as exc:
+            _logger.debug(
+                "candidate %r is not a valid epic-run-state cache: %r — "
+                "skipping",
+                path,
+                exc,
+            )
+            continue
+        if cache.current_state == "epic-complete":
+            continue
+        groups.append(
+            EpicGroupSummary(
+                epic_id=cache.epic_id,
+                current_state=cache.current_state,
+                story_ids=cache.story_ids,
+            )
+        )
+    return tuple(groups)
 
 
 # --------------------------------------------------------------------------- #
@@ -744,10 +825,14 @@ def enumerate_stories(request: ListingRequest) -> ListingOutcome:
 
     rows_tuple = tuple(rows)
     orphan_count = sum(1 for r in rows_tuple if r.is_orphan)
+    # AC-5: purely-additive per-epic grouping. Empty when no epic-run-state
+    # cache exists → byte-identical no-args output (the bit-identity guard).
+    epic_groups = _discover_epic_groups(automation_dir)
     listing = StoryListing(
         rows=rows_tuple,
         orphan_count=orphan_count,
         total_count=len(rows_tuple),
+        epic_groups=epic_groups,
     )
     action: _ListingAction = "listing-found" if rows_tuple else "listing-empty"
     return ListingOutcome(action=action, listing=listing)
@@ -776,6 +861,25 @@ def _format_timestamp(ts: datetime.datetime | None) -> str:
     return ts.isoformat()
 
 
+def _render_story_row_line(row: StoryRowSummary) -> str:
+    """Render a single per-story row line (byte-identical to the Story 8.5
+    inline form). Shared by the ungrouped ``## Stories`` section and the
+    per-epic grouped rows (Story 15.4 AC-5)."""
+    ts_rendered = _format_timestamp(row.last_activity_timestamp)
+    if row.is_orphan:
+        return (
+            f"[ORPHAN] {row.story_id} [{row.current_state}] "
+            f"branch={row.branch_name} markers={row.marker_count} "
+            f"last_activity={ts_rendered} -- story-doc missing; "
+            "orphan-run-state-detected marker emitted"
+        )
+    return (
+        f"{row.story_id} [{row.current_state}] "
+        f"branch={row.branch_name} markers={row.marker_count} "
+        f"last_activity={ts_rendered}"
+    )
+
+
 def render_story_listing_human(listing: StoryListing) -> str:
     """Pure deterministic formatter producing the AC-4 human-readable
     terminal output.
@@ -788,12 +892,23 @@ def render_story_listing_human(listing: StoryListing) -> str:
 
     1. Heading: ``# /bmad-automation status — multi-story listing``
     2. ``## Summary`` — total + orphans counts.
-    3. ``## Stories`` — per-row entries (rendered when ``total_count > 0``).
-    4. ``## Loud-fail markers`` — per-orphan blocks (rendered when
+    3. ``## Epics`` — per-epic grouped member rows (Story 15.4 AC-5; rendered
+       ONLY when ``epic_groups`` is non-empty — purely additive).
+    4. ``## Stories`` — ungrouped (non-epic-member) per-row entries.
+    5. ``## Loud-fail markers`` — per-orphan blocks (rendered when
        ``orphan_count > 0``).
-    5. ``## Empty case`` — empty-listing message (rendered when
+    6. ``## Empty case`` — empty-listing message (rendered when
        ``total_count == 0``).
+
+    Bit-identity guard (Story 15.4 AC-5): when ``epic_groups`` is empty, the
+    ``## Epics`` section is absent and EVERY row is a non-member, so the
+    ``## Stories`` section is byte-identical to Story 8.5's output.
     """
+    member_ids: set[str] = set()
+    for group in listing.epic_groups:
+        member_ids.update(group.story_ids)
+    rows_by_id = {row.story_id: row for row in listing.rows}
+
     lines: list[str] = []
     lines.append("# /bmad-automation status — multi-story listing")
     lines.append("")
@@ -805,25 +920,31 @@ def render_story_listing_human(listing: StoryListing) -> str:
     lines.append(f"orphans: {listing.orphan_count}")
     lines.append("")
 
-    # --- Stories ---
-    if listing.total_count > 0:
+    # --- Epics (grouped member rows; purely additive) ---
+    if listing.epic_groups:
+        lines.append("## Epics")
+        lines.append("")
+        for group in listing.epic_groups:
+            group_rows = [
+                rows_by_id[sid] for sid in group.story_ids if sid in rows_by_id
+            ]
+            if not group_rows:
+                continue
+            lines.append(f"### {group.epic_id} [{group.current_state}]")
+            lines.append("")
+            for row in group_rows:
+                lines.append(_render_story_row_line(row))
+                lines.append("")
+
+    # --- Stories (ungrouped non-members) ---
+    non_member_rows = [
+        row for row in listing.rows if row.story_id not in member_ids
+    ]
+    if non_member_rows:
         lines.append("## Stories")
         lines.append("")
-        for row in listing.rows:
-            ts_rendered = _format_timestamp(row.last_activity_timestamp)
-            if row.is_orphan:
-                lines.append(
-                    f"[ORPHAN] {row.story_id} [{row.current_state}] "
-                    f"branch={row.branch_name} markers={row.marker_count} "
-                    f"last_activity={ts_rendered} -- story-doc missing; "
-                    "orphan-run-state-detected marker emitted"
-                )
-            else:
-                lines.append(
-                    f"{row.story_id} [{row.current_state}] "
-                    f"branch={row.branch_name} markers={row.marker_count} "
-                    f"last_activity={ts_rendered}"
-                )
+        for row in non_member_rows:
+            lines.append(_render_story_row_line(row))
             lines.append("")
 
     # --- Loud-fail markers ---
@@ -870,8 +991,14 @@ def render_story_listing_json(listing: StoryListing) -> str:
     load-bearing for byte-stable output. ``datetime.datetime`` fields
     serialize as ISO-8601; round-trip via
     :meth:`StoryListing.model_validate_json` is byte-stable.
+
+    Bit-identity guard (Story 15.4 AC-5): ``epic_groups`` (the trailing
+    additive field) is excluded from the dump when empty, so a project that
+    never ran ``run --epic`` has byte-identical no-args JSON to Story 8.5's.
     """
-    return listing.model_dump_json(indent=2)
+    if listing.epic_groups:
+        return listing.model_dump_json(indent=2)
+    return listing.model_dump_json(indent=2, exclude={"epic_groups"})
 
 
 # --------------------------------------------------------------------------- #

@@ -59,6 +59,14 @@ Story 15.1 — advance_epic_run_state + transient filter + hardening (AC-3, AC-6
     [x] EpicRunState rejects whitespace-only epic_id                       → test_epic_run_state_rejects_whitespace_only_epic_id
     [x] EpicRunState rejects embedded-newline run_id                       → test_epic_run_state_rejects_embedded_newline_run_id
     [x] EpicRunState rejects duplicate story_ids                           → test_epic_run_state_rejects_duplicate_story_ids
+
+Story 15.4 — load_epic_run_state public loader (Task 1; AC-1 / AC-6):
+    [x] happy path returns validated EpicRunState                          → test_load_epic_run_state_happy_path_returns_validated_model
+    [x] missing file raises typed EpicRunStateNotFound (pre-condition)      → test_load_epic_run_state_missing_file_raises_not_found
+    [x] non-mapping top level raises typed EpicRunStateParseError           → test_load_epic_run_state_non_mapping_raises_parse_error
+    [x] schema mismatch (e.g. a per-story run-state) raises ParseError      → test_load_epic_run_state_schema_mismatch_raises_parse_error
+    [x] malformed YAML raises typed EpicRunStateParseError                  → test_load_epic_run_state_malformed_yaml_raises_parse_error
+    [x] loader is read-only (mtime + sha256 unchanged)                     → test_load_epic_run_state_does_not_mutate_file
 """
 
 from __future__ import annotations
@@ -84,6 +92,8 @@ from loud_fail_harness.epic_run_state import (
     EpicCurrentState,
     EpicRunState,
     EpicRunStateAdvanceResult,
+    EpicRunStateNotFound,
+    EpicRunStateParseError,
     PerEpicCostPartition,
     PerEpicRetryBudget,
     PerSprintRetryBudget,
@@ -92,6 +102,7 @@ from loud_fail_harness.epic_run_state import (
     SprintRunState,
     advance_epic_run_state,
     filter_transient_markers,
+    load_epic_run_state,
     worktree_run_state_path,
 )
 
@@ -468,6 +479,8 @@ def test_module_all_exports() -> None:
         "EpicCurrentState",
         "EpicRunState",
         "EpicRunStateAdvanceResult",
+        "EpicRunStateNotFound",
+        "EpicRunStateParseError",
         "PerEpicCostPartition",
         "PerEpicRetryBudget",
         "PerSprintRetryBudget",
@@ -477,6 +490,7 @@ def test_module_all_exports() -> None:
         "advance_epic_run_state",
         "advance_worktree_run_state",
         "filter_transient_markers",
+        "load_epic_run_state",
         "worktree_run_state_path",
     ]
     assert epic_run_state_module.__all__ == expected
@@ -637,3 +651,74 @@ def test_epic_run_state_rejects_duplicate_story_ids() -> None:
     kwargs["story_ids"] = ("15-1-foo", "15-1-foo")
     with pytest.raises(PydanticValidationError):
         EpicRunState(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# load_epic_run_state public loader (Story 15.4 Task 1; AC-1 / AC-6)
+# ---------------------------------------------------------------------------
+
+
+def test_load_epic_run_state_happy_path_returns_validated_model(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "epic-run-state.yaml"
+    path.write_text(
+        _epic_run_state().model_dump_json(), encoding="utf-8"
+    )
+    loaded = load_epic_run_state(path)
+    assert isinstance(loaded, EpicRunState)
+    assert loaded.epic_id == "epic-15"
+    assert loaded.current_state == "epic-in-progress"
+
+
+def test_load_epic_run_state_missing_file_raises_not_found(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "does-not-exist.yaml"
+    with pytest.raises(EpicRunStateNotFound) as excinfo:
+        load_epic_run_state(path)
+    assert excinfo.value.path == path
+
+
+def test_load_epic_run_state_non_mapping_raises_parse_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "epic-run-state.yaml"
+    path.write_text("- just\n- a\n- list\n", encoding="utf-8")
+    with pytest.raises(EpicRunStateParseError):
+        load_epic_run_state(path)
+
+
+def test_load_epic_run_state_schema_mismatch_raises_parse_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "epic-run-state.yaml"
+    # A valid YAML mapping that is NOT a valid EpicRunState (e.g. a per-story
+    # run-state.yaml) → EpicRunStateParseError (caller maps to exit 2).
+    path.write_text(
+        "schema_version: '1.3'\nstory_id: 15-4\ncurrent_state: in-progress\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(EpicRunStateParseError) as excinfo:
+        load_epic_run_state(path)
+    assert excinfo.value.path == path
+
+
+def test_load_epic_run_state_malformed_yaml_raises_parse_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "epic-run-state.yaml"
+    path.write_text("epic_id: [unterminated\n", encoding="utf-8")
+    with pytest.raises(EpicRunStateParseError):
+        load_epic_run_state(path)
+
+
+def test_load_epic_run_state_does_not_mutate_file(tmp_path: pathlib.Path) -> None:
+    import hashlib
+
+    path = tmp_path / "epic-run-state.yaml"
+    path.write_text(_epic_run_state().model_dump_json(), encoding="utf-8")
+    before = (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    load_epic_run_state(path)
+    after = (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    assert after == before

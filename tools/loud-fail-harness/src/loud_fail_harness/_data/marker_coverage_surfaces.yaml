@@ -1728,7 +1728,7 @@ verdicts:
   - marker_class: orphan-run-state-detected
     surface_name: orchestrator-run-state-helper
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py:747
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py:817
     audit_date: "2026-05-10"
   - marker_class: orphan-run-state-detected
     surface_name: orchestrator-state-machine

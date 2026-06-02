@@ -126,6 +126,14 @@ bmad-automation-status = "loud_fail_harness.status_command:main"
 # story-id; emits orphan markers for run-state entries whose story-doc is missing.
 # See src/loud_fail_harness/multi_story_status.py for the substrate.
 bmad-automation-status-list = "loud_fail_harness.multi_story_status:main"
+# bmad-automation-status-epic (Story 15.4) — invoked by /bmad-automation status --epic <epic-id>'s
+# orchestrator-skill step. Read-only EPIC-scope inspection per FR48 + NFR-O4 (zero write surface).
+# Loads the epic-run-state cache via epic_run_state.load_epic_run_state; projects Story 8.4's
+# status_command.inspect_story per contained story for per-story marker presence (NFR-R8 — no fourth
+# canonical store); computes the epic-PR-bundle pointer via bundle_assembly_epic.compute_epic_bundle_path.
+# Halts on no-epic-run-state / epic-id-mismatch with a named-invariant diagnostic (NOT a marker).
+# See src/loud_fail_harness/epic_status_command.py for the substrate.
+bmad-automation-status-epic = "loud_fail_harness.epic_status_command:main"
 # no-destructive-resume-guard (Story 8.6) — library-as-CLI-aid for ad-hoc
 # Verdict inspection. Mirrors marker-coverage-audit's posture per pyproject.toml
 # lines 70-74 (NOT a CI gate — invoked manually by practitioners debugging
