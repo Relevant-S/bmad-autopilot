@@ -1,0 +1,24 @@
+schema_version: '1.0'
+epic_id: epic-915
+run_id: run-epic-915-ref-001
+current_state: epic-complete
+story_ids:
+- 915-1-alpha
+- 915-2-bravo
+- 915-3-charlie
+per_story_status:
+  915-1-alpha: merge-ready
+  915-2-bravo: merge-ready
+  915-3-charlie: merge-ready
+per_epic_retry_budget:
+  multiplier: 2
+  story_count: 3
+  effective_budget: 6
+  consumed: 2
+per_epic_cost_partition:
+  per_story_cost:
+    915-1-alpha: 1.5
+    915-2-bravo: 2.25
+    915-3-charlie: 0.75
+  epic_cost_total: 4.5
+active_markers: []
