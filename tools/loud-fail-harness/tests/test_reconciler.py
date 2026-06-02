@@ -26,10 +26,10 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9):
-    [x] all 31 expected marker_class identifiers present         → test_taxonomy_has_31_canonical_markers
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9; Story 15.2 — 31→32 entries, schema_version 1.9→1.10):
+    [x] all 32 expected marker_class identifiers present         → test_taxonomy_has_32_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.9" at top level                       → test_taxonomy_declares_schema_version_1_9
+    [x] schema_version: "1.10" at top level                      → test_taxonomy_declares_schema_version_1_10
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -134,6 +134,8 @@ CANONICAL_MARKER_CLASSES = [
     "worktree-stale-lock",
     # Story 14.5 — Epic 14 parallel-mode cross-state pollution pre-provision.
     "parallel-story-state-pollution",
+    # Story 15.2 — Epic 15 per-epic cumulative retry-budget exhaustion.
+    "epic-budget-exhausted",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -372,14 +374,15 @@ def test_determinism_under_shuffle() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_taxonomy_has_31_canonical_markers(taxonomy_data: dict) -> None:
+def test_taxonomy_has_32_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 31
+    assert len(names) == 32
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
         "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
         "Story 14.3 appended entry 30: worktree-stale-lock; "
-        "Story 14.5 appended entry 31: parallel-story-state-pollution)"
+        "Story 14.5 appended entry 31: parallel-story-state-pollution; "
+        "Story 15.2 appended entry 32: epic-budget-exhausted)"
     )
 
 
@@ -392,7 +395,7 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_9(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_10(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
@@ -410,7 +413,11 @@ def test_taxonomy_declares_schema_version_1_9(taxonomy_data: dict) -> None:
     # worktree-stale-lock entry; new top-level field, not a new class — the
     # 31-class closed-set below is unchanged; MINOR bump per the file's
     # documented additive-optional-field rule).
-    assert taxonomy_data.get("schema_version") == "1.9"
+    # Story 15.2 bumps 1.9 → 1.10 (additive: new top-level marker class
+    # ``epic-budget-exhausted`` for the per-epic cumulative retry-budget
+    # exhaustion surface; closed-set 31 → 32; treated as PATCH per
+    # epics-phase-2.md line 70 + line 411 + the Story 14.3/14.5 precedent).
+    assert taxonomy_data.get("schema_version") == "1.10"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -479,7 +486,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 31  # Story 14.5 appended parallel-story-state-pollution
+    assert len(ids) == 32  # Story 15.2 appended epic-budget-exhausted
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

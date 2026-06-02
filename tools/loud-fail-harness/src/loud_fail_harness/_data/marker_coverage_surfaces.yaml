@@ -3309,3 +3309,116 @@ verdicts:
       altitude only; the Review-BMAD specialist wrapper has no shared-
       state-collision code path.
     audit_date: "2026-05-30"
+  - marker_class: epic-budget-exhausted
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Per-epic cumulative retry-budget exhaustion marker (Story 15.2);
+      emitted by the epic state machine, not by bundle assembly. The
+      running epic-level PR bundle (Story 15.3) renders the marker but does
+      not produce it.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is an orchestrator-state-machine
+      accounting event (Story 15.2); the cost-telemetry pipeline has no code
+      path that produces this halt event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is enforced inside the sequential
+      epic loop (Story 15.2), not at SessionStart reattachment; the hook has
+      no code path that produces this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is emitted by the epic loop into the
+      epic-run-state active_markers (Story 15.2); the Stop hook has no code
+      path that produces this event (epic-level PR bundle assembly is Story
+      15.3).
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is an epic-loop accounting event
+      (Story 15.2); the SubagentStop hook has no code path that produces
+      this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is enforced at the epic state machine
+      (Story 15.2), not in the per-specialist dispatch wrapper; the wrapper
+      has no code path that produces this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      The orchestrator skill prose (run-epic.md) NAMES the per-epic budget
+      pause but does not itself emit the marker; the canonical emission is
+      the Python composition in epic_lifecycle.run_epic_loop (Story 15.2),
+      audited under the orchestrator-state-machine surface.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      The per-story run-state helpers persist per-story state; the per-epic
+      budget exhaustion marker is emitted into the EPIC-scope run-state by
+      the epic loop (Story 15.2) via advance_epic_run_state, audited under
+      the orchestrator-state-machine surface.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: orchestrator-state-machine
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/epic_lifecycle.py:611
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is a runtime epic-loop event (Story
+      15.2); the fixture-driven reconciliation gate has no code path that
+      produces this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is emitted by the epic loop (Story
+      15.2); the runtime reconciliation gate audits emission coverage but
+      does not itself produce this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is an orchestrator-altitude event
+      (Story 15.2); the Dev specialist wrapper has no code path that
+      produces this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is an orchestrator-altitude event
+      (Story 15.2); the QA specialist wrapper has no code path that produces
+      this event.
+    audit_date: "2026-06-02"
+  - marker_class: epic-budget-exhausted
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Per-epic retry-budget exhaustion is an orchestrator-altitude event
+      (Story 15.2); the Review-BMAD specialist wrapper has no code path that
+      produces this event.
+    audit_date: "2026-06-02"

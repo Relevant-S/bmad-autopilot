@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 434
-- Emitted: 40
-- Not-applicable: 393
+- Total intersections: 448
+- Emitted: 41
+- Not-applicable: 406
 - Scheduled-by-story: 1
 - Gaps: 0
 
@@ -147,6 +147,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | env-setup-failed | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | env-setup-failed | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/env_provisioning.py:875` | 2026-05-05 |  |
 | env-setup-failed | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
+| epic-budget-exhausted | bundle-assembler | not-applicable | `n/a` | 2026-06-02 | Per-epic cumulative retry-budget exhaustion marker (Story 15.2); emitted by the epic state machine, not by bundle assembly. The running epic-level PR bundle (Story 15.3) renders the marker but does not produce it. |
+| epic-budget-exhausted | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is an orchestrator-state-machine accounting event (Story 15.2); the cost-telemetry pipeline has no code path that produces this halt event. |
+| epic-budget-exhausted | hook-session-start | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is enforced inside the sequential epic loop (Story 15.2), not at SessionStart reattachment; the hook has no code path that produces this event. |
+| epic-budget-exhausted | hook-stop | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is emitted by the epic loop into the epic-run-state active_markers (Story 15.2); the Stop hook has no code path that produces this event (epic-level PR bundle assembly is Story 15.3). |
+| epic-budget-exhausted | hook-subagent-stop | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is an epic-loop accounting event (Story 15.2); the SubagentStop hook has no code path that produces this event. |
+| epic-budget-exhausted | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is enforced at the epic state machine (Story 15.2), not in the per-specialist dispatch wrapper; the wrapper has no code path that produces this event. |
+| epic-budget-exhausted | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-02 | The orchestrator skill prose (run-epic.md) NAMES the per-epic budget pause but does not itself emit the marker; the canonical emission is the Python composition in epic_lifecycle.run_epic_loop (Story 15.2), audited under the orchestrator-state-machine surface. |
+| epic-budget-exhausted | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-02 | The per-story run-state helpers persist per-story state; the per-epic budget exhaustion marker is emitted into the EPIC-scope run-state by the epic loop (Story 15.2) via advance_epic_run_state, audited under the orchestrator-state-machine surface. |
+| epic-budget-exhausted | orchestrator-state-machine | emitted | `tools/loud-fail-harness/src/loud_fail_harness/epic_lifecycle.py:611` | 2026-06-02 |  |
+| epic-budget-exhausted | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is a runtime epic-loop event (Story 15.2); the fixture-driven reconciliation gate has no code path that produces this event. |
+| epic-budget-exhausted | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is emitted by the epic loop (Story 15.2); the runtime reconciliation gate audits emission coverage but does not itself produce this event. |
+| epic-budget-exhausted | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is an orchestrator-altitude event (Story 15.2); the Dev specialist wrapper has no code path that produces this event. |
+| epic-budget-exhausted | specialist-wrapper-qa | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is an orchestrator-altitude event (Story 15.2); the QA specialist wrapper has no code path that produces this event. |
+| epic-budget-exhausted | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-02 | Per-epic retry-budget exhaustion is an orchestrator-altitude event (Story 15.2); the Review-BMAD specialist wrapper has no code path that produces this event. |
 | evidence-truncated | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | evidence-truncated | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | evidence-truncated | hook-session-start | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |

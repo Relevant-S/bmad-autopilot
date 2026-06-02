@@ -23,6 +23,19 @@
 # unbounded loop-amplified cost; reference-project runs settled here.
 retry_budget: 2
 
+# Per-epic retry-budget multiplier. When an epic is driven via
+# `/bmad-automation run --epic <epic-id>`, the Orchestrator enforces a
+# cumulative per-epic retry ceiling SEPARATE from (and additive on top of) the
+# per-story `retry_budget` above. The effective ceiling is
+# `per_epic_retry_budget_multiplier × story_count`; exhausting it pauses the
+# epic at the next story-completion boundary with an `epic-budget-exhausted`
+# loud-fail marker (Story 15.2). Must be an integer >= 1.
+# Source: FR-P2-1 (see _bmad-output/planning-artifacts/prd.md post-MVP FRs)
+# Default rationale: 2× story count bounds aggregate retry cost at epic scope
+# with the same loud-fail discipline as the per-story budget, while leaving
+# headroom for a minority of stories to use their full per-story retries.
+per_epic_retry_budget_multiplier: 2
+
 # Per-specialist invocation timeout (minutes). Specialist invocations exceeding
 # this signal a hang and surface a `specialist-timeout: {specialist}` loud-fail
 # marker with a diagnostic pointer rather than open-endedly waiting (Story 6.7).

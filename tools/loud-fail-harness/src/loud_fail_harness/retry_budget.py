@@ -127,9 +127,21 @@ if TYPE_CHECKING:
 #: Default retry-budget value per FR8 ("default: 2").
 DEFAULT_RETRY_BUDGET: int = 2
 
+#: Default per-epic retry-budget multiplier (Story 15.2 / FR-P2-1). The
+#: effective per-epic budget is ``multiplier × story_count``. Canonical home is
+#: here (alongside :data:`DEFAULT_RETRY_BUDGET`, the per-story sibling);
+#: :mod:`loud_fail_harness.epic_lifecycle` re-exports it. Single-sourced (the
+#: literal ``2`` lives only here) so the resolver default and the epic-init
+#: default can never drift.
+DEFAULT_PER_EPIC_RETRY_MULTIPLIER: int = 2
+
 #: Canonical config-file field name. Snake_case per Pattern 1's
 #: structural-key boundary (architecture.md lines 932-935).
 _RETRY_BUDGET_FIELD: str = "retry_budget"
+
+#: Canonical per-epic-multiplier config-file field name (Story 15.2). Snake_case
+#: per Pattern 1's structural-key boundary.
+_PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD: str = "per_epic_retry_budget_multiplier"
 
 
 class RetryBudgetConfigError(ValueError):
@@ -329,6 +341,123 @@ def read_retry_budget_from_config_file(
     return resolve_retry_budget(parsed, default=default)
 
 
+def resolve_per_epic_retry_budget_multiplier(
+    config: Mapping[str, Any] | None = None,
+    *,
+    default: int = DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
+) -> int:
+    """Resolve the integer per-epic retry-budget multiplier from a config
+    mapping (Story 15.2 / FR-P2-1).
+
+    The per-epic sibling of :func:`resolve_retry_budget`. The effective per-epic
+    budget the epic loop enforces is ``multiplier × story_count`` (separate from
+    — and additive on top of — the per-story budgets). The ONLY semantic
+    differences from :func:`resolve_retry_budget` are the field name
+    (``per_epic_retry_budget_multiplier``) and the floor of **1** rather than 0:
+    a multiplier of 0 would make every non-empty epic instantly exhausted,
+    which is never a meaningful operator choice (set the per-story
+    ``retry_budget`` to 0 to forbid retries).
+
+    Per-input contract (mirrors :func:`resolve_retry_budget` verbatim except the
+    floor):
+
+    * ``config is None`` → ``default``.
+    * field absent / value ``None`` → ``default``.
+    * ``type(value) is int`` (not :class:`bool`) AND ``value >= 1`` → ``value``.
+    * any other value (string-int, float, ``bool``, ``< 1``) →
+      :exc:`RetryBudgetConfigError`.
+    """
+    if config is None:
+        return default
+
+    if _PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD not in config:
+        return default
+
+    value = config[_PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD]
+
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        raise RetryBudgetConfigError(
+            f"{_PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD} must be an integer "
+            f">= 1; got {value!r} ({type(value).__name__}) — booleans are "
+            f"rejected to avoid YAML truthy-coercion ambiguity — write the "
+            f"value as an unquoted integer in config.yaml (e.g., "
+            f"'per_epic_retry_budget_multiplier: 2')"
+        )
+
+    if type(value) is not int:
+        raise RetryBudgetConfigError(
+            f"{_PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD} must be a YAML int; "
+            f"got {value!r} ({type(value).__name__}) — write the value as an "
+            f"unquoted integer in config.yaml (e.g., "
+            f"'per_epic_retry_budget_multiplier: 2', not "
+            f"'per_epic_retry_budget_multiplier: \"2\"' or "
+            f"'per_epic_retry_budget_multiplier: 2.0')"
+        )
+
+    if value < 1:
+        raise RetryBudgetConfigError(
+            f"{_PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD} must be an integer "
+            f">= 1; got {value!r} (int) — the per-epic budget is "
+            f"multiplier × story_count, so a multiplier below 1 would exhaust "
+            f"every epic immediately; set it to 1 or a larger integer"
+        )
+
+    return value
+
+
+def read_per_epic_retry_budget_multiplier_from_config_file(
+    config_path: pathlib.Path,
+    *,
+    default: int = DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
+) -> int:
+    """Read ``per_epic_retry_budget_multiplier`` from a YAML config file
+    (Story 15.2).
+
+    The per-epic sibling of :func:`read_retry_budget_from_config_file`; the
+    missing-file / empty-file / malformed-YAML / non-mapping contract is
+    identical (delegates value-shape validation to
+    :func:`resolve_per_epic_retry_budget_multiplier`). Uses
+    :func:`yaml.safe_load` per the loud-fail security doctrine.
+    """
+    if not config_path.exists():
+        return default
+
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RetryBudgetConfigError(
+            f"failed to read {config_path}: {exc}"
+        ) from exc
+
+    if not raw_text.strip():
+        return default
+
+    try:
+        parsed = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise RetryBudgetConfigError(
+            f"{config_path} is not valid YAML; "
+            f"parser error: {exc} — fix the YAML syntax in "
+            f"{config_path} and re-run"
+        ) from exc
+
+    if parsed is None:
+        return default
+
+    if not isinstance(parsed, Mapping):
+        raise RetryBudgetConfigError(
+            f"{config_path} top-level must be a YAML mapping; "
+            f"got {type(parsed).__name__}: {parsed!r} — write the file as "
+            f"'per_epic_retry_budget_multiplier: 2' (key/value pairs at the "
+            f"top level), not as a list or scalar"
+        )
+
+    return resolve_per_epic_retry_budget_multiplier(parsed, default=default)
+
+
 def evaluate_retry_decision(
     run_state: RunState,
     resolved_budget: int,
@@ -385,10 +514,13 @@ def evaluate_retry_decision(
 
 
 __all__ = [
+    "DEFAULT_PER_EPIC_RETRY_MULTIPLIER",
     "DEFAULT_RETRY_BUDGET",
     "RetryBudgetConfigError",
     "RetryDecision",
     "evaluate_retry_decision",
+    "read_per_epic_retry_budget_multiplier_from_config_file",
     "read_retry_budget_from_config_file",
+    "resolve_per_epic_retry_budget_multiplier",
     "resolve_retry_budget",
 ]

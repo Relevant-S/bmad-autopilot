@@ -28,11 +28,14 @@ import pytest
 import yaml
 
 from loud_fail_harness.retry_budget import (
+    DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
     DEFAULT_RETRY_BUDGET,
     RetryBudgetConfigError,
     RetryDecision,
     evaluate_retry_decision,
+    read_per_epic_retry_budget_multiplier_from_config_file,
     read_retry_budget_from_config_file,
+    resolve_per_epic_retry_budget_multiplier,
     resolve_retry_budget,
 )
 from loud_fail_harness.run_state import (
@@ -570,3 +573,165 @@ def test_configurability_override_default_vs_override_diverges(
         evaluate_retry_decision(rs, override_budget)
         == RetryDecision.DISPATCH_RETRY
     )
+
+
+# --------------------------------------------------------------------------- #
+# Story 15.2 — per-epic retry-budget multiplier resolver (AC-1)               #
+#   Mirrors the resolve_retry_budget / read_..._from_config_file contract     #
+#   verbatim; the ONLY semantic differences are the field name and the floor  #
+#   of 1 (reject < 1) rather than 0.                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_default_per_epic_retry_multiplier_is_two() -> None:
+    assert DEFAULT_PER_EPIC_RETRY_MULTIPLIER == 2
+
+
+def test_resolve_per_epic_returns_default_for_none_config() -> None:
+    assert resolve_per_epic_retry_budget_multiplier(None) == 2
+
+
+def test_resolve_per_epic_returns_default_for_empty_dict_config() -> None:
+    assert resolve_per_epic_retry_budget_multiplier({}) == 2
+
+
+def test_resolve_per_epic_returns_default_for_field_absent() -> None:
+    assert resolve_per_epic_retry_budget_multiplier({"retry_budget": 9}) == 2
+
+
+@pytest.mark.parametrize("value", [1, 2, 3, 10])
+def test_resolve_per_epic_returns_resolved_value_for_int(value: int) -> None:
+    assert (
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": value}
+        )
+        == value
+    )
+
+
+def test_resolve_per_epic_treats_none_value_as_field_absent() -> None:
+    assert (
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": None}
+        )
+        == 2
+    )
+
+
+def test_resolve_per_epic_rejects_zero() -> None:
+    # Floor is 1 (NOT 0) — this is the only semantic difference from the
+    # per-story resolver.
+    with pytest.raises(RetryBudgetConfigError, match=">= 1"):
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": 0}
+        )
+
+
+def test_resolve_per_epic_rejects_negative_int() -> None:
+    with pytest.raises(RetryBudgetConfigError, match=">= 1"):
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": -1}
+        )
+
+
+def test_resolve_per_epic_rejects_string_int() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="YAML int"):
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": "2"}
+        )
+
+
+def test_resolve_per_epic_rejects_float() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="YAML int"):
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": 2.0}
+        )
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_resolve_per_epic_rejects_bool(value: bool) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": value}
+        )
+
+
+def test_resolve_per_epic_honors_default_keyword_override() -> None:
+    assert resolve_per_epic_retry_budget_multiplier(None, default=4) == 4
+
+
+def test_resolve_per_epic_error_message_contains_field_and_value() -> None:
+    with pytest.raises(RetryBudgetConfigError) as excinfo:
+        resolve_per_epic_retry_budget_multiplier(
+            {"per_epic_retry_budget_multiplier": 0}
+        )
+    message = str(excinfo.value)
+    assert "per_epic_retry_budget_multiplier" in message
+    assert "0" in message
+
+
+def test_read_per_epic_returns_default_for_missing_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    assert (
+        read_per_epic_retry_budget_multiplier_from_config_file(
+            tmp_path / "absent.yaml"
+        )
+        == 2
+    )
+
+
+def test_read_per_epic_returns_default_for_empty_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("", encoding="utf-8")
+    assert read_per_epic_retry_budget_multiplier_from_config_file(config) == 2
+
+
+def test_read_per_epic_reads_resolved_value(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "per_epic_retry_budget_multiplier: 3\n", encoding="utf-8"
+    )
+    assert read_per_epic_retry_budget_multiplier_from_config_file(config) == 3
+
+
+def test_read_per_epic_raises_for_malformed_yaml(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("per_epic_retry_budget_multiplier: [\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="not valid YAML"):
+        read_per_epic_retry_budget_multiplier_from_config_file(config)
+
+
+def test_read_per_epic_raises_for_non_mapping(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("- a\n- b\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML mapping"):
+        read_per_epic_retry_budget_multiplier_from_config_file(config)
+
+
+def test_read_per_epic_propagates_resolver_error(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "per_epic_retry_budget_multiplier: 0\n", encoding="utf-8"
+    )
+    with pytest.raises(RetryBudgetConfigError, match=">= 1"):
+        read_per_epic_retry_budget_multiplier_from_config_file(config)
+
+
+def test_read_per_epic_returns_default_for_whitespace_only(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("   \n\t\n", encoding="utf-8")
+    assert read_per_epic_retry_budget_multiplier_from_config_file(config) == 2
+
+
+def test_read_per_epic_raises_for_non_utf8_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_bytes(b"\xff\xfe")  # invalid UTF-8
+    with pytest.raises(RetryBudgetConfigError, match="failed to read"):
+        read_per_epic_retry_budget_multiplier_from_config_file(config)

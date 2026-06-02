@@ -18,15 +18,15 @@ What this library provides:
     * **Epic-run-state initialization** (:func:`init_epic_run_state`) — seeds an
       :class:`~loud_fail_harness.epic_run_state.EpicRunState` at
       ``epic-in-progress`` with ``per_story_status`` seeded from each story's
-      current lifecycle state, the ``per_epic_retry_budget`` STRUCTURE populated
-      (enforcement is Story 15.2), and the ``per_epic_cost_partition`` zeroed
+      current lifecycle state, the ``per_epic_retry_budget`` populated
+      (``effective_budget = multiplier × story_count``, ``consumed = 0``), and the ``per_epic_cost_partition`` zeroed
       (AC-1).
     * **Epic state machine** (:func:`derive_epic_state` / :func:`fold_story_terminal`)
       — the pure transition function ``epic-in-progress`` →
       ``epic-paused-on-escalation`` (any contained story ``escalated``) |
-      ``epic-complete`` (all contained stories terminal). ``epic-paused-on-budget``
-      is reachable only once Story 15.2 lands — NOT implemented here (scope
-      boundary).
+      ``epic-complete`` (all contained stories terminal); ``epic-paused-on-budget``
+      when the cumulative per-epic retry budget is exhausted with undispatched stories
+      remaining (layered on top by :func:`apply_epic_budget`).
     * **Sequential dispatch loop** (:func:`run_epic_loop`) — drives the
       enumerated stories strictly sequentially through an INJECTED per-story
       ``story_loop_runner`` (in production the unchanged Phase-1 + 1.5
@@ -76,7 +76,7 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable, Mapping
-from typing import ClassVar, Protocol, get_args
+from typing import ClassVar, Final, Literal, Protocol, get_args
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -90,6 +90,7 @@ from loud_fail_harness.epic_run_state import (
     advance_epic_run_state,
 )
 from loud_fail_harness.reconciler import load_marker_lifetimes
+from loud_fail_harness.retry_budget import DEFAULT_PER_EPIC_RETRY_MULTIPLIER
 
 #: Per-story statuses that count as terminal-and-successful for the
 #: ``epic-complete`` transition (Story 15.3 line 423 + AC-3). ``escalated`` is
@@ -97,10 +98,14 @@ from loud_fail_harness.reconciler import load_marker_lifetimes
 #: ``epic-paused-on-escalation``, NOT ``epic-complete``).
 TERMINAL_PER_STORY_STATUSES: frozenset[str] = frozenset({"merge-ready", "done"})
 
-#: Default per-epic retry-budget multiplier (Story 15.2's
-#: ``per_epic_retry_budget_multiplier``; effective budget = multiplier ×
-#: story_count). The STRUCTURE is populated here; ENFORCEMENT is Story 15.2.
-DEFAULT_PER_EPIC_RETRY_MULTIPLIER: int = 2
+
+#: The marker class identifier sourced VERBATIM from
+#: ``schemas/marker-taxonomy.yaml`` (entry ``epic-budget-exhausted``).
+#: Single-source-of-truth posture mirroring
+#: :data:`loud_fail_harness.retry_budget_exhaustion.RETRY_BUDGET_EXHAUSTED_MARKER`.
+EPIC_BUDGET_EXHAUSTED_MARKER: Final[Literal["epic-budget-exhausted"]] = (
+    "epic-budget-exhausted"
+)
 
 _VALID_PER_STORY_STATUSES: frozenset[str] = frozenset(get_args(PerStoryStatus))
 
@@ -126,20 +131,49 @@ class EpicStoryEnumerationError(Exception):
         super().__init__(f"epic enumeration failed for {epic_id!r}: {reason}")
 
 
+class StoryLoopOutcome(BaseModel):
+    """The per-story driver's outcome the epic loop folds (Story 15.2 AC-3).
+
+    Story 15.1 had the :class:`StoryLoopRunner` return a bare terminal-status
+    string. Story 15.2's per-epic budget consumes the SUM of per-story retries
+    across the epic, so the runner now surfaces ``retries_consumed`` alongside
+    the terminal status. The injected runner already drives the per-story loop
+    and owns where that story's per-story ``RunState`` lives, so it is the
+    natural place to read ``len(retry_history)`` — chosen over having the epic
+    loop read ``DEFAULT_RUN_STATE_PATH`` (which Epic 18 relocates per-worktree;
+    see the story's "Consumption-surfacing decision"). This is an additive
+    evolution of the epic-layer seam WITHIN Epic 15; Story 15.1 AC-2's
+    bit-identity invariant is about ``orchestrator_run_entry.py`` + the per-story
+    ``RunState`` shape, NOT this injected Protocol.
+
+    Frozen; field declaration order is load-bearing for byte-stable
+    ``model_dump_json()`` output.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    terminal_status: PerStoryStatus
+    retries_consumed: int = Field(ge=0)
+
+
 class StoryLoopRunner(Protocol):
     """The per-story driver the epic loop composes for each contained story.
 
     In production the implementation drives one story through the UNCHANGED
     per-story loop (``run_story_loop_entry`` → Dev → review-seam → QA → merge-
     ready/escalated per ``steps/run.md``, reusing the per-story
-    ``event_log_appender`` within the story per AC-5) and returns the story's
-    terminal :data:`~loud_fail_harness.epic_run_state.PerStoryStatus`. Tests
-    inject a deterministic stub. Keyword-only + non-defaulted (the project's
-    structural-callback discipline; omitting an argument is a ``TypeError`` at
-    call time).
+    ``event_log_appender`` within the story per AC-5) and returns a
+    :class:`StoryLoopOutcome` carrying the story's terminal
+    :data:`~loud_fail_harness.epic_run_state.PerStoryStatus` AND the number of
+    retries that story consumed (read from the per-story ``RunState``'s
+    ``retry_history``; Story 15.2 AC-3). Tests inject a deterministic stub.
+    Keyword-only + non-defaulted (the project's structural-callback discipline;
+    omitting an argument is a ``TypeError`` at call time).
     """
 
-    def __call__(self, *, story_id: str, index: int, total: int) -> str: ...
+    def __call__(
+        self, *, story_id: str, index: int, total: int
+    ) -> StoryLoopOutcome: ...
 
 
 #: The epic-progress framing sink (AC-5 / NFR-O1). Receives a formatted
@@ -165,8 +199,10 @@ class RunEpicLoopResult(BaseModel):
         * ``dispatched_story_ids`` — the stories actually driven this run, in
           dispatch order. On escalation this is a PREFIX of ``story_ids`` (the
           downstream stories did NOT auto-advance — AC-4).
-        * ``paused_on_story_id`` — the story whose escalation paused the epic,
-          or ``None`` on a clean run.
+        * ``paused_on_story_id`` — the story at whose completion boundary the
+          epic paused (``escalated`` → ``epic-paused-on-escalation``, OR the
+          per-epic budget exhausted with undispatched stories remaining →
+          ``epic-paused-on-budget``), or ``None`` on a clean run.
         * ``wrote_path`` — the on-disk epic-run-state cache path.
     """
 
@@ -274,10 +310,11 @@ def init_epic_run_state(
     the enumerated stories are all ``ready-for-dev`` (the enumeration filter),
     so the default seed is ``ready-for-dev`` per story; callers may override via
     ``per_story_status_seed`` (e.g. a resumed epic re-deriving statuses from the
-    per-story story-docs). ``per_epic_retry_budget`` is populated as a STRUCTURE
-    (effective_budget = multiplier × story_count, consumed = 0) — ENFORCEMENT is
-    Story 15.2. ``per_epic_cost_partition`` is zeroed; ``active_markers`` is
-    empty.
+    per-story story-docs). ``per_epic_retry_budget`` is populated
+    (``effective_budget = multiplier × story_count``, ``consumed = 0``);
+    budget enforcement is applied per-boundary by :func:`apply_epic_budget` in
+    :func:`run_epic_loop`. ``per_epic_cost_partition`` is zeroed;
+    ``active_markers`` is empty.
     """
     if per_story_status_seed is not None:
         seed = dict(per_story_status_seed)
@@ -321,8 +358,10 @@ def derive_epic_state(
     (sensor-not-advisor — the epic halts, the human decides continuation);
     else ``epic-complete`` when EVERY contained story is terminal
     (``merge-ready`` / ``done``); else ``epic-in-progress``.
-    ``epic-paused-on-budget`` is NOT reachable here (Story 15.2 owns budget
-    enforcement; the enum member is left unreached per the scope boundary).
+    ``epic-paused-on-budget`` is NOT produced here — budget enforcement is a
+    separate layer applied by :func:`apply_epic_budget` AFTER calling this
+    function. ``derive_epic_state`` stays a pure function of
+    ``per_story_status`` only.
     """
     statuses = list(per_story_status.values())
     if any(status == "escalated" for status in statuses):
@@ -332,6 +371,49 @@ def derive_epic_state(
     ):
         return "epic-complete"
     return "epic-in-progress"
+
+
+def apply_epic_budget(
+    base_state: EpicCurrentState,
+    consumed: int,
+    effective_budget: int,
+    *,
+    has_undispatched: bool,
+) -> tuple[EpicCurrentState, bool]:
+    """Layer per-epic budget enforcement ON TOP of :func:`derive_epic_state`
+    (AC-4 + AC-6).
+
+    ``derive_epic_state`` stays a PURE function of ``per_story_status`` (budget
+    logic does NOT leak into it). This helper takes its result (``base_state``)
+    plus the cumulative budget figures and returns the resolved
+    ``current_state`` and whether to emit the ``epic-budget-exhausted`` marker.
+
+    Returns ``(resolved_state, emit_marker)`` where:
+
+    * ``emit_marker`` is ``True`` iff the budget is exhausted
+      (``effective_budget > 0`` AND ``consumed >= effective_budget``) AND
+      undispatched stories remain — i.e. the exhaustion would guard FUTURE
+      dispatch. The marker is additive: it emits regardless of ``base_state``
+      (so an escalation that masks the single-valued ``current_state`` does NOT
+      silently lose the budget overage — AC-6). Exhausting the budget exactly on
+      the final story (no undispatched stories) is NOT an exhaustion event — the
+      pause guards future dispatch, not a completed epic (AC-4).
+    * ``resolved_state`` is ``epic-paused-on-budget`` ONLY when ``base_state``
+      is ``epic-in-progress`` AND ``emit_marker`` (escalation precedence:
+      ``epic-paused-on-escalation`` is the proximate human-actionable signal and
+      wins the single-valued state; ``epic-complete`` is preserved — a completed
+      epic never pauses). Otherwise ``base_state`` is returned unchanged.
+
+    The ``effective_budget > 0`` guard keeps the helper total for the degenerate
+    zero-budget case (a zero-story epic never enumerates — ``run_epic_loop``
+    raises :exc:`EpicStoryEnumerationError` first — but the pure helper must not
+    report a never-approached budget as instantly exhausted).
+    """
+    exhausted = effective_budget > 0 and consumed >= effective_budget
+    emit_marker = exhausted and has_undispatched
+    if base_state == "epic-in-progress" and emit_marker:
+        return "epic-paused-on-budget", True
+    return base_state, emit_marker
 
 
 def fold_story_terminal(
@@ -393,34 +475,45 @@ def run_epic_loop(
     sprint_status_path: pathlib.Path,
     epic_run_state_path: pathlib.Path,
     story_loop_runner: StoryLoopRunner,
+    multiplier: int = DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
     progress_sink: ProgressSink | None = None,
     transient_marker_classes: frozenset[str] | None = None,
     taxonomy_path: pathlib.Path | None = None,
 ) -> RunEpicLoopResult:
     """Drive an epic's ``ready-for-dev`` stories sequentially through the
-    per-story loop, advancing epic-run-state after each (AC-1..AC-5).
+    per-story loop, advancing epic-run-state after each (AC-1..AC-6).
 
     Composition (the canonical epic loop ``steps/run-epic.md`` names):
 
         1. **Enumerate** the contained ``ready-for-dev`` stories via
            :func:`enumerate_epic_stories` (key-ascending order; AC-1).
         2. **Initialize** the epic-run-state cache via
-           :func:`init_epic_run_state` and persist it via
+           :func:`init_epic_run_state` (threading the config-resolved
+           ``multiplier`` so ``effective_budget = multiplier × story_count``;
+           AC-2) and persist it via
            :func:`~loud_fail_harness.epic_run_state.advance_epic_run_state`
            (atomic write + transient-marker filter; AC-1 / AC-3 / AC-6).
         3. **Dispatch sequentially** — for each story in order, invoke the
-           injected ``story_loop_runner`` (the UNCHANGED per-story loop;
-           AC-2), fold its terminal status into the aggregate
-           (:func:`fold_story_terminal`), persist the advance, and surface the
-           "story M of N" framing line via ``progress_sink`` (AC-5).
-        4. **Pause on escalation** — if folding a story's terminal status
-           transitions the epic to ``epic-paused-on-escalation``, STOP; the
-           downstream stories do NOT auto-advance (AC-4; sensor-not-advisor).
+           injected ``story_loop_runner`` (the UNCHANGED per-story loop; AC-2),
+           fold its terminal status into the aggregate
+           (:func:`fold_story_terminal`), fold its ``retries_consumed`` into
+           ``per_epic_retry_budget.consumed`` (AC-3), apply the per-epic budget
+           (:func:`apply_epic_budget`; AC-4 / AC-6), persist the advance, and
+           surface the "story M of N" framing line via ``progress_sink`` (AC-5).
+        4. **Pause on escalation OR budget exhaustion** — if folding a story's
+           terminal status transitions the epic to
+           ``epic-paused-on-escalation`` (a contained story escalated) OR the
+           cumulative retries exhaust the per-epic budget with undispatched
+           stories remaining (``epic-paused-on-budget``), STOP; the downstream
+           stories do NOT auto-advance (AC-4; sensor-not-advisor). The budget is
+           checked AFTER the boundary story reaches terminal — the in-flight
+           story is never interrupted.
 
     Stories run strictly sequentially (parallel is Epic 18 — no concurrent
     dispatch here; AC-2). The transient-class set is resolved ONCE and threaded
     through every ``advance_epic_run_state`` call so a recovery-recomputed
-    transient marker never persists into the aggregate (AC-6).
+    transient marker never persists into the aggregate (AC-6). The durable
+    ``epic-budget-exhausted`` marker is NOT transient and survives the filter.
 
     Args:
         epic_id: The ``epic-<N>`` identifier the practitioner passed at
@@ -430,7 +523,13 @@ def run_epic_loop(
         sprint_status_path: Caller-controlled path to ``sprint-status.yaml``.
         epic_run_state_path: Caller-controlled on-disk path for the epic-run-
             state cache.
-        story_loop_runner: The per-story driver Protocol (AC-2).
+        story_loop_runner: The per-story driver Protocol (AC-2). Returns a
+            :class:`StoryLoopOutcome` carrying the terminal status + the
+            per-story retries consumed (AC-3).
+        multiplier: The per-epic retry-budget multiplier (AC-2). Production
+            callers resolve it from ``_bmad/automation/config.yaml`` via
+            :func:`~loud_fail_harness.retry_budget.resolve_per_epic_retry_budget_multiplier`;
+            defaults to :data:`DEFAULT_PER_EPIC_RETRY_MULTIPLIER`.
         progress_sink: Optional epic-progress framing sink (AC-5).
         transient_marker_classes / taxonomy_path: Forwarded to
             ``advance_epic_run_state`` (AC-6).
@@ -461,7 +560,9 @@ def run_epic_loop(
             mc for mc, lt in lifetimes.items() if lt == "transient"
         )
 
-    epic_state = init_epic_run_state(epic_id, run_id, story_ids)
+    epic_state = init_epic_run_state(
+        epic_id, run_id, story_ids, multiplier=multiplier
+    )
     advance = advance_epic_run_state(
         epic_run_state_path,
         epic_state,
@@ -475,9 +576,10 @@ def run_epic_loop(
     _expected_terminal = TERMINAL_PER_STORY_STATUSES | {"escalated"}
 
     for index, story_id in enumerate(story_ids, start=1):
-        terminal_status = story_loop_runner(
+        outcome = story_loop_runner(
             story_id=story_id, index=index, total=total
         )
+        terminal_status = outcome.terminal_status
         if terminal_status not in _expected_terminal:
             raise ValueError(
                 f"story_loop_runner returned non-terminal status "
@@ -485,6 +587,33 @@ def run_epic_loop(
                 f"expected one of {sorted(_expected_terminal)}"
             )
         epic_state = fold_story_terminal(epic_state, story_id, terminal_status)
+
+        # Fold this story's per-story retries into the cumulative per-epic budget
+        # AFTER the story reached terminal (sensor-not-advisor: the in-flight
+        # story is never interrupted — AC-3 / AC-4). apply_epic_budget layers the
+        # budget decision ON TOP of the pure derive_epic_state result; escalation
+        # keeps current_state precedence while the marker emits additively (AC-6).
+        budget = epic_state.per_epic_retry_budget
+        new_consumed = budget.consumed + outcome.retries_consumed
+        resolved_state, emit_marker = apply_epic_budget(
+            epic_state.current_state,
+            new_consumed,
+            budget.effective_budget,
+            has_undispatched=index < total,
+        )
+        active_markers = epic_state.active_markers
+        if emit_marker and EPIC_BUDGET_EXHAUSTED_MARKER not in active_markers:
+            active_markers = (*active_markers, EPIC_BUDGET_EXHAUSTED_MARKER)
+        epic_state = epic_state.model_copy(
+            update={
+                "per_epic_retry_budget": budget.model_copy(
+                    update={"consumed": new_consumed}
+                ),
+                "current_state": resolved_state,
+                "active_markers": active_markers,
+            }
+        )
+
         advance = advance_epic_run_state(
             epic_run_state_path,
             epic_state,
@@ -502,7 +631,10 @@ def run_epic_loop(
                     epic_state.current_state,
                 )
             )
-        if epic_state.current_state == "epic-paused-on-escalation":
+        if epic_state.current_state in (
+            "epic-paused-on-escalation",
+            "epic-paused-on-budget",
+        ):
             paused_on = story_id
             break
 
@@ -518,11 +650,14 @@ def run_epic_loop(
 
 __all__ = [
     "DEFAULT_PER_EPIC_RETRY_MULTIPLIER",
+    "EPIC_BUDGET_EXHAUSTED_MARKER",
     "EpicStoryEnumerationError",
     "ProgressSink",
     "RunEpicLoopResult",
+    "StoryLoopOutcome",
     "StoryLoopRunner",
     "TERMINAL_PER_STORY_STATUSES",
+    "apply_epic_budget",
     "derive_epic_state",
     "enumerate_epic_stories",
     "fold_story_terminal",

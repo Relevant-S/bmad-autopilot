@@ -35,7 +35,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 
 #### Context
 
-The Orchestrator is the seam-transition state machine across BMAD lifecycle states (`ready-for-dev → in-progress → review → qa → done`) and owns all flow policy: retry budgets, escalation routing, env lifecycle, scope-assertion enforcement. The PRD names it "main session + skill" (Developer-Tool Requirements → Project-Type Overview); the brainstorm named "Option D: main session + ≤3 hooks + subagents." Neither source decides *how the orchestrator is structurally bound to the main session*. Three primitive options exist:
+The Orchestrator is the seam-transition state machine across BMAD lifecycle states (`ready-for-dev → in-progress → review → qa → done`) and owns all flow policy: retry budgets, escalation routing, env lifecycle, scope-assertion enforcement. The PRD names it "main session + skill" (Developer-Tool Requirements → Project-Type Overview); the brainstorm named "Option D: main session + ≤3 hooks + subagents." Neither source decides _how the orchestrator is structurally bound to the main session_. Three primitive options exist:
 
 - **A — Skill in main session.** The orchestrator's prompt is a skill loaded into the main Claude Code session; flow policy executes inside the main session's reasoning loop.
 - **B — Long-lived subagent.** The orchestrator is its own subagent, invoked once per story run, internally dispatching specialist subagents and returning at terminal seams.
@@ -47,14 +47,14 @@ The decision cascades into where flow policy lives, how `status`/`resume`/Sessio
 
 #### Trade-off Matrix
 
-| Axis | A: Skill in main session | B: Long-lived subagent (or re-invoke-per-seam) |
-|---|---|---|
-| **Flow-policy contract (sensor-not-advisor schema-symmetry)** | Asymmetric in pure form; resolvable by enforcing envelope-shaped output at CI for orchestrator-emitted seam events. Mitigation reuses specialist-envelope CI machinery. | Native — every subagent return is envelope-shaped. |
-| **Reattachment (NFR-R2, NFR-R7)** | File-driven via SessionStart hook + run-state.yaml + git branch. | Same — file-driven. Process boundary is convenience, not load-bearing. |
-| **Streaming (NFR-O1: per-seam live in main session)** | Native to main session; no relay needed. | Either depends on Claude Code's subagent-output relay (primitive-shape leak — contradicts portability) or re-invokes per seam (token cost penalty). |
-| **Cost (NFR-P1: <$3 target / <$5 ceiling)** | ~1 skill load + N specialist invocations = N+1 context entries on happy path. | Long-lived: comparable to A (N+1). Re-invoke-per-seam: ~2N entries — 50–100% penalty against $3 target. |
-| **Portability** | Skill-load is Claude-Code-shape; portable surface is `(orchestrator-prompt-logic + run-state.yaml schema + event protocol)`. | Subagent runtime is Claude-Code-shape; portable surface is `(orchestrator-prompt-logic + run-state.yaml)`. Equivalent leak; cleaner only if the target host has a similar subagent primitive. |
-| **Implementation simplicity** | No exotic primitive use; skill loading is documented and stable at MVP floor (Claude Code v2.1.32+). | Long-lived requires recursive subagent dispatch (orchestrator-subagent invokes specialist-subagents) — pattern not documented at MVP floor; may require workarounds. |
+| Axis                                                          | A: Skill in main session                                                                                                                                                | B: Long-lived subagent (or re-invoke-per-seam)                                                                                                                                                |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Flow-policy contract (sensor-not-advisor schema-symmetry)** | Asymmetric in pure form; resolvable by enforcing envelope-shaped output at CI for orchestrator-emitted seam events. Mitigation reuses specialist-envelope CI machinery. | Native — every subagent return is envelope-shaped.                                                                                                                                            |
+| **Reattachment (NFR-R2, NFR-R7)**                             | File-driven via SessionStart hook + run-state.yaml + git branch.                                                                                                        | Same — file-driven. Process boundary is convenience, not load-bearing.                                                                                                                        |
+| **Streaming (NFR-O1: per-seam live in main session)**         | Native to main session; no relay needed.                                                                                                                                | Either depends on Claude Code's subagent-output relay (primitive-shape leak — contradicts portability) or re-invokes per seam (token cost penalty).                                           |
+| **Cost (NFR-P1: <$3 target / <$5 ceiling)**                   | ~1 skill load + N specialist invocations = N+1 context entries on happy path.                                                                                           | Long-lived: comparable to A (N+1). Re-invoke-per-seam: ~2N entries — 50–100% penalty against $3 target.                                                                                       |
+| **Portability**                                               | Skill-load is Claude-Code-shape; portable surface is `(orchestrator-prompt-logic + run-state.yaml schema + event protocol)`.                                            | Subagent runtime is Claude-Code-shape; portable surface is `(orchestrator-prompt-logic + run-state.yaml)`. Equivalent leak; cleaner only if the target host has a similar subagent primitive. |
+| **Implementation simplicity**                                 | No exotic primitive use; skill loading is documented and stable at MVP floor (Claude Code v2.1.32+).                                                                    | Long-lived requires recursive subagent dispatch (orchestrator-subagent invokes specialist-subagents) — pattern not documented at MVP floor; may require workarounds.                          |
 
 #### Decision
 
@@ -68,7 +68,7 @@ The skill defines the orchestrator's prompt logic. The orchestrator's runtime is
 - **Streaming (NFR-O1) is decisive.** Live per-seam main-session streaming is an explicit NFR. Options B and C either leak the subagent-output relay mechanism (contradicting the portability principle) or pay a 50–100% per-story cost penalty. Option A streams natively.
 - **Cost (NFR-P1) realistic case favors A.** B-long-lived is theoretically cost-comparable but requires recursive subagent dispatch — undocumented at MVP floor. Falling back to B-re-invoke-per-seam puts the $3 target and $5 ceiling at material risk.
 - **Reattachment is file-driven, not process-driven.** SessionStart hook + run-state.yaml + git branch makes reattachment work for any primitive. This axis doesn't discriminate.
-- **Portability is cleanest as logic + state file + protocol.** Option A makes this articulation natural: skill is the *binding* to Claude Code; the portable surface is `(orchestrator-prompt-logic.md, run-state.yaml schema, orchestrator-event.yaml, specialist envelope schema)`. Future ports rebind to other host runtimes.
+- **Portability is cleanest as logic + state file + protocol.** Option A makes this articulation natural: skill is the _binding_ to Claude Code; the portable surface is `(orchestrator-prompt-logic.md, run-state.yaml schema, orchestrator-event.yaml, specialist envelope schema)`. Future ports rebind to other host runtimes.
 - **Implementation simplicity at MVP matters.** Option A uses documented stable primitives. Option B requires investigating recursive dispatch.
 - **Consistency with brainstorm Option D.** "Main session + ≤3 hooks + subagents" placed orchestrator in main session; Option A is the structural realization of that placement.
 
@@ -82,7 +82,7 @@ This decision commits the architecture to:
 4. **`status` and `resume` commands operate on the run-state file directly** — file-driven, no live-orchestrator requirement.
 5. **Loud-fail markers emitted by orchestrator decisions** (retry-budget-exhausted, escalation, hook-failed) ride the same envelope/event substrate.
 
-This decision *does not* commit to:
+This decision _does not_ commit to:
 
 - Specialist dispatch mechanism (Task tool vs. Agent Teams primitive — separate decision).
 - Schema enforcement technology (ADR-003 territory).
@@ -94,7 +94,7 @@ This decision *does not* commit to:
 - **Per-story cost on reference projects exceeds $5 ceiling** with Option A on reasonable story sizes. Investigate whether B-long-lived with recursive dispatch is cheaper.
 - **Schema-asymmetry concerns surface during implementation** — i.e., enforcing envelope-output protocol at CI for the orchestrator proves materially harder than specialist envelope validation. Asymmetry is hiding a real gap; Option B earns reconsideration.
 - **A credible port is proposed to a runtime that exposes a subagent primitive but no skill primitive (or vice versa).** Portability re-prioritizes; primitive binding is rebuilt for the target.
-- *(added per ADR-003)* **Hook out-of-band-failure burden becomes a recurring maintenance signal.** Clusters of A.4-class failures (terminal hook failures, hook-orchestrator observation gaps) consume disproportionate harness-maintenance effort. Signal that ADR-001's Option A primitive choice should be re-evaluated against the cost of harness load it produces.
+- _(added per ADR-003)_ **Hook out-of-band-failure burden becomes a recurring maintenance signal.** Clusters of A.4-class failures (terminal hook failures, hook-orchestrator observation gaps) consume disproportionate harness-maintenance effort. Signal that ADR-001's Option A primitive choice should be re-evaluated against the cost of harness load it produces.
 
 ### ADR-002: Portability Boundary — Host-Runtime and Methodology Axes
 
@@ -118,29 +118,29 @@ ADR-001 stands as written. Its claim — that the named surface is portable on t
 - **Methodology axis** — port from BMAD to a different methodology while staying in Claude Code (or both axes, for the maximal port). Three positions:
   - **Portable** — copies unchanged to the new methodology. No methodology coupling.
   - **Methodology-Bridge** — content rewritten for the target methodology. The structural shape is portable; the methodology-specific content (state names, target skill names, taxonomy buckets) is not.
-  - **Methodology-Bound** — replaced wholesale. The component exists *because* of the source methodology; in a different methodology it has no analog.
+  - **Methodology-Bound** — replaced wholesale. The component exists _because_ of the source methodology; in a different methodology it has no analog.
 
 The axes are independent: a component's host-axis position does not predict its methodology-axis position. This is the load-bearing finding; the original three-tier model (host-axis only) collapsed both axes into one, hiding methodology-coupled artifacts inside what looked like a clean portable surface.
 
 #### Component Classification — 3×3 Matrix
 
-|  | **Methodology-Portable** | **Methodology-Bridge** | **Methodology-Bound** |
-|---|---|---|---|
-| **Host-Portable** | **(1) Architectural core.** Specialist envelope schema; orchestrator-event schema; run-state.yaml schema; marker taxonomy; configuration schemas (`config.yaml`, `qa-runbook.yaml`); three failure profiles (total-block / graceful-degrade / opt-in-skip); three-tier evidence hierarchy; AC-assertion-evidence triple structure; hook **purpose** descriptions; slash command **capability** descriptions; 20-lines-of-bash **principle**. | **(2)** Orchestrator prompt logic (logic ports; references to lifecycle state names, target skill names, and escalation-artifact references rebuild per methodology — but flow-policy *structure* (retry budgets, sensor-not-advisor pattern, seam-transition orchestration) is cell-1 substructure that survives the rebuild); specialist envelope **content** (shape is cell 1; semantic content per methodology is cell 2 — e.g., what `proposed_commit_message` carries); finding taxonomy (`decision_needed | patch | defer | dismiss` is BMAD's; target methodology may classify differently). | **(3)** Story-doc section read/write contract (story doc is BMAD's canonical artifact); BMAD-extension audit format; lifecycle state set (`backlog → ready-for-dev → in-progress → review → qa → done`); `qa` lifecycle state upstream proposal; `## QA Behavioral Plan` upstream proposal. |
-| **Host-Bridge** | **(4)** Orchestrator skill binding (per ADR-001); hook trigger primitives (`SubagentStop` / `Stop` / `SessionStart` event names + bash-script runtime); slash command invocation primitive (`/bmad-automation X` syntax); PR bundle **rendering** (markup + assembly via Stop hook); bash **specifically** (the language; the principle is cell 1). | **(5)** Specialist wrapper **binding** — binds Claude Code subagent dispatch primitive AND the methodology-specific target skill (`bmad-dev-story`, `bmad-code-review`). The only resident of this cell. Most expensive to port: rewrites on either axis. | **(6) Empty by design discipline.** Methodology-specificity should flow through bridges as configuration, not be embedded in bridges as code. A hook firing on a methodology-specific transition like `review → qa` belongs in cell 4 (Methodology-Portable) when its transition name is read from configuration; it would only land here if the transition name were hardcoded into the bridge. A component genuinely landing in cell 6 means methodology-specificity has been embedded in code rather than expressed as configuration — a structural signal that the design has chosen the wrong abstraction layer. |
-| **Host-Bound** | **(7)** Claude Code plugin install primitive; main-session reasoning loop; subagent primitive (Agent Teams, Task tool); `.claude/skills/` directory convention. | **(8) Empty by current host design.** Host runtimes today are methodology-agnostic; populating cell 8 would require a host to ship a methodology-specific primitive whose behavior is methodology-bridge per target methodology. Plausible but not currently observed. Most plausible scenario: BMAD-core upstream-absorption into Claude Code primitives. See Revisit Conditions. | **(9) Empty by current host design.** Same reasoning as cell 8, both dimensions; would require a host to ship a primitive whose existence and behavior are both methodology-bound. Most plausible scenario: a host that absorbs a methodology so deeply that the primitive itself encodes methodology-specific behavior (the upstream-absorption case taken to its limit). Currently not observed; revisitable. |
+|                   | **Methodology-Portable**                                                                                                                                                                                                                                                                                                                                                                                                                     | **Methodology-Bridge**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | **Methodology-Bound**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Host-Portable** | **(1) Architectural core.** Specialist envelope schema; orchestrator-event schema; run-state.yaml schema; marker taxonomy; configuration schemas (`config.yaml`, `qa-runbook.yaml`); three failure profiles (total-block / graceful-degrade / opt-in-skip); three-tier evidence hierarchy; AC-assertion-evidence triple structure; hook **purpose** descriptions; slash command **capability** descriptions; 20-lines-of-bash **principle**. | **(2)** Orchestrator prompt logic (logic ports; references to lifecycle state names, target skill names, and escalation-artifact references rebuild per methodology — but flow-policy _structure_ (retry budgets, sensor-not-advisor pattern, seam-transition orchestration) is cell-1 substructure that survives the rebuild); specialist envelope **content** (shape is cell 1; semantic content per methodology is cell 2 — e.g., what `proposed_commit_message` carries); finding taxonomy (`decision_needed | patch                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | defer | dismiss` is BMAD's; target methodology may classify differently). | **(3)** Story-doc section read/write contract (story doc is BMAD's canonical artifact); BMAD-extension audit format; lifecycle state set (`backlog → ready-for-dev → in-progress → review → qa → done`); `qa` lifecycle state upstream proposal; `## QA Behavioral Plan` upstream proposal. |
+| **Host-Bridge**   | **(4)** Orchestrator skill binding (per ADR-001); hook trigger primitives (`SubagentStop` / `Stop` / `SessionStart` event names + bash-script runtime); slash command invocation primitive (`/bmad-automation X` syntax); PR bundle **rendering** (markup + assembly via Stop hook); bash **specifically** (the language; the principle is cell 1).                                                                                          | **(5)** Specialist wrapper **binding** — binds Claude Code subagent dispatch primitive AND the methodology-specific target skill (`bmad-dev-story`, `bmad-code-review`). The only resident of this cell. Most expensive to port: rewrites on either axis.                                                                                                                                                                                                                                                        | **(6) Empty by design discipline.** Methodology-specificity should flow through bridges as configuration, not be embedded in bridges as code. A hook firing on a methodology-specific transition like `review → qa` belongs in cell 4 (Methodology-Portable) when its transition name is read from configuration; it would only land here if the transition name were hardcoded into the bridge. A component genuinely landing in cell 6 means methodology-specificity has been embedded in code rather than expressed as configuration — a structural signal that the design has chosen the wrong abstraction layer. |
+| **Host-Bound**    | **(7)** Claude Code plugin install primitive; main-session reasoning loop; subagent primitive (Agent Teams, Task tool); `.claude/skills/` directory convention.                                                                                                                                                                                                                                                                              | **(8) Empty by current host design.** Host runtimes today are methodology-agnostic; populating cell 8 would require a host to ship a methodology-specific primitive whose behavior is methodology-bridge per target methodology. Plausible but not currently observed. Most plausible scenario: BMAD-core upstream-absorption into Claude Code primitives. See Revisit Conditions.                                                                                                                               | **(9) Empty by current host design.** Same reasoning as cell 8, both dimensions; would require a host to ship a primitive whose existence and behavior are both methodology-bound. Most plausible scenario: a host that absorbs a methodology so deeply that the primitive itself encodes methodology-specific behavior (the upstream-absorption case taken to its limit). Currently not observed; revisitable.                                                                                                                                                                                                       |
 
 ##### Architectural Core (Cell 1 — prose supplement)
 
-The eight residents of cell 1 form the architectural core: the surface that copies unchanged to *any* compliant host running *any* compatible methodology. It deserves prose, not just a cell.
+The eight residents of cell 1 form the architectural core: the surface that copies unchanged to _any_ compliant host running _any_ compatible methodology. It deserves prose, not just a cell.
 
-The core is what the project's long-term vision rests on. When the brief says "the layer dissolves into the methodology it extends; what remains is the architectural pattern that made it work," the architectural pattern *is* the cell-1 surface. This is also what an upstream RFC to BMAD-METHOD or any successor methodology would carry forward — the schemas, taxonomies, hierarchies, and contracts that make seam-transition orchestration with sensor-not-advisor specialists work, independent of any particular host or methodology.
+The core is what the project's long-term vision rests on. When the brief says "the layer dissolves into the methodology it extends; what remains is the architectural pattern that made it work," the architectural pattern _is_ the cell-1 surface. This is also what an upstream RFC to BMAD-METHOD or any successor methodology would carry forward — the schemas, taxonomies, hierarchies, and contracts that make seam-transition orchestration with sensor-not-advisor specialists work, independent of any particular host or methodology.
 
 Cell 1's stability is therefore an architectural commitment, not a happy outcome. Future contributors should treat changes to cell-1 components as schema-versioned, breaking-change-classified events — the same discipline applied to the specialist envelope schema in ADR-001 applies uniformly to the rest of the cell.
 
 ##### Rebuild-Cost Peak (Cell 5 — prose supplement)
 
-Cell 5 holds a single resident — specialist wrapper binding — and is the diagonal-asymmetry residence point: the position where both axes' Bridges intersect. Components classified here rewrite on host-axis ports *and* on methodology-axis ports. Cell 5 therefore identifies the rebuild-cost peak: the most expensive component to port, regardless of which axis triggers the port. Naming it explicitly lets future port effort budget for the rewrite at planning time, rather than discovering the cost mid-port.
+Cell 5 holds a single resident — specialist wrapper binding — and is the diagonal-asymmetry residence point: the position where both axes' Bridges intersect. Components classified here rewrite on host-axis ports _and_ on methodology-axis ports. Cell 5 therefore identifies the rebuild-cost peak: the most expensive component to port, regardless of which axis triggers the port. Naming it explicitly lets future port effort budget for the rewrite at planning time, rather than discovering the cost mid-port.
 
 #### Portability Precondition (promotion candidate)
 
@@ -175,7 +175,7 @@ The host-port admissibility test is the four-capability precondition. Methodolog
 - **The architectural core is identifiable and load-bearing.** Cell 1's eight residents are the substrate that survives both axes of port. Naming the core makes it possible to schema-version it, treat changes as breaking, and aim upstream RFCs at it.
 - **Cell 5 carries known port cost.** Specialist wrapper binding is the single resident at host-Bridge / methodology-Bridge — rewrites on either axis. Identifying it explicitly lets future port effort budget for it; hiding it inside a flatter "Bridge" tier would have understated the cost. (This is the cost-asymmetry note Q1 asked for, landed in the matrix rather than as a separate sub-tier.)
 - **The precondition is separate from the axes.** A host that fails the four-capability requirement isn't somewhere on the host-axis spectrum; it's outside the architecture's reach. Calling this out as a precondition prevents the model from being stretched to cover hosts it shouldn't cover.
-- **ADR-001 stands; ADR-002 supplements.** The default project pattern: *later ADRs refine earlier ADRs by extension when the earlier ADR's flaw is omission (incomplete-but-true).* ADR-001's flaw was omission — host-axis-correct, methodology-axis-silent — so supplement-don't-contradict is the right response. ADRs found to contain genuine **errors** (incorrect rationale, not just incompleteness) get a different response: they are edited in place with a visible "corrected:" marker, or formally superseded by a follow-up ADR with explicit deprecation. Conflating omission and error would either erase design history (treating omissions as errors) or preserve incorrect reasoning (treating errors as omissions); both fail differently and need to be distinguished.
+- **ADR-001 stands; ADR-002 supplements.** The default project pattern: _later ADRs refine earlier ADRs by extension when the earlier ADR's flaw is omission (incomplete-but-true)._ ADR-001's flaw was omission — host-axis-correct, methodology-axis-silent — so supplement-don't-contradict is the right response. ADRs found to contain genuine **errors** (incorrect rationale, not just incompleteness) get a different response: they are edited in place with a visible "corrected:" marker, or formally superseded by a follow-up ADR with explicit deprecation. Conflating omission and error would either erase design history (treating omissions as errors) or preserve incorrect reasoning (treating errors as omissions); both fail differently and need to be distinguished.
 
 #### Consequences
 
@@ -209,14 +209,14 @@ This decision commits the architecture to:
 
 #### Context
 
-The PRD names two CI-enforced invariants whose enforcement the architecture has not yet specified: sensor-not-advisor schema validation on specialist envelopes (FR53) and loud-fail marker completeness via harness reconciliation (FR33). Both are first-class engineering work — explicitly *not* lint rules per Success Criteria → Technical Success — and both run in CI. The natural design question: do they share a substrate, and how does the substrate handle the harder half?
+The PRD names two CI-enforced invariants whose enforcement the architecture has not yet specified: sensor-not-advisor schema validation on specialist envelopes (FR53) and loud-fail marker completeness via harness reconciliation (FR33). Both are first-class engineering work — explicitly _not_ lint rules per Success Criteria → Technical Success — and both run in CI. The natural design question: do they share a substrate, and how does the substrate handle the harder half?
 
 The two halves have asymmetric difficulty:
 
 - **Schema enforcement** is well-trodden. JSON Schema or equivalent validators run in CI; envelopes containing forbidden fields (`next_action`, `recommendation`, anything implying flow policy) fail validation. The choice is mostly tooling — language and library — not architecture.
-- **Harness reconciliation** is the design problem. FR33 requires the harness to detect skip events on reference-project runs *independently* of the marker system, then reconcile detected skips against emitted markers. If the harness derives "what skipped" from "what markers were emitted," the check is tautological (`markers == markers` always passes). Real reconciliation requires an independent skip-event source. The design question: what *is* the independent source, and is it complete-by-construction under blocking commitment?
+- **Harness reconciliation** is the design problem. FR33 requires the harness to detect skip events on reference-project runs _independently_ of the marker system, then reconcile detected skips against emitted markers. If the harness derives "what skipped" from "what markers were emitted," the check is tautological (`markers == markers` always passes). Real reconciliation requires an independent skip-event source. The design question: what _is_ the independent source, and is it complete-by-construction under blocking commitment?
 
-**Commitment level — PRD-ratified blocking, not best-effort.** FR33 says "any skip event detected by the harness on reference-project runs that does not emit a corresponding PR-bundle marker fails CI." NFR Loud-Fail Marker Completeness specifies "100% of detected skips produce PR-bundle marker." Success Criteria → Technical Success enumerates loud-fail marker completeness as a CI-enforced invariant. ADR-003 ratifies blocking commitment explicitly: best-effort is not on the table. This reshapes the option-space evaluation — primary skip-event sources must be complete-by-construction over the *known* skip-class set, not best-on-average across options.
+**Commitment level — PRD-ratified blocking, not best-effort.** FR33 says "any skip event detected by the harness on reference-project runs that does not emit a corresponding PR-bundle marker fails CI." NFR Loud-Fail Marker Completeness specifies "100% of detected skips produce PR-bundle marker." Success Criteria → Technical Success enumerates loud-fail marker completeness as a CI-enforced invariant. ADR-003 ratifies blocking commitment explicitly: best-effort is not on the table. This reshapes the option-space evaluation — primary skip-event sources must be complete-by-construction over the _known_ skip-class set, not best-on-average across options.
 
 **Relationship to FR65 (BMAD-extension audit).** FR65 specifies the audit doc's existence and convention-classification scope. ADR-003 elaborates the operational workflow for one specific class of audit additions — skip-class recognition. This is architectural elaboration of FR65's existing scope, not PRD drift; the audit doc gains a skip-class-recognition subsection, not a new responsibility surface.
 
@@ -227,18 +227,18 @@ The two halves have asymmetric difficulty:
 The architecture commits to **three layers of skip-event detection**, each layer bounded structurally differently. Each layer catches what the layers above it cannot — not by redundancy, but because each layer's bound has a different shape.
 
 - **Layer A — Orchestrator-events.** Every orchestrator decision point that involves a skip emits a schema-validated event recorded in run-state. The harness reads run-state's event log + PR-bundle markers; reconciles "for every skip-class event in log, is there a matching marker in bundle?" Reuses ADR-001's `orchestrator-event.yaml` (cell-1 architectural-core artifact per ADR-002). Non-tautological — events emit at orchestrator decision time, markers emit at PR-bundle assembly time, different code paths and temporal sources.
-- **Layer B — Runtime-state inspection.** The harness inspects post-run state (file presence, dependency availability, hook exit codes recorded in run-state, env state, git branch state) and independently infers what *should have* skipped. Encodes skip-detection logic separately from the orchestrator's awareness.
+- **Layer B — Runtime-state inspection.** The harness inspects post-run state (file presence, dependency availability, hook exit codes recorded in run-state, env state, git branch state) and independently infers what _should have_ skipped. Encodes skip-detection logic separately from the orchestrator's awareness.
 - **Layer C — Reference-project run fixtures + synthetic stories.** Each reference project carries an expected skip-profile; the harness compares actual markers against the fixture's expected profile. Synthetic test stories in `examples/` (per FR Reference Artifacts) trigger skip-classes that real reference projects don't naturally exercise.
 
 **Each layer's structural bound:**
 
-- **Layer A** is bounded by what the orchestrator is *aware of*. Cannot catch skips at decision points the schema doesn't recognize, nor skips that happen below the orchestrator's reasoning loop (hook failures, specialist process crashes, mid-decision crashes).
-- **Layer B** is bounded by what *manifests as observable runtime state*. Cannot catch skips that leave no state divergence (heuristic skipped because AC didn't trigger it, semantic verification not configured, internal heuristic timeout).
-- **Layer C** is bounded by *what's been pinned as a regression scenario*. Cannot catch novel skip-class combinations beyond fixture coverage, nor skip-classes recognized too recently to have fixtures yet.
+- **Layer A** is bounded by what the orchestrator is _aware of_. Cannot catch skips at decision points the schema doesn't recognize, nor skips that happen below the orchestrator's reasoning loop (hook failures, specialist process crashes, mid-decision crashes).
+- **Layer B** is bounded by what _manifests as observable runtime state_. Cannot catch skips that leave no state divergence (heuristic skipped because AC didn't trigger it, semantic verification not configured, internal heuristic timeout).
+- **Layer C** is bounded by _what's been pinned as a regression scenario_. Cannot catch novel skip-class combinations beyond fixture coverage, nor skip-classes recognized too recently to have fixtures yet.
 
 The three layers' bounds are structurally different. A's bound is "orchestrator awareness." B's bound is "state observability." C's bound is "fixture coverage." Gaps in one layer don't cascade into another's because the bounds don't overlap in shape — A's residuals are in B's bound; B's residuals are in A's or C's bound; C's residuals are partially in A's and B's bounds. Defense-in-depth holds.
 
-**Defense-in-depth framing scoped locally.** This framing is descriptive of *this* harness, where the layers genuinely have different structural bounds. ADR-003 does not promote defense-in-depth as a project-level discipline; the framing is local to the harness-reconciliation design.
+**Defense-in-depth framing scoped locally.** This framing is descriptive of _this_ harness, where the layers genuinely have different structural bounds. ADR-003 does not promote defense-in-depth as a project-level discipline; the framing is local to the harness-reconciliation design.
 
 #### Failure Mode Analysis (load-bearing findings)
 
@@ -278,7 +278,7 @@ The full FMA is captured in the architectural-elicitation transcript; the load-b
 
 **Unknown-unknown skip-classes routing:**
 
-The harness is CI-enforced over the *known* skip-class set. Skip-classes newly recognized after MVP enter the harness via the BMAD-extension audit (FR65) workflow — an explicit, review-enforced step. The audit doc gains a skip-class-recognition subsection committing to the workflow:
+The harness is CI-enforced over the _known_ skip-class set. Skip-classes newly recognized after MVP enter the harness via the BMAD-extension audit (FR65) workflow — an explicit, review-enforced step. The audit doc gains a skip-class-recognition subsection committing to the workflow:
 
 ```
 newly recognized skip-class →
@@ -294,12 +294,12 @@ This is the **CI-vs-review split for the harness**: Layers A/B/C and the five su
 #### Rationale
 
 - **Three layers, not one or two.** FMA demonstrated no single source is complete-by-construction over the full skip-class space, and that A's residuals fall into structurally different categories. A's "terminal hook failure" residual (caught by B) and A's "wrong-class assignment" residual (caught by C) cannot share a layer — they have different observability shapes (state divergence vs. coded-but-incorrect emission). Compressing them would hide the shape difference and weaken the defense.
-- **Blocking commitment is PRD-ratified.** FR33, NFR loud-fail completeness, and Technical Success criteria all specify blocking. ADR-003 ratifies what the PRD already committed to and uses blocking as the evaluation frame. Best-effort over conceivable skip-classes would be unenforceable; blocking over the *known* skip-class set is enforceable.
+- **Blocking commitment is PRD-ratified.** FR33, NFR loud-fail completeness, and Technical Success criteria all specify blocking. ADR-003 ratifies what the PRD already committed to and uses blocking as the evaluation frame. Best-effort over conceivable skip-classes would be unenforceable; blocking over the _known_ skip-class set is enforceable.
 - **Defense-in-depth here, not project-wide.** The framing is descriptive: A, B, and C have genuinely different structural bounds. Promoting defense-in-depth as a project-level discipline would create pressure toward "we should add a fourth layer for completeness" or "every architectural component should be three-layered" — over-formalization the framing wasn't designed to bear. Local to this harness only.
-- **C's expanded role is honest.** "Regression pinning, not gap-filling" is correct *for the orchestrator-vs-below-orchestrator axis* but undercounts C's role as backstop for orchestrator-internal failures (prompt drift, wrong-class assignment) that B's state-observability bound cannot see. Reframing C as both regression pinning *and* orchestrator-internal-drift backstop is a finding from FMA, not redefinition.
+- **C's expanded role is honest.** "Regression pinning, not gap-filling" is correct _for the orchestrator-vs-below-orchestrator axis_ but undercounts C's role as backstop for orchestrator-internal failures (prompt drift, wrong-class assignment) that B's state-observability bound cannot see. Reframing C as both regression pinning _and_ orchestrator-internal-drift backstop is a finding from FMA, not redefinition.
 - **Unknown-unknown route-out is the loud-fail doctrine applied to the harness's own architecture.** The structural limit (no source is complete over conceivable skip-classes) is acknowledged explicitly and routed to a review-enforced mechanism, rather than hidden behind a fourth-layer-that-wouldn't-work. The CI-vs-review split is the operationalization of "honest about enforcement mechanism" — same discipline applied to the 9-invariant split in Success Criteria.
 - **Co-versioning of marker-taxonomy and orchestrator-event-schema makes Layer A complete-by-construction.** Both are cell-1 architectural-core artifacts (per ADR-002). Treating them as co-versioned isn't process overhead — it's an architectural commitment that prevents the most plausible Layer A failure mode.
-- **FR65 elaboration, not PRD drift.** FR65 specifies the audit's existence and convention-classification scope. Skip-class recognition is a class of convention; the recognition workflow is the *how* of conventions getting added. ADR-003 elaborates the workflow without expanding FR65's responsibility surface.
+- **FR65 elaboration, not PRD drift.** FR65 specifies the audit's existence and convention-classification scope. Skip-class recognition is a class of convention; the recognition workflow is the _how_ of conventions getting added. ADR-003 elaborates the workflow without expanding FR65's responsibility surface.
 - **Substrate language under-specified deliberately.** Schema validation is well-trodden in any modern language; reconciliation is logic where Python's ergonomics suit but isn't load-bearing on language. Locking the language at architecture time would over-specify or constrain implementation prematurely. Naming Python as starting choice + TS as alternative + "easily revised" framing is the right discipline.
 - **Hook out-of-band-ness is downstream of ADR-001 Option A.** The structural property that hooks run outside the orchestrator's reasoning loop creates the recurring gap Layer B exists to close. ADR-003 acknowledges the coupling and flags ADR-001 for a follow-up revisit-condition addition — keeping cross-ADR coupling visible without retroactive editing in this fork.
 
@@ -311,13 +311,13 @@ This decision commits the architecture to:
    - Specialist envelope schema validator
    - Orchestrator-event schema validator
    - Skip-event-to-marker reconciler (Layer A's primary mechanism)
-   - Marker-taxonomy ↔ event-schema enumeration-equivalence checker (Layer A's completeness mitigation) *(extended per SDN-001: substrate component 4's enumeration-equivalence check now covers a third reconciliation pair — `marker-taxonomy.yaml ↔ dependencies.yaml` — with component count staying at five and the consumer set growing to two.)*
+   - Marker-taxonomy ↔ event-schema enumeration-equivalence checker (Layer A's completeness mitigation) _(extended per SDN-001: substrate component 4's enumeration-equivalence check now covers a third reconciliation pair — `marker-taxonomy.yaml ↔ dependencies.yaml` — with component count staying at five and the consumer set growing to two.)_
    - Marker-taxonomy ↔ fixture-coverage enumerator (Layer C's completeness mitigation)
 2. **Co-versioning of `marker-taxonomy.yaml` and `orchestrator-event.yaml` — local exception, not generalized cell-1 model.** These two cell-1 components are co-versioned because the harness's enumeration-equivalence check (substrate component 4) requires consistency between them; schema-version bumps on either trigger reconciliation review. **This coupling is local to the harness's substrate; it does not generalize to all cell-1 components.** Other cell-1 components (run-state schema, specialist envelope schema) remain independently versioned per ADR-002, because no runtime invariant requires their cross-component consistency. If a future component introduces a similar runtime invariant tying it to another cell-1 schema, the same justification pattern (named runtime invariant requiring cross-component consistency) is reused; absent such an invariant, the marker/event coupling stays the only exception. ADR-002's per-component versioning remains the cell-1 default.
 3. **Audit doc gains a skip-class-recognition workflow subsection.** Concrete deliverable, MVP-scope. Specifies the workflow (recognize → add to taxonomy → add to event-schema → add fixture → re-run CI checks → merge) and names skip-class recognition as a review-enforced convention-addition class within FR65's scope.
 4. **CI-vs-review split for harness completeness is explicit.** Layers A/B/C and substrate components 1–5 are CI-enforced. Skip-class recognition is review-enforced. **The 5/4 invariant count in the PRD (Success Criteria → Technical Success) is canonical; ADR-003's 6/5 reflects elaboration of FR33 and FR65 into harness-specific sub-invariants, not addition to the canonical count.** Harness completeness over known skip-classes elaborates FR33 (CI-enforced); skip-class recognition elaborates FR65 (review-enforced). Future readers comparing PRD invariants to architecture should treat ADR-003's enumeration as sub-items of the canonical 5/4, not as new invariants. Promoting these to canonical-count items would require a PRD edit, which is out of scope for ADR-003.
 5. **Synthetic test stories live in `examples/`** per FR Reference Artifacts and are required to cover every skip-class in the marker taxonomy (Layer C's completeness mitigation). Adding a skip-class without a synthetic story fails CI.
-6. **Hook out-of-band-ness is acknowledged as structural to ADR-001 Option A** and is the gap Layer B closes. ADR-003 flags ADR-001 for a follow-up revisit-condition addition: *"Hook out-of-band-failure burden becomes a recurring maintenance signal — clusters of A.4-class failures (terminal hook failures, hook-orchestrator observation gaps) consume disproportionate harness-maintenance effort."* This addition is scheduled to happen as a supplement-by-extension to ADR-001 (per ADR-002's omission-vs-error framing — the addition is a new finding, not a correction). It is not retroactively edited into ADR-001 in this fork; the flag here documents the cross-ADR coupling and the planned edit.
+6. **Hook out-of-band-ness is acknowledged as structural to ADR-001 Option A** and is the gap Layer B closes. ADR-003 flags ADR-001 for a follow-up revisit-condition addition: _"Hook out-of-band-failure burden becomes a recurring maintenance signal — clusters of A.4-class failures (terminal hook failures, hook-orchestrator observation gaps) consume disproportionate harness-maintenance effort."_ This addition is scheduled to happen as a supplement-by-extension to ADR-001 (per ADR-002's omission-vs-error framing — the addition is a new finding, not a correction). It is not retroactively edited into ADR-001 in this fork; the flag here documents the cross-ADR coupling and the planned edit.
 7. **Defense-in-depth framing is scoped to this harness.** Project-level discipline is not implied. Future harnesses or enforcement mechanisms classify their layering needs from their own structural-bound analysis, not by analogy to ADR-003.
 8. **Substrate language is Python (starting choice).** TypeScript is a documented alternative for MCP-future scenarios. Language change is a minor-version revision, not a major-version event — the substrate's contracts (the five components and their inputs/outputs) are what the architecture commits to, not the language hosting them.
 9. **Unknown-unknown skip-classes are an explicit out-of-CI residual** routed to review via FR65. This is the loud-fail doctrine applied to the harness's own architecture — the structural limit is named, not hidden.
@@ -339,7 +339,7 @@ This decision commits the architecture to:
 
 #### Context
 
-ADR-001 placed the orchestrator as a skill in the main Claude Code session and committed to envelope-shaped output protocol enforcement. It deferred *how* the orchestrator invokes specialist subagents (Dev, Review-BMAD, QA, and Phase 1.5 Review-LAD) — the dispatch mechanism. ADR-005 made this deferral concrete by naming `specialist-crash-mid-execution` as a marker class whose detection mechanism is ADR-004's responsibility. ADR-004 picks the dispatch primitive and commits to the detection mechanism.
+ADR-001 placed the orchestrator as a skill in the main Claude Code session and committed to envelope-shaped output protocol enforcement. It deferred _how_ the orchestrator invokes specialist subagents (Dev, Review-BMAD, QA, and Phase 1.5 Review-LAD) — the dispatch mechanism. ADR-005 made this deferral concrete by naming `specialist-crash-mid-execution` as a marker class whose detection mechanism is ADR-004's responsibility. ADR-004 picks the dispatch primitive and commits to the detection mechanism.
 
 **Primitive landscape — verification finding (April 2026).** The brainstorm session (2026-04-24) and the PRD's Runtime Compatibility Matrix both reference **"Agent Teams (v2.1.32+)"** as the multi-agent primitive informing the MVP version floor. Verification searches against current Anthropic documentation surface a different landscape: **Task tool is the canonical multi-agent dispatch primitive in Claude Code today**, with OpenTelemetry instrumentation built into the Claude Code platform layer (subagent spans nest under parent `claude_code.tool` spans; token counts, cost, and timing exposed as OTel metrics and traces). **"Agent Teams" does not appear as a distinct primitive name in current Anthropic docs.** The primitive landscape evolved between brainstorm research (late 2025) and architecture verification (April 2026); whether "Agent Teams" was renamed, subsumed into Task tool's capabilities, or never canonical externally is unclear from verification alone.
 
@@ -349,18 +349,18 @@ ADR-001 placed the orchestrator as a skill in the main Claude Code session and c
 
 The five-requirement evaluation framework (from fork-elicitation):
 
-| # | Requirement | Source |
-|---|---|---|
-| 1 | Structured-input dispatch | ADR-001 + FR1–FR7 |
-| 2 | Structured-output return (envelope-validatable) | ADR-003 + FR51 |
-| 3 | Specialist-crash detection | ADR-005 marker `specialist-crash-mid-execution` |
-| 4 | Timeout enforcement | NFR-P2 (default 15min/specialist) |
-| 5 | Cost-telemetry exposure | Carry-forward to ADR-006 |
+| #   | Requirement                                     | Source                                          |
+| --- | ----------------------------------------------- | ----------------------------------------------- |
+| 1   | Structured-input dispatch                       | ADR-001 + FR1–FR7                               |
+| 2   | Structured-output return (envelope-validatable) | ADR-003 + FR51                                  |
+| 3   | Specialist-crash detection                      | ADR-005 marker `specialist-crash-mid-execution` |
+| 4   | Timeout enforcement                             | NFR-P2 (default 15min/specialist)               |
+| 5   | Cost-telemetry exposure                         | Carry-forward to ADR-006                        |
 
 **Options considered post-verification:**
 
 - **Task tool — in-session canonical primitive.** Multi-agent coordination via parent-spawned subagents; structured input via prompt; return text parsed against envelope schema; OTel spans nested under parent `claude_code.tool` span.
-- **Agent SDK (programmatic harness).** Runs Claude Code CLI as a child process; provides Python and TypeScript bindings. **Rejected** — incompatible with ADR-001's orchestrator-as-skill choice. The orchestrator lives *inside* a Claude Code session; the SDK is for invoking Claude Code from *outside*. Architecture mismatch.
+- **Agent SDK (programmatic harness).** Runs Claude Code CLI as a child process; provides Python and TypeScript bindings. **Rejected** — incompatible with ADR-001's orchestrator-as-skill choice. The orchestrator lives _inside_ a Claude Code session; the SDK is for invoking Claude Code from _outside_. Architecture mismatch.
 - **"Agent Teams" — brainstorm-era framing.** Does not appear as a distinct primitive in current docs. Either subsumed into Task tool or never canonical externally. **Not a viable evaluation candidate** post-verification.
 
 **Hybrid is dead-letter** — there is only one viable in-session primitive (Task tool); nothing to hybridize with.
@@ -376,7 +376,7 @@ The five-requirement evaluation framework (from fork-elicitation):
   1. **`tool-level-error`** — Task tool's own dispatch failed (subagent process crash, primitive-level error). Detection: Task tool returns error rather than agent output.
   2. **`silent-corruption`** — specialist returned text but the text doesn't parse to envelope or fails schema validation per ADR-003. Detection: orchestrator's envelope-parse step (substrate component 1) fails.
   3. **`timeout-exceeded`** — wall-clock budget exhausted (NFR-P2's 15-min default, configurable per specialist via `_bmad/automation/config.yaml`). Detection: orchestrator wraps each Task tool dispatch with a wall-clock timer; cancels and emits if exceeded. Task tool itself does not expose native per-call timeout that orchestrator can rely on.
-- **Cost-telemetry exposure: native via Claude Code's OpenTelemetry instrumentation** (`claude_code.interaction` / `claude_code.llm_request` / `claude_code.tool` spans; subagent spans nested under parent tool span; token-count and cost metrics emitted as OTel signals). ADR-004 commits to *exposure availability*; ADR-006 will choose the consumption path (OTel direct, orchestrator-owned counters, or hybrid).
+- **Cost-telemetry exposure: native via Claude Code's OpenTelemetry instrumentation** (`claude_code.interaction` / `claude_code.llm_request` / `claude_code.tool` spans; subagent spans nested under parent tool span; token-count and cost metrics emitted as OTel signals). ADR-004 commits to _exposure availability_; ADR-006 will choose the consumption path (OTel direct, orchestrator-owned counters, or hybrid).
 
 #### Cross-Coupling to ADR-005
 
@@ -389,7 +389,7 @@ The marker class supports both detection paths; the sub-field `cause` distinguis
 
 #### Carry-Forward to ADR-006
 
-ADR-004 surfaces what the dispatch primitive *exposes* for cost-accounting; ADR-006 will choose the consumption path:
+ADR-004 surfaces what the dispatch primitive _exposes_ for cost-accounting; ADR-006 will choose the consumption path:
 
 - **OTel availability.** Claude Code's platform-layer OpenTelemetry exports include token counts (input/output, by model), cost counters, and span hierarchy with subagent nesting. Configurable via `CLAUDE_CODE_ENABLE_TELEMETRY=1` + OTLP exporter env vars.
 - **Span hierarchy for per-subagent attribution.** Subagent invocations via Task tool produce nested spans (`claude_code.llm_request` and `claude_code.tool` under parent's `claude_code.tool` span), making per-specialist cost attribution structurally available.
@@ -437,7 +437,7 @@ The PRD's NFR-R8 names the cross-state consistency policy: story-doc canonical, 
 
 **Three factual resolutions land in Context before option analysis (verifying assumptions surfaced during fork elicitation):**
 
-1. **Multi-writer is real, not collapsible.** Specialists (Dev, Review-BMAD, QA) write story-doc sections directly during their own execution — `bmad-dev-story` writes `## Dev Agent Record`; `bmad-code-review` writes `## Senior Developer Review (AI)` and `## Review Findings`; QA writes `## QA Behavioral Plan` (per FR23). The Automator's wrappers invoke these BMAD-core skills and observe returns; they do *not* buffer-and-write-through-orchestrator. Buffering would override BMAD-core's existing behavior and violate BMAD-extension discipline. **Conclusion: story-doc has multiple writers (one per specialist subagent); the orchestrator is not among them.**
+1. **Multi-writer is real, not collapsible.** Specialists (Dev, Review-BMAD, QA) write story-doc sections directly during their own execution — `bmad-dev-story` writes `## Dev Agent Record`; `bmad-code-review` writes `## Senior Developer Review (AI)` and `## Review Findings`; QA writes `## QA Behavioral Plan` (per FR23). The Automator's wrappers invoke these BMAD-core skills and observe returns; they do _not_ buffer-and-write-through-orchestrator. Buffering would override BMAD-core's existing behavior and violate BMAD-extension discipline. **Conclusion: story-doc has multiple writers (one per specialist subagent); the orchestrator is not among them.**
 2. **The orchestrator is a pure run-state writer plus sprint-status writer (for non-BMAD-native transitions); never a story-doc writer.** FR23's `## QA Behavioral Plan` is QA's write, not the orchestrator's. The orchestrator emits orchestrator-events to its own event log and updates run-state.yaml; for the new `qa` lifecycle state (per upstream proposal 1, since BMAD-core's existing skills don't cover the `review → qa` transition), the orchestrator writes sprint-status.yaml. **Conclusion: clean separation of writers — specialists own story-doc, orchestrator owns run-state and the `qa` sprint-status transition; BMAD-core skills own the rest of sprint-status.**
 3. **Sprint-status.yaml is a third state store, not just a derived projection.** BMAD-core skills (bmad-dev-story step 4, bmad-code-review step 6) write sprint-status during their normal flow; the orchestrator writes it for non-BMAD-native transitions. NFR-R8's "story-doc canonical, run-state cache" framing was implicitly two-store; sprint-status enters as a third store with its own canonicality. **Conclusion: cross-state consistency is a three-store problem, not two-store.**
 
@@ -445,13 +445,13 @@ These resolutions reshape the option space into three composing sub-decisions: *
 
 #### Sub-decision (a) — Recovery Sources
 
-| Source | Role |
-|---|---|
-| `story-doc` | BMAD-domain canonical for specialist outputs; multi-writer (specialists). |
-| `sprint-status.yaml` | BMAD-domain canonical for lifecycle state name; multi-writer (BMAD-core skills + orchestrator for `qa` transition). |
-| `run-state.yaml` | Orchestrator-domain canonical for flow control (cache; reconstructable from other sources). |
+| Source                 | Role                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `story-doc`            | BMAD-domain canonical for specialist outputs; multi-writer (specialists).                                                |
+| `sprint-status.yaml`   | BMAD-domain canonical for lifecycle state name; multi-writer (BMAD-core skills + orchestrator for `qa` transition).      |
+| `run-state.yaml`       | Orchestrator-domain canonical for flow control (cache; reconstructable from other sources).                              |
 | Orchestrator-event log | Audit trail; primary for state recovery if available; reconstructable cache otherwise. Reuses ADR-003's cell-1 artifact. |
-| Git state | **Diagnostic probe only** — not a recovery source; commit-verification probe. |
+| Git state              | **Diagnostic probe only** — not a recovery source; commit-verification probe.                                            |
 
 #### Sub-decision (b) — Canonicality Model
 
@@ -461,7 +461,7 @@ Three readings considered:
 - **Reading 2 — pure story-doc canonical for everything.** Sprint-status is derived projection. **Rejected** — BMAD-core skills write sprint-status during normal flow; treating those writes as drift violates BMAD-extension discipline.
 - **Reading 3 (chosen) — domain-canonical in normal flow; story-doc-wins-tiebreak in recovery disagreement.** Each store is canonical for its own domain during normal operation (BMAD-core's sprint-status writes are respected; story-doc sections are specialist truth). On recovery disagreement, story-doc wins.
 
-**Why story-doc wins the tiebreak (durability rationale, not stipulation):** story-doc section presence is durable and unambiguously machine-readable — specialists' completion artifacts persist as named sections testable for existence with no ambiguity. Sprint-status is mutable scalar state stored in a single small YAML file; mid-write corruption or partial updates are more likely than story-doc section ambiguity. Story-doc isn't canonical *because we say so*; it wins recovery tiebreak because it is the more durable, harder-to-corrupt source. If a future scenario surfaces sprint-status as more reliable than story-doc, the rule revisits.
+**Why story-doc wins the tiebreak (durability rationale, not stipulation):** story-doc section presence is durable and unambiguously machine-readable — specialists' completion artifacts persist as named sections testable for existence with no ambiguity. Sprint-status is mutable scalar state stored in a single small YAML file; mid-write corruption or partial updates are more likely than story-doc section ambiguity. Story-doc isn't canonical _because we say so_; it wins recovery tiebreak because it is the more durable, harder-to-corrupt source. If a future scenario surfaces sprint-status as more reliable than story-doc, the rule revisits.
 
 #### Sub-decision (c) — Recovery Algorithm
 
@@ -495,9 +495,9 @@ Three viable options; FMA per crash scenario produced clear discrimination.
 - **Tiebreak directionality is durability-based, not stipulated.** Story-doc wins because section presence is harder to corrupt than scalar YAML state — not because we say so. Reformulating this way leaves the door open for revisit if a future scenario surfaces sprint-status as more reliable.
 - **B-with-A-fallback handles pure B's brittleness.** Pure B fails when event log is missing/corrupted; fallback to story-doc-only reconstruction with degraded marker preserves recovery while making the degradation visible. Fallback-mode conservatism (escalate ambiguous cases) prevents B-with-A-fallback from silently degrading into A's failure mode.
 - **Git probe is diagnostic, not gating, because of the loud-fail doctrine.** The doctrine says "absence is as visible as presence; user decides." Auto-halting on every git anomaly would treat detection as failure — the inverse posture. Markers handle visibility; user decides resolution. `dangling-uncommitted-work` matches the response shape of `LAD-skipped` and `Tier-3-not-configured`: visible, actionable, not flow-blocking.
-- **Drift-handling: auto-rebuild + marker is the doctrine-aligned default.** Drift is *expected* in recovery (post-crash state always has minor inconsistencies); halt-and-surface for every drift event would erode trust-earned-automation by treating every recovery as suspect. The trust-earned-automation commitment is "visibility over enforcement"; halt-and-surface is enforcement, which is reserved for cases where visibility itself is degraded (the fallback-mode carve-out).
+- **Drift-handling: auto-rebuild + marker is the doctrine-aligned default.** Drift is _expected_ in recovery (post-crash state always has minor inconsistencies); halt-and-surface for every drift event would erode trust-earned-automation by treating every recovery as suspect. The trust-earned-automation commitment is "visibility over enforcement"; halt-and-surface is enforcement, which is reserved for cases where visibility itself is degraded (the fallback-mode carve-out).
 - **The architectural commitment underlying Reading 3: story-doc section presence is a load-bearing state oracle for recovery.** "Dev Agent Record present" implies in-progress was reached; "Senior Developer Review (AI) present" implies review was reached; "QA Behavioral Plan + completion markers" imply qa was reached. This isn't a PRD invariant currently; ADR-005 creates it. See Consequence 1.
-- **Specialist crash detection cross-couples to ADR-004.** The marker class `specialist-crash-mid-execution` exists at ADR-005's level; the *trigger* (timeout? exit code? heartbeat absence?) is ADR-004's responsibility. ADR-005 doesn't pre-couple ADR-004; it specifies the recovery response and notes the dependency.
+- **Specialist crash detection cross-couples to ADR-004.** The marker class `specialist-crash-mid-execution` exists at ADR-005's level; the _trigger_ (timeout? exit code? heartbeat absence?) is ADR-004's responsibility. ADR-005 doesn't pre-couple ADR-004; it specifies the recovery response and notes the dependency.
 
 #### Consequences
 
@@ -505,8 +505,8 @@ Three viable options; FMA per crash scenario produced clear discrimination.
    - Documentation of which sections imply which lifecycle states.
    - Mapping artifact location: `_bmad/automation/config.yaml` or a dedicated schema file (provisional; final placement gated on the still-open repo-layout decision per Project Context Analysis).
    - Schema validation in the harness substrate (per ADR-003 — substrate component 4 may extend to cover the section-presence contract's consistency).
-   - **Coordination with FR43 (story-doc version tolerance):** when BMAD changes section names or adds intermediate sections, the state-derivation logic in the orchestrator's recovery algorithm must update. FR43 currently focuses on *reading* docs across versions; ADR-005 extends the concern to *state-derivation correctness* across versions. The mapping artifact is versioned with the BMAD template version it targets.
-   - **Post-recovery state shape is a schema commitment, not just skill-prose behavior.** The recovery algorithm's *outputs* (the run-state structure produced after recovery completes) are part of the run-state schema contract. Layer A's reconciliation depends on this post-recovery shape — if recovery produces an unexpected run-state shape, Layer A's enumeration-equivalence check may fail or false-pass. The schema commitment binds: the post-recovery run-state must conform to the same schema that pre-crash run-state conforms to, with the same field invariants. This makes the recovery algorithm's outputs validatable rather than purely behavioral.
+   - **Coordination with FR43 (story-doc version tolerance):** when BMAD changes section names or adds intermediate sections, the state-derivation logic in the orchestrator's recovery algorithm must update. FR43 currently focuses on _reading_ docs across versions; ADR-005 extends the concern to _state-derivation correctness_ across versions. The mapping artifact is versioned with the BMAD template version it targets.
+   - **Post-recovery state shape is a schema commitment, not just skill-prose behavior.** The recovery algorithm's _outputs_ (the run-state structure produced after recovery completes) are part of the run-state schema contract. Layer A's reconciliation depends on this post-recovery shape — if recovery produces an unexpected run-state shape, Layer A's enumeration-equivalence check may fail or false-pass. The schema commitment binds: the post-recovery run-state must conform to the same schema that pre-crash run-state conforms to, with the same field invariants. This makes the recovery algorithm's outputs validatable rather than purely behavioral.
 2. **Recovery algorithm sketch lands as orchestrator skill prompt instructions** (per ADR-001 — orchestrator skill is host-Bridge per ADR-002 cell 4):
    ```
    SessionStart hook recovery sequence:
@@ -527,7 +527,7 @@ Three viable options; FMA per crash scenario produced clear discrimination.
 4. **`specialist-crash-mid-execution` cross-couples to ADR-004.** This ADR commits to the marker class and recovery response (re-dispatch or escalate per orchestrator policy); ADR-004 commits to the detection mechanism (timeout, exit code, heartbeat absence — TBD in ADR-004). The dependency is documented; the two ADRs compose at integration time.
 5. **NFR-R8's two-store framing extends to three-store recovery.** ADR-005 elaborates NFR-R8: the policy "story-doc canonical, run-state cache, story-doc-wins-on-disagreement" applies, and the elaboration is that sprint-status is a third store with the same recovery-tiebreak rule. Architectural elaboration of NFR-R8 (parallel to ADR-003's elaboration of FR33/FR65), not PRD drift.
 6. **Atomic write protocol (NFR-R1) covers all three stores.** Run-state.yaml, sprint-status.yaml (where orchestrator writes for `qa` transition), and orchestrator-event log entries all use temp-file-plus-atomic-rename. Standard Python pathlib + os.replace covers it; implementation detail.
-7. **Defense-in-depth framing from ADR-003 does not extend to ADR-005.** ADR-005's recovery uses three sources but isn't structured as defense-in-depth — sources are *ranked* (event log primary, story-doc canonical for tiebreak, git diagnostic-only), not layered with structurally different bounds. The framing stays local to ADR-003's harness reconciliation, per that ADR's Consequence 7.
+7. **Defense-in-depth framing from ADR-003 does not extend to ADR-005.** ADR-005's recovery uses three sources but isn't structured as defense-in-depth — sources are _ranked_ (event log primary, story-doc canonical for tiebreak, git diagnostic-only), not layered with structurally different bounds. The framing stays local to ADR-003's harness reconciliation, per that ADR's Consequence 7.
 
 #### Revisit Conditions
 
@@ -625,50 +625,50 @@ Option analysis at fork-#7 elicitation surfaced no architectural fork — schema
 # Authoritative dependency manifest. Cell-1 portable artifact (per ADR-002).
 # Schema-version bumps require reconciliation review (per cell-1 discipline).
 
-schema_version: "1.0"
+schema_version: '1.0'
 
 dependencies:
   claude-code:
-    version_floor: "2.1.32"
-    version_ceiling_policy: "tracked-against-current-releases; primitive-deprecation triggers version-pin review"
+    version_floor: '2.1.32'
+    version_ceiling_policy: 'tracked-against-current-releases; primitive-deprecation triggers version-pin review'
     profiles:
       init:
         profile: total-block
-        diagnostic: "Claude Code v2.1.32+ required. Run `claude --version` to check."
+        diagnostic: 'Claude Code v2.1.32+ required. Run `claude --version` to check.'
       runtime:
         profile: total-block
 
   bmad-core:
-    version_floor: "6.0"
-    version_ceiling_policy: "tracked-against-bmad-releases; upstream-absorption event triggers version-pin review"
+    version_floor: '6.0'
+    version_ceiling_policy: 'tracked-against-bmad-releases; upstream-absorption event triggers version-pin review'
     profiles:
       init:
         profile: total-block
-        diagnostic: "BMAD core v6.0+ required."
+        diagnostic: 'BMAD core v6.0+ required.'
       runtime:
         profile: total-block
 
   tea-module:
-    version_policy: "version-agnostic; detected at init"
+    version_policy: 'version-agnostic; detected at init'
     profiles:
       init:
         profile: total-block
-        diagnostic: "TEA module not installed. Run `/bmad:install tea` and re-run `/bmad-automation init`."
+        diagnostic: 'TEA module not installed. Run `/bmad:install tea` and re-run `/bmad-automation init`.'
       runtime:
         profile: total-block
 
   playwright-mcp:
-    version_floor: "officially-supported-as-of-mvp-release"
+    version_floor: 'officially-supported-as-of-mvp-release'
     by_project_type:
       web:
         profiles:
           init:
             profile: total-block
-            diagnostic: "Playwright MCP unreachable. Required for web QA. See docs/playwright-mcp-setup.md."
+            diagnostic: 'Playwright MCP unreachable. Required for web QA. See docs/playwright-mcp-setup.md.'
           runtime:
             profile: graceful-degrade
             marker_class: env-setup-failed
-            diagnostic_pointer: "Playwright MCP unavailable mid-run; QA phase skipped with marker."
+            diagnostic_pointer: 'Playwright MCP unavailable mid-run; QA phase skipped with marker.'
       api:
         profiles:
           init:
@@ -683,18 +683,18 @@ dependencies:
             profile: opt-in-skip
 
   mobile-mcp:
-    phase: "1.5"
-    version_floor: "TBD-at-Phase-1.5-design-time"
+    phase: '1.5'
+    version_floor: 'TBD-at-Phase-1.5-design-time'
     by_project_type:
       mobile:
         profiles:
           init:
             profile: total-block
-            diagnostic: "Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md."
+            diagnostic: 'Mobile MCP required for mobile projects. See docs/mobile-mcp-setup.md.'
           runtime:
             profile: graceful-degrade
             marker_class: mobile-blocked
-            diagnostic_pointer: "Mobile MCP unavailable mid-run; mobile QA phase skipped."
+            diagnostic_pointer: 'Mobile MCP unavailable mid-run; mobile QA phase skipped.'
       web:
         profiles:
           init:
@@ -709,14 +709,14 @@ dependencies:
             profile: opt-in-skip
 
   lad:
-    version_floor: "bb47e9e"
+    version_floor: 'bb47e9e'
     profiles:
       init:
         profile: opt-in-skip
         sub_classifications:
           - condition: configured-but-api-key-missing
             emits_marker: LAD-skipped
-            diagnostic_pointer: "LAD configured but `OPENROUTER_API_KEY` env var missing. Set the env var or disable LAD in config.yaml."
+            diagnostic_pointer: 'LAD configured but `OPENROUTER_API_KEY` env var missing. Set the env var or disable LAD in config.yaml.'
           - condition: unconfigured
             silent: true
       runtime:
@@ -724,7 +724,7 @@ dependencies:
         sub_classifications:
           - condition: configured-but-api-key-missing
             emits_marker: LAD-skipped
-            diagnostic_pointer: "LAD MCP unavailable mid-run; 4th-layer review skipped."
+            diagnostic_pointer: 'LAD MCP unavailable mid-run; 4th-layer review skipped.'
           - condition: unconfigured
             silent: true
 ```
@@ -802,7 +802,7 @@ _Drafted during step-02 elicitation; supporting material for the ADRs above. Ope
 
 ### Technical Constraints & Dependencies
 
-**Runtime primitives (Claude Code).** v2.1.32+ — Task tool is canonical multi-agent dispatch primitive *(updated per ADR-004 verification; previous "Agent Teams primitive" framing was outdated)* — total-block. All invocation is slash-command; no programmatic SDK, no CLI binary, no HTTP API, no direct specialist invocation. Hook scripts are bash-only (≤20 lines each).
+**Runtime primitives (Claude Code).** v2.1.32+ — Task tool is canonical multi-agent dispatch primitive _(updated per ADR-004 verification; previous "Agent Teams primitive" framing was outdated)_ — total-block. All invocation is slash-command; no programmatic SDK, no CLI binary, no HTTP API, no direct specialist invocation. Hook scripts are bash-only (≤20 lines each).
 
 **Methodology dependency (BMAD core).** v6.0+ — total-block. The Automator extends, doesn't fork. Two upstream proposals drafted (`qa` lifecycle state, `## QA Behavioral Plan` story-doc section) + seam-transition pattern itself.
 
@@ -831,18 +831,18 @@ _Drafted during step-02 elicitation; supporting material for the ADRs above. Ope
 
 ### Architectural Questions Identified — Status as of close of step-02
 
-| Question | Status | Resolution |
-|---|---|---|
-| Orchestrator implementation primitive | **RESOLVED** | ADR-001 (skill in main session + envelope-shaped output protocol enforced at CI) |
-| Portability boundary — host-axis vs methodology-axis | **RESOLVED** | ADR-002 (two-axis 3×3 model + four-capability precondition) |
-| Schema enforcement technology | **RESOLVED** | ADR-003 (Python starting choice; Pydantic + jsonschema; substrate reused for harness reconciliation) |
-| Loud-fail harness implementation | **RESOLVED** | ADR-003 (three-layer defense-in-depth: orchestrator-events / runtime-state / fixtures+synthetic stories; unknown-unknown routed to FR65) |
-| Subagent dispatch mechanism (Task tool vs Agent Teams primitive) | **OPEN** | Downstream of repo-layout decision. |
-| Run-state file format | **PARTIALLY RESOLVED** | YAML confirmed (NFR-O2); schema-versioned per ADR-002/003; specific schema definition is implementation work. |
-| Repo layout (plugin-primitive-ready vs `.claude/skills/` vs both) | **OPEN** | Tracks against plugin-primitive stability research blocker. |
-| State-streaming mechanism | **OPEN** | How main-session output streams per-seam transitions; implications for `status` command consistency. |
-| Extension-audit doc location and format | **PARTIALLY RESOLVED** | ADR-003 names skip-class-recognition workflow as a required subsection; full doc location/format/cadence is downstream work. |
-| Cost-accounting mechanism | **OPEN** | Per-specialist × per-retry cost breakdown source (NFR-P5). Token telemetry, orchestrator-owned counters, or hybrid. |
+| Question                                                          | Status                 | Resolution                                                                                                                               |
+| ----------------------------------------------------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Orchestrator implementation primitive                             | **RESOLVED**           | ADR-001 (skill in main session + envelope-shaped output protocol enforced at CI)                                                         |
+| Portability boundary — host-axis vs methodology-axis              | **RESOLVED**           | ADR-002 (two-axis 3×3 model + four-capability precondition)                                                                              |
+| Schema enforcement technology                                     | **RESOLVED**           | ADR-003 (Python starting choice; Pydantic + jsonschema; substrate reused for harness reconciliation)                                     |
+| Loud-fail harness implementation                                  | **RESOLVED**           | ADR-003 (three-layer defense-in-depth: orchestrator-events / runtime-state / fixtures+synthetic stories; unknown-unknown routed to FR65) |
+| Subagent dispatch mechanism (Task tool vs Agent Teams primitive)  | **OPEN**               | Downstream of repo-layout decision.                                                                                                      |
+| Run-state file format                                             | **PARTIALLY RESOLVED** | YAML confirmed (NFR-O2); schema-versioned per ADR-002/003; specific schema definition is implementation work.                            |
+| Repo layout (plugin-primitive-ready vs `.claude/skills/` vs both) | **OPEN**               | Tracks against plugin-primitive stability research blocker.                                                                              |
+| State-streaming mechanism                                         | **OPEN**               | How main-session output streams per-seam transitions; implications for `status` command consistency.                                     |
+| Extension-audit doc location and format                           | **PARTIALLY RESOLVED** | ADR-003 names skip-class-recognition workflow as a required subsection; full doc location/format/cadence is downstream work.             |
+| Cost-accounting mechanism                                         | **OPEN**               | Per-specialist × per-retry cost breakdown source (NFR-P5). Token telemetry, orchestrator-owned counters, or hybrid.                      |
 
 ### Research Blockers Still Open
 
@@ -871,7 +871,7 @@ The standard starter-template question doesn't fit this project's shape. This pr
 
 Per ADR-003, the substrate is small — five components (envelope schema validator + orchestrator-event schema validator + skip-event-to-marker reconciler + marker-taxonomy ↔ event-schema enumeration-equivalence checker + marker-taxonomy ↔ fixture-coverage enumerator). No web surface, no framework, no service. Layout decision reduces to a small list of well-trodden picks.
 
-**Scope of this sub-decision:** the harness's *layout contents* — what's in it, library picks, dev tooling. The substrate's *location in the repo* is downstream of the plugin-primitive-stability research blocker (OPEN per Project Context Analysis) and lands when the repo-layout decision is taken. Provisional candidates for location: `tools/loud-fail-harness/` or `_bmad/automation/harness/` adjacent to the skill bundles. This separation matters: contents (decided here) carry over regardless of where the substrate ultimately sits.
+**Scope of this sub-decision:** the harness's _layout contents_ — what's in it, library picks, dev tooling. The substrate's _location in the repo_ is downstream of the plugin-primitive-stability research blocker (OPEN per Project Context Analysis) and lands when the repo-layout decision is taken. Provisional candidates for location: `tools/loud-fail-harness/` or `_bmad/automation/harness/` adjacent to the skill bundles. This separation matters: contents (decided here) carry over regardless of where the substrate ultimately sits.
 
 #### Layout Pattern
 
@@ -880,7 +880,7 @@ Per ADR-003, the substrate is small — five components (envelope schema validat
 #### Library Picks (current versions verified 2026-04-25)
 
 - **Schema validation — Pydantic v2.** Latest stable: **2.13.3** (released 2026-04-20). v3 not yet announced; v2 is the current recommended default for new projects. Pydantic v1 remains in maintenance under the `pydantic.v1` namespace (1.10.26) for backward compatibility — not relevant here.
-- **JSON Schema validation — `jsonschema` package** (current: 4.26.0). The ecosystem has consolidated: `jsonschema` is the primary library and uses the newer `referencing` library *internally* for `$ref` resolution. These compose rather than compete; for this project's substrate, use `jsonschema` directly. The `referencing` package is invoked explicitly only for custom reference-resolution behavior, which is out of scope.
+- **JSON Schema validation — `jsonschema` package** (current: 4.26.0). The ecosystem has consolidated: `jsonschema` is the primary library and uses the newer `referencing` library _internally_ for `$ref` resolution. These compose rather than compete; for this project's substrate, use `jsonschema` directly. The `referencing` package is invoked explicitly only for custom reference-resolution behavior, which is out of scope.
 - **Lint + format — Ruff.** Universal current recommendation; subsumes flake8 + black + isort + most equivalents into a single tool. No alternative worth evaluating.
 
 #### Type Checker — Open Landscape, Conservative Default
@@ -892,11 +892,13 @@ The Python type-checker landscape is in flux as of April 2026:
 - **ty** (Astral) — Beta release; Astral recommends for "motivated users for production use"; stable release expected 2026-late or 2027-early. Designed as the eventual replacement for mypy/pyright across the Astral toolchain (uv + ruff + ty).
 
 **Decision: start with mypy.** Reasoning:
+
 - The harness is small and CI-only; speed is not load-bearing (mypy's slowness shows up on large codebases or editor latency, neither applies).
 - mypy's PyPI-installability and reference-implementation status make it the lowest-friction integration with `pyproject.toml` + uv-managed dev dependencies.
 - Type-checker swap is a minor-version revision per ADR-003's "language is the most easily-revised piece" framing — the substrate's contracts (the five components) are the architectural commitment; the type checker isn't.
 
 **Revisit when:**
+
 - Astral's `ty` reaches stable release. The Astral toolchain (uv + ruff + ty) is the natural composition for a project already using uv + ruff; `ty` becomes the default once stable.
 - Type-checking ergonomics on the harness specifically prove worse than predicted (e.g., reconciliation logic surfaces type complexity mypy doesn't handle well).
 
@@ -1086,7 +1088,7 @@ Standard step-06 expects a single project tree, API/component/data boundaries, a
 The project comprises two distinct distribution units with different lifecycles, audiences, and deployment paths:
 
 - **Automator runtime distribution.** Skill bundles, subagent definitions, hook scripts, cell-1 schema files, and config templates. Installs into user BMAD projects via `/plugin install bmad-automation` (target) or git-clone-symlink fallback. Read by the orchestrator and hooks during story loops. Versioned per Developer-Tool Requirements semver policy.
-- **Harness substrate (CI tooling).** Python package implementing the five-component substrate per ADR-003. Runs in the Automator's *own development CI* against schemas and reference projects. **Not deployed to user installations** — never appears in a user's BMAD project filesystem. Lifecycle is Automator-development-internal.
+- **Harness substrate (CI tooling).** Python package implementing the five-component substrate per ADR-003. Runs in the Automator's _own development CI_ against schemas and reference projects. **Not deployed to user installations** — never appears in a user's BMAD project filesystem. Lifecycle is Automator-development-internal.
 
 This distinction is load-bearing for understanding the project structure: the harness substrate is **at repo root** (`tools/loud-fail-harness/`), not inside `_bmad/automation/`, because `_bmad/automation/` is runtime-deployed-to-users and the harness is not. The lifecycle/audience/deployment mismatch makes colocation incorrect even though both are Automator-internal.
 
@@ -1232,7 +1234,7 @@ my-bmad-project/                          # User's BMAD project
 
 ### Architectural Boundaries (recast)
 
-Standard API / component / data boundaries don't apply (no HTTP API, no traditional component layer, no database). The integration boundaries that *do* matter for this project:
+Standard API / component / data boundaries don't apply (no HTTP API, no traditional component layer, no database). The integration boundaries that _do_ matter for this project:
 
 - **Specialist envelope contract** (per ADR-003) — the load-bearing integration boundary. Every specialist returns this shape; orchestrator parses against schema. Boundary enforcement: harness substrate component 1.
 - **Orchestrator-event contract** (per ADR-001 + ADR-003) — the orchestrator's emission boundary. Events flow into run-state and into the harness pipeline. Boundary enforcement: harness substrate component 2.
@@ -1245,17 +1247,17 @@ Standard API / component / data boundaries don't apply (no HTTP API, no traditio
 
 ### Requirements-to-Location Mapping (FR Categories → Structure)
 
-| Capability area | Primary location |
-|---|---|
-| **Story Loop Execution** (FR1–FR7) | Orchestrator skill (`skills/bmad-automation/workflow.md` + step-files) + run-state.yaml |
-| **Retry & Scope Discipline** (FR8–FR15) | Orchestrator skill (retry policy logic) + Dev wrapper agent (`agents/dev-wrapper.md`) |
-| **Behavioral Verification (QA)** (FR16–FR25) | QA agent (`agents/qa.md`) + `## QA Behavioral Plan` story-doc section spec |
-| **Code Review (Adversarial)** (FR26–FR29) | Review-BMAD wrapper (`agents/review-bmad-wrapper.md`); LAD wrapper at Phase 1.5 |
-| **Loud-Fail Surface** (FR30–FR34) | `schemas/marker-taxonomy.yaml` + `tools/loud-fail-harness/` + orchestrator-event emission logic |
-| **Installation & Initialization** (FR35–FR44) | Orchestrator skill's `init` slash-command logic + `examples/sample-story-auto-001.md` + config-templates |
-| **State & Resumability** (FR45–FR50) | run-state.yaml + `hooks/session-start.sh` + orchestrator skill's `resume`/`status` slash-command logic |
-| **Specialist Contracts & Schema Enforcement** (FR51–FR56) | `schemas/envelope.schema.yaml` + harness substrate components 1, 4, 5 |
-| **Hooks & Architectural Invariants** (FR57–FR66) | `hooks/*.sh` + harness substrate (CI-enforced invariants) + `docs/extension-audit.md` |
+| Capability area                                           | Primary location                                                                                         |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Story Loop Execution** (FR1–FR7)                        | Orchestrator skill (`skills/bmad-automation/workflow.md` + step-files) + run-state.yaml                  |
+| **Retry & Scope Discipline** (FR8–FR15)                   | Orchestrator skill (retry policy logic) + Dev wrapper agent (`agents/dev-wrapper.md`)                    |
+| **Behavioral Verification (QA)** (FR16–FR25)              | QA agent (`agents/qa.md`) + `## QA Behavioral Plan` story-doc section spec                               |
+| **Code Review (Adversarial)** (FR26–FR29)                 | Review-BMAD wrapper (`agents/review-bmad-wrapper.md`); LAD wrapper at Phase 1.5                          |
+| **Loud-Fail Surface** (FR30–FR34)                         | `schemas/marker-taxonomy.yaml` + `tools/loud-fail-harness/` + orchestrator-event emission logic          |
+| **Installation & Initialization** (FR35–FR44)             | Orchestrator skill's `init` slash-command logic + `examples/sample-story-auto-001.md` + config-templates |
+| **State & Resumability** (FR45–FR50)                      | run-state.yaml + `hooks/session-start.sh` + orchestrator skill's `resume`/`status` slash-command logic   |
+| **Specialist Contracts & Schema Enforcement** (FR51–FR56) | `schemas/envelope.schema.yaml` + harness substrate components 1, 4, 5                                    |
+| **Hooks & Architectural Invariants** (FR57–FR66)          | `hooks/*.sh` + harness substrate (CI-enforced invariants) + `docs/extension-audit.md`                    |
 
 ### File Organization Patterns (consolidation)
 
@@ -1342,7 +1344,7 @@ Per-component readiness assessment:
 - **Orchestrator skill (content)** (`skills/bmad-automation/`) — GREEN for content. Workflow logic, recovery algorithm, retry policy, dispatch protocol all specified per ADR-001/004/005/006.
 - **Specialist subagents** (Dev / Review-BMAD / QA wrappers) — GREEN for content. Wrapper logic, envelope contract, return shape specified.
 - **Hook scripts** — GREEN. Three hooks named with purpose and bash size constraint.
-- **Skill-bundle install path** — GATED on plugin-primitive stability. Architectural commitments made (plugin-primary + git-clone-symlink fallback per FR35/FR36); finalization of *specifics* awaits primitive stabilization.
+- **Skill-bundle install path** — GATED on plugin-primitive stability. Architectural commitments made (plugin-primary + git-clone-symlink fallback per FR35/FR36); finalization of _specifics_ awaits primitive stabilization.
 - **Repo layout finalization** — GATED on plugin-primitive stability. Step-06 used provisional layout; finalization deferred.
 - **State-streaming mechanism** — GATED on Claude Code streaming primitive design. NFR-O1 names the requirement; implementation surface within the streaming primitives is not yet decided.
 
@@ -1388,24 +1390,28 @@ The distinction between yellow-gated and yellow-implementation-deferred matters 
 ### Architecture Completeness Checklist
 
 **Requirements Analysis:** GREEN
+
 - [x] Project context analyzed (Project Context Analysis section)
 - [x] Scale and complexity assessed (medium domain, high architectural)
 - [x] Technical constraints identified (Runtime Compatibility per SDN-001)
 - [x] Cross-cutting concerns mapped (10 concerns enumerated; all addressed)
 
 **Architectural Decisions:** GREEN
+
 - [x] Critical decisions documented (6 ADRs + SDN-001)
 - [x] Technology stack specified (Python harness, Pydantic v2, jsonschema, ruff, mypy, pytest, uv per Starter Template Eval)
 - [x] Integration patterns defined (envelope contract, hook contract, run-state contract per Boundaries)
 - [x] Performance considerations addressed (ADR-006 cost telemetry; NFR-P band; OTel pipeline)
 
 **Implementation Patterns:** GREEN
+
 - [x] Naming conventions established (Pattern 1 — casing + file naming)
 - [x] Structure patterns referenced (Pattern 7 — story-doc adherence; Pattern 6 — Python style; project structure in step-06)
 - [x] Communication patterns specified (Pattern 3 — orchestrator-event class naming; Pattern 2 — marker class naming)
 - [x] Process patterns documented (Pattern 4 — state update; Pattern 5 — error handling via loud-fail)
 
 **Project Structure:** GREEN with provisional locations
+
 - [x] Complete directory structure defined (three views — source / distribution / user filesystem)
 - [x] Component boundaries established (Boundaries section recast around envelope/hook/state-store contracts)
 - [x] Integration points mapped (specialist envelope, orchestrator-event, hook contracts, OTel pipeline)
@@ -1415,17 +1421,20 @@ The distinction between yellow-gated and yellow-implementation-deferred matters 
 ### Architecture Readiness Assessment
 
 **Overall status:**
+
 - **READY for harness substrate** (the unblocked MVP path) — `tools/loud-fail-harness/` scaffolding can begin immediately with no architectural blockers.
 - **READY for cell-1 schema concretization** — schemas specified; field-level definitions at implementation.
 - **READY for skill-bundle content development** (orchestrator skill prompt, specialist wrappers, hook scripts) — content can be developed in parallel with the harness substrate; only install/distribution finalization is gated.
 - **GATED for skill-bundle install path finalization** — architecturally specified (plugin-primary + fallback); awaits Claude Code plugin-primitive stabilization for finalization.
 
 **Confidence level:**
+
 - **High** for the architectural-core (cell-1 surface, contracts, substrate composition)
 - **High** for the harness substrate's implementation path
 - **Medium** for the skill-bundle install layer (gated on plugin primitive)
 
 **Key strengths:**
+
 - Cross-ADR coherence with explicit cross-couplings (no implicit dependencies)
 - Honest treatment of architectural gaps (yellow-gated and yellow-implementation-deferred carved out distinctly)
 - Two-axis portability classification (host-runtime + methodology) with structural test
@@ -1433,6 +1442,7 @@ The distinction between yellow-gated and yellow-implementation-deferred matters 
 - Cell-1 portable surface identified and committed to schema-versioned discipline
 
 **Areas for future enhancement:**
+
 - Plugin-primitive stabilization triggers repo layout + extension-audit-doc location finalization
 - Phase 1.5 work (mobile MCP, Review-LAD) operationalizes opt-in dependency entries in SDN-001
 - Phase 2 work (epic/sprint orchestration, parallel stories, auto-merge) extends the orchestrator's seam-transition model upward
@@ -1445,7 +1455,7 @@ The distinction between yellow-gated and yellow-implementation-deferred matters 
 
 - Follow architectural decisions exactly as documented in ADRs/SDN-001/Patterns.
 - When a decision-relevant question arises, locate the ADR/SDN/Pattern that bounds it; if the decision is implementation-deferred, take the decision at implementation altitude with rationale recorded in code review.
-- When an architectural question arises that *isn't* bounded by an existing artifact, that's a new fork — surface it as a candidate ADR per the BMAD-extension audit (FR65) workflow rather than deciding silently.
+- When an architectural question arises that _isn't_ bounded by an existing artifact, that's a new fork — surface it as a candidate ADR per the BMAD-extension audit (FR65) workflow rather than deciding silently.
 - Respect cell-1 portability classification — changes to cell-1 artifacts (schemas, taxonomies, hierarchies) are major-version events.
 - Loud-fail discipline applies to architecture itself: if you discover an architectural gap during implementation, the right response is supplement-by-extension (per ADR-002's omission-vs-error pattern), not silent patching.
 
@@ -1705,20 +1715,19 @@ Story 6.7 lands the orchestrator-side wiring that turns three previously-raised-
 
 ### FR33 runtime reconciliation gate — shared reconciler component, runtime-shape diagnostic, captured-input contract (Story 6.8 resolution)
 
-Story 6.8 lands the FR33 runtime reconciliation CI gate at `tools/loud-fail-harness/src/loud_fail_harness/fr33_runtime_gate.py` as a NEW SIBLING module to Story 1.8's `fr33_fixture_gate.py`. Both gates compose with substrate-component-3's `reconciler.reconcile` (Story 1.4) WITHOUT modification. The runtime gate is structurally a CI **gate** (NOT a sixth substrate component beyond ADR-003's enumerated five at architecture.md lines 311-315) that *consumes* the substrate's reconciliation primitive against captured reference-project orchestrator-event logs.
+Story 6.8 lands the FR33 runtime reconciliation CI gate at `tools/loud-fail-harness/src/loud_fail_harness/fr33_runtime_gate.py` as a NEW SIBLING module to Story 1.8's `fr33_fixture_gate.py`. Both gates compose with substrate-component-3's `reconciler.reconcile` (Story 1.4) WITHOUT modification. The runtime gate is structurally a CI **gate** (NOT a sixth substrate component beyond ADR-003's enumerated five at architecture.md lines 311-315) that _consumes_ the substrate's reconciliation primitive against captured reference-project orchestrator-event logs.
 
 1. **Shared-reconciler invariant (AC-1).** Both `fr33_runtime_gate.py` and `fr33_fixture_gate.py` import `reconcile`, `SkipEvent`, `Marker`, and `ClassificationResult` from `loud_fail_harness.reconciler` — NOT a copy-pasted matching algorithm; NOT a parallel implementation. Story 1.4's `reconcile(skip_events, markers) -> ClassificationResult` at `reconciler.py:147-191` IS the SINGLE substrate-component-3 surface. Future FR33 enforcement extensions (Phase 2 orphan-marker handling; per-(specialist × code-surface) reconciliation; live-reference-project gating) compose with `reconcile` WITHOUT branching the matching logic. The shared-reconciler invariant is witnessed by the test at `tests/test_fr33_runtime_gate.py::test_shared_reconciler_invariant_both_gates_same_callable` — both gates' `reconcile` references resolve to the SAME callable object.
 
 2. **Runtime gate input contract.** The runtime gate consumes TWO files per capture directory under `tools/loud-fail-harness/tests/fixtures/runtime-captures/`:
+   - **`events.jsonl`** — JSON Lines orchestrator-event log. Canonical shape per Story 2.12's `event_streaming.default_event_log_path` resolving to `_bmad-output/qa-evidence/<story_id>/<run_id>/events.jsonl` (ADR-001's append-only single-writer contract). Skip-event entries additionally carry an OPTIONAL `marker_class` payload field (kebab-case Pattern 2 identifier) AND an OPTIONAL `emission_site` payload field (free-form code-surface string used by the AC-2 verbatim diagnostic's `{code_surface}` placeholder). Entries WITHOUT `marker_class` are non-skip events and are filtered out of the reconciler input. Both `marker_class` and `emission_site` are extension fields beyond the canonical schema's `additionalProperties: false` — promotion to canonical schema fields is a Phase 2 thickening tracked in `deferred-work.md`. At MVP the runtime gate validates SHAPE (the four common required fields) rather than calling `validate_event` against the strict canonical schema. The capture-synthesis convention is documented at `tools/loud-fail-harness/tests/fixtures/runtime-captures/README.md`.
+   - **`run-state.yaml`** — Story 2.2's atomic run-state schema (schema_version 1.3 post-Story-6.2). The captured run's final `active_markers` tuple is the runtime marker source; ZERO new fields added by Story 6.8.
 
-    - **`events.jsonl`** — JSON Lines orchestrator-event log. Canonical shape per Story 2.12's `event_streaming.default_event_log_path` resolving to `_bmad-output/qa-evidence/<story_id>/<run_id>/events.jsonl` (ADR-001's append-only single-writer contract). Skip-event entries additionally carry an OPTIONAL `marker_class` payload field (kebab-case Pattern 2 identifier) AND an OPTIONAL `emission_site` payload field (free-form code-surface string used by the AC-2 verbatim diagnostic's `{code_surface}` placeholder). Entries WITHOUT `marker_class` are non-skip events and are filtered out of the reconciler input. Both `marker_class` and `emission_site` are extension fields beyond the canonical schema's `additionalProperties: false` — promotion to canonical schema fields is a Phase 2 thickening tracked in `deferred-work.md`. At MVP the runtime gate validates SHAPE (the four common required fields) rather than calling `validate_event` against the strict canonical schema. The capture-synthesis convention is documented at `tools/loud-fail-harness/tests/fixtures/runtime-captures/README.md`.
-    - **`run-state.yaml`** — Story 2.2's atomic run-state schema (schema_version 1.3 post-Story-6.2). The captured run's final `active_markers` tuple is the runtime marker source; ZERO new fields added by Story 6.8.
-
-    The corpus is split across TWO sibling directories per AC-7's "CI step exits 0 on green build" requirement: `tests/fixtures/runtime-captures/` is the **happy-path corpus** (default-globbed by the CI step's `uv run fr33-runtime-gate` invocation; every capture under this root MUST reconcile cleanly); `tests/fixtures/runtime-captures-failure-cases/` is the **known-failure corpus** (NOT default-globbed; referenced explicitly by unit tests to witness the AC-2 verbatim diagnostic). The default-glob `tests/fixtures/runtime-captures/*/` picks up every direct subdirectory of the happy-path root automatically. Contributors extend coverage by capturing a real reference-project run (events.jsonl + run-state.yaml from `_bmad-output/qa-evidence/<story_id>/<run_id>/`), minimizing for readability while preserving reconciliation completeness, and dropping the result under the appropriate corpus — no test code change required for happy-path additions (per AC-3's "repeatable input-capture mechanism" commitment).
+   The corpus is split across TWO sibling directories per AC-7's "CI step exits 0 on green build" requirement: `tests/fixtures/runtime-captures/` is the **happy-path corpus** (default-globbed by the CI step's `uv run fr33-runtime-gate` invocation; every capture under this root MUST reconcile cleanly); `tests/fixtures/runtime-captures-failure-cases/` is the **known-failure corpus** (NOT default-globbed; referenced explicitly by unit tests to witness the AC-2 verbatim diagnostic). The default-glob `tests/fixtures/runtime-captures/*/` picks up every direct subdirectory of the happy-path root automatically. Contributors extend coverage by capturing a real reference-project run (events.jsonl + run-state.yaml from `_bmad-output/qa-evidence/<story_id>/<run_id>/`), minimizing for readability while preserving reconciliation completeness, and dropping the result under the appropriate corpus — no test code change required for happy-path additions (per AC-3's "repeatable input-capture mechanism" commitment).
 
 3. **`reconciler-mismatch-runtime` taxonomy entry extension.** `schemas/marker-taxonomy.yaml`'s `reconciler-mismatch-runtime` entry (reserved in the v1 closed taxonomy by Story 1.4) is extended additively: `pointer_context_fields` extends from `[]` to `[code_surface, skip_event_class]` (alphabetical per Pattern 1's identifier-list convention); `diagnostic_pointer` text gains `{skip_event_class}` and `{code_surface}` placeholders for actionable-pointer interpolation per Story 6.2; `sub_classifications` stays `[]` (the diagnostic granularity is carried via the two pointer-context-field interpolations rather than via sub-classifications — runtime mismatch is one mode with two interpolated dimensions, parallel to `cost-near-ceiling`'s post-6.5 single `[ceiling-crossed]` sub-classification + multiple pointer-context fields). The convention follows Stories 6.5 / 6.6 / 6.7 ratified for additive entry extensions.
 
-4. **Distinct-shape diagnostics (AC-2).** The runtime gate's CI-failure message format is structurally distinct from the fixture gate's: section header `## Runtime reconciliation findings` (vs. fixture gate's `Fixture reconciliation failed: synthetic-story` template); message template `Runtime reconciliation failed: reference-project run produced skip-event class `<X>` at code surface `<surface>` but no emitted marker reconciled. Inspect specialist or hook at `<surface>` for missing emission.` (vs. fixture gate's `Fixture reconciliation failed: synthetic-story `<fixture-name>` declared expected_marker `<X>` but reconciler produced `<Y>`. Inspect harness logic or fixture declaration.`). The exit-code triage is distinct: runtime gate exit 2 = schema-shape-broken OR marker-taxonomy-mismatch; runtime gate exit 1 = runtime-reconciliation-mismatch; clean = exit 0 (vs. fixture gate's harness-bug-wins precedence). Debuggers reading either gate's CI output grep for the runtime header to identify which gate fired without re-deriving from the marker-class string (Story 1.11's flat-routing principle).
+4. **Distinct-shape diagnostics (AC-2).** The runtime gate's CI-failure message format is structurally distinct from the fixture gate's: section header `## Runtime reconciliation findings` (vs. fixture gate's `Fixture reconciliation failed: synthetic-story` template); message template `Runtime reconciliation failed: reference-project run produced skip-event class `<X>`at code surface`<surface>`but no emitted marker reconciled. Inspect specialist or hook at`<surface>` for missing emission.` (vs. fixture gate's `Fixture reconciliation failed: synthetic-story `<fixture-name>`declared expected_marker`<X>`but reconciler produced`<Y>`. Inspect harness logic or fixture declaration.`). The exit-code triage is distinct: runtime gate exit 2 = schema-shape-broken OR marker-taxonomy-mismatch; runtime gate exit 1 = runtime-reconciliation-mismatch; clean = exit 0 (vs. fixture gate's harness-bug-wins precedence). Debuggers reading either gate's CI output grep for the runtime header to identify which gate fired without re-deriving from the marker-class string (Story 1.11's flat-routing principle).
 
 5. **Phase 2 thickening (forward-looking).** Three thickening directions are tracked in `deferred-work.md`: (a) **Orphan-marker handling** — `ClassificationResult.orphan_markers` (emitted markers without detected skip-events) is NOT routed to a finding category at MVP because some markers fire from non-skip surfaces (e.g. `walking-skeleton-bundle`, `init-would-destroy-existing-artifact`, `bundle-assembly-failed` per Story 6.9, `cost-near-ceiling` per Story 6.5); a per-marker-class allowlist of expected-orphan classes is the Phase 2 path. (b) **Per-(specialist × code-surface) reconciliation** — finer-grained matching keys for cases where the same `marker_class` legitimately fires from multiple surfaces. (c) **Live-reference-project capture** — a CI step capturing a live reference-project run against the Automator (gated on success) and piping its events.jsonl into the runtime gate, eliminating the per-capture commit churn.
 
@@ -1748,19 +1757,19 @@ Story 6.9 lands the orchestrator-side substrate library that detects bundle-asse
 
 This addendum records the FR22c within-AC flow-branch enumeration surface landed by Story 13.2 at `tools/loud-fail-harness/src/loud_fail_harness/qa_behavioral_plan.py` — the `flow_branches[]` field on `QABehavioralPlanEntry` plus the new `FlowBranch` record model. Story 13.2 is the `(schema)` step of the Epic 13 QA flow-branch-coverage patch epic (Sprint Change Proposal 2026-05-20, dependency chain `13.1 → 13.2 (schema) → 13.3 (iteration) → 13.4 (wrapper prompt) → 13.5 (CI fixture) → 13.7`). It is the data-model layer ONLY: nothing acts on the field yet. The governing architectural pattern is the outer-workspace Architecture's "Pattern 8: Within-AC Flow-Branch Enumeration (QA)" landed by Story 13.1; THIS addendum is the inner-repo restatement of the data-model contract, parallel to the "QA Behavioral Plan AC-Hash Function — Stability Guarantees (Story 4.1)" addendum above.
 
-**`flow_branches[]` field shape.** `QABehavioralPlanEntry` gains a fifth per-AC field, `flow_branches: tuple[FlowBranch, ...]`, appended LAST (declaration order is load-bearing for byte-stable `model_dump_json()`; appending preserves every pre-existing field's byte position). Each `FlowBranch` is a frozen Pydantic `BaseModel` carrying exactly four fields in declaration order: `branch_id: str` (required, `min_length=1`), `description: str` (required, `min_length=1`), `disposition: FlowBranchDisposition` (a module-level `Literal["must-visit", "intentionally-skipped"]` type alias), and `skip_rationale: str | None` (default `None`). A flow branch is an optional or branching step *within* a single AC's flow — the structural slot Story 4.1's per-AC entry lacked, and the gap FR22c closes.
+**`flow_branches[]` field shape.** `QABehavioralPlanEntry` gains a fifth per-AC field, `flow_branches: tuple[FlowBranch, ...]`, appended LAST (declaration order is load-bearing for byte-stable `model_dump_json()`; appending preserves every pre-existing field's byte position). Each `FlowBranch` is a frozen Pydantic `BaseModel` carrying exactly four fields in declaration order: `branch_id: str` (required, `min_length=1`), `description: str` (required, `min_length=1`), `disposition: FlowBranchDisposition` (a module-level `Literal["must-visit", "intentionally-skipped"]` type alias), and `skip_rationale: str | None` (default `None`). A flow branch is an optional or branching step _within_ a single AC's flow — the structural slot Story 4.1's per-AC entry lacked, and the gap FR22c closes.
 
 **`disposition` default + conditional-rationale rule.** `disposition` defaults to `"must-visit"` per FR22c ("the default disposition for an enumerated branch is `must-visit`"). The `skip_rationale` field is governed by a cross-field conditional enforced by a Pydantic v2 `@model_validator(mode="after")` instance method (`FlowBranch._check_skip_rationale`): when `disposition == "intentionally-skipped"`, `skip_rationale` MUST be a non-empty (after `.strip()`) string — FR22c's "`intentionally-skipped` … requires a one-line rationale in the plan entry"; when `disposition == "must-visit"`, `skip_rationale` MUST be `None` — a rationale on a must-visit branch is a contradiction and is rejected. A `@model_validator(mode="after")` is the idiomatic mechanism because a `@field_validator` does not fire when the field is omitted from input and so cannot enforce required-when-absent. The structural witnesses are `test_flow_branch_disposition_defaults_to_must_visit`, `test_flow_branch_intentionally_skipped_without_rationale_raises`, and `test_flow_branch_must_visit_with_rationale_raises`.
 
-**`flow_branches[]` is OUT of `compute_ac_hash` scope (deferred-work resolution).** This paragraph is the canonical resolution of the deferred-work item "ac_hash and flow_branches[] boundary unspecified" (`_bmad-output/implementation-artifacts/deferred-work.md`, the 13-1 code-review block). `compute_ac_hash(ac_list)` hashes the canonical normalized form of the input acceptance-criteria *text* (`AcEntry.ac_text`) — see the "Stability Guarantees (Story 4.1)" addendum above. `flow_branches[]` is QA-agent-authored *plan content* derived at plan-generation time, NOT an input AC; it is structurally outside `compute_ac_hash`'s input domain (the function never receives a `QABehavioralPlanEntry` or a `FlowBranch`). `compute_ac_hash` is therefore byte-for-byte unchanged by Story 13.2. The load-bearing consequence: an operator manually editing `flow_branches[]` — e.g. flipping a branch's `disposition` from `must-visit` to `intentionally-skipped` — does NOT change `ac_hash` and does NOT trigger Story 4.2's `plan-drift-detected`, because drift detection compares `ac_hash` values and `ac_hash` is a pure function of AC text. The separate run-time question of whether an operator's `flow_branches[]` edit should force plan regeneration (reuse-vs-regenerate) is a Story 13.3 iteration-contract concern, explicitly out of Story 13.2's scope.
+**`flow_branches[]` is OUT of `compute_ac_hash` scope (deferred-work resolution).** This paragraph is the canonical resolution of the deferred-work item "ac_hash and flow_branches[] boundary unspecified" (`_bmad-output/implementation-artifacts/deferred-work.md`, the 13-1 code-review block). `compute_ac_hash(ac_list)` hashes the canonical normalized form of the input acceptance-criteria _text_ (`AcEntry.ac_text`) — see the "Stability Guarantees (Story 4.1)" addendum above. `flow_branches[]` is QA-agent-authored _plan content_ derived at plan-generation time, NOT an input AC; it is structurally outside `compute_ac_hash`'s input domain (the function never receives a `QABehavioralPlanEntry` or a `FlowBranch`). `compute_ac_hash` is therefore byte-for-byte unchanged by Story 13.2. The load-bearing consequence: an operator manually editing `flow_branches[]` — e.g. flipping a branch's `disposition` from `must-visit` to `intentionally-skipped` — does NOT change `ac_hash` and does NOT trigger Story 4.2's `plan-drift-detected`, because drift detection compares `ac_hash` values and `ac_hash` is a pure function of AC text. The separate run-time question of whether an operator's `flow_branches[]` edit should force plan regeneration (reuse-vs-regenerate) is a Story 13.3 iteration-contract concern, explicitly out of Story 13.2's scope.
 
 **Additive-optional / back-compat posture.** `flow_branches` is optional with an empty-tuple default (`Field(default_factory=tuple)`). Constructing a `QABehavioralPlanEntry` without `flow_branches` continues to succeed and yields `flow_branches == ()`; this non-breaking property is what lets the field land before the behavior (the three drivers' `verify_ac`, `qa_ac_iteration.iterate_acs`, and `generate_plan` neither pass nor read it). `generate_plan`'s MVP first-run plan leaves `flow_branches` empty — FR22c's "MUST enumerate" is a plan-generation directive on the Story 13.4 wrapper prompt, NOT a non-empty-cardinality constraint on the data model; an empty tuple is the valid representation for a strictly-linear AC with no branching steps (this resolves the deferred-work item "Empty flow_branches[] case under-specified"). `render_plan_section` OMITS the `flow_branches` block entirely when the tuple is empty, so a plan authored before FR22c is byte-identical under render and parses back to `flow_branches == ()` — the back-compatibility regression baseline is the unmodified Story 4.1 fixture `examples/qa-behavioral-plans/qa-behavioral-plan-multi-ac-mixed-tiers.md`; the populated-branch baseline is the new `examples/qa-behavioral-plans/qa-behavioral-plan-flow-branches.md` (both round-trip byte-for-byte through `parse_plan_section` → `render_plan_section`).
 
-**Forward-pointers.** Story 13.2 makes nothing *act* on `flow_branches[]`. Story 13.3 owns the iteration contract — extending `qa_ac_iteration.iterate_acs` (and the three drivers' `verify_ac`) to visit each `must-visit` branch or emit a `heuristic-skipped: flow-branch-<branch-id>` marker for an `intentionally-skipped` one. Story 13.4 owns the `agents/qa.md` wrapper-prompt change — making the plan-generation phase *populate* `flow_branches[]` at plan-generation time. Story 13.6 owns the `schemas/marker-taxonomy.yaml` PATCH bump (v1.5 → v1.6) declaring the `heuristic-skipped: flow-branch-*` sub-classification, and MUST land before Story 13.3 (which emits that sub-classification). This addendum is a clarification of FR22c + the Story 4.1 AC-hash contract + Pattern 8 — NOT a new architectural decision; no new ADR is introduced and the existing addenda above are not modified.
+**Forward-pointers.** Story 13.2 makes nothing _act_ on `flow_branches[]`. Story 13.3 owns the iteration contract — extending `qa_ac_iteration.iterate_acs` (and the three drivers' `verify_ac`) to visit each `must-visit` branch or emit a `heuristic-skipped: flow-branch-<branch-id>` marker for an `intentionally-skipped` one. Story 13.4 owns the `agents/qa.md` wrapper-prompt change — making the plan-generation phase _populate_ `flow_branches[]` at plan-generation time. Story 13.6 owns the `schemas/marker-taxonomy.yaml` PATCH bump (v1.5 → v1.6) declaring the `heuristic-skipped: flow-branch-*` sub-classification, and MUST land before Story 13.3 (which emits that sub-classification). This addendum is a clarification of FR22c + the Story 4.1 AC-hash contract + Pattern 8 — NOT a new architectural decision; no new ADR is introduced and the existing addenda above are not modified.
 
 ## QA Within-AC Flow-Branch Iteration Contract (FR22c / Story 13.3)
 
-This addendum records the FR22c within-AC flow-branch *iteration* contract landed by Story 13.3 at `tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py` — the extension of Story 4.6's plan-driven AC iteration framework (`iterate_acs` + `AcIterationResult`) so that, for every AC it iterates, the framework also processes that AC's `flow_branches[]` (the per-AC within-AC branch enumeration Story 13.2 landed on `QABehavioralPlanEntry`). Story 13.3 is the `(iteration)` step of the Epic 13 QA flow-branch-coverage patch epic (Sprint Change Proposal 2026-05-20, dependency chain `13.1 → 13.2 (schema) → 13.3 (iteration) → 13.4 (wrapper prompt) → 13.5 (CI fixture) → 13.7`). It is the iteration-contract library layer ONLY: it adds the typed contract scaffolding; the QA agent's run-time *acting* on it is Story 13.4. The governing architectural pattern is the outer-workspace Architecture's "Pattern 8: Within-AC Flow-Branch Enumeration (QA)" — enumeration is plan-generation, *visitation is run-time*; THIS addendum is the inner-repo restatement of the iteration-contract layer, parallel to the "QA Behavioral Plan Per-AC Flow-Branch Enumeration (FR22c / Story 13.2)" addendum above.
+This addendum records the FR22c within-AC flow-branch _iteration_ contract landed by Story 13.3 at `tools/loud-fail-harness/src/loud_fail_harness/qa_ac_iteration.py` — the extension of Story 4.6's plan-driven AC iteration framework (`iterate_acs` + `AcIterationResult`) so that, for every AC it iterates, the framework also processes that AC's `flow_branches[]` (the per-AC within-AC branch enumeration Story 13.2 landed on `QABehavioralPlanEntry`). Story 13.3 is the `(iteration)` step of the Epic 13 QA flow-branch-coverage patch epic (Sprint Change Proposal 2026-05-20, dependency chain `13.1 → 13.2 (schema) → 13.3 (iteration) → 13.4 (wrapper prompt) → 13.5 (CI fixture) → 13.7`). It is the iteration-contract library layer ONLY: it adds the typed contract scaffolding; the QA agent's run-time _acting_ on it is Story 13.4. The governing architectural pattern is the outer-workspace Architecture's "Pattern 8: Within-AC Flow-Branch Enumeration (QA)" — enumeration is plan-generation, _visitation is run-time_; THIS addendum is the inner-repo restatement of the iteration-contract layer, parallel to the "QA Behavioral Plan Per-AC Flow-Branch Enumeration (FR22c / Story 13.2)" addendum above.
 
 **`iterate_acs` processes each AC's `flow_branches[]`.** For each iterated `entry`, after the `verify_ac` call and after the smoke-first-abort check passes (see below), `iterate_acs` processes `entry.flow_branches` in plan-declaration order: each `FlowBranch` whose `disposition == "intentionally-skipped"` is turned into a marker-emission record via the new `surface_flow_branch_skipped` helper, and each `must-visit` branch's `branch_id` is collected into a coverage-obligation list. When (and only when) `entry.flow_branches` is non-empty, one `AcFlowBranchCoverage` record — `ac_id` + `must_visit_branch_ids` + `skipped` — is constructed and appended to a per-iteration accumulator. The processing is added ONCE in the shared per-entry loop body, NOT duplicated per `project_type` branch: it is plan-driven (reads `entry.flow_branches`) and has no driver dependency, so it is byte-identical whether the AC was verified via `_playwright_verify_ac`, `_http_verify_ac`, or `_mobile_verify_ac` — web / api / mobile parity at the library layer (the wrapper-prompt parity is Story 13.4's scope). The three drivers' `verify_ac` is UNCHANGED — Story 13.3 touches only the iteration framework, not the drivers.
 
@@ -1774,17 +1783,17 @@ This addendum records the FR22c within-AC flow-branch *iteration* contract lande
 
 **Marker-key safety — `FlowBranch.branch_id` pattern tightening.** Because `branch_id` enters the marker-key domain in Story 13.3 (it is the `<branch-id>` component of `heuristic-skipped: flow-branch-<branch-id>`), `FlowBranch.branch_id`'s `Field(pattern=…)` in `qa_behavioral_plan.py` is tightened from `r"^\S[^\n]*$"` (rejects leading whitespace + newlines) to `r"^\S$|^\S.*\S$"` (additionally rejects trailing whitespace), so a whitespace-contaminated `branch_id` cannot produce a malformed marker key. This is the minimal scoped edit the deferred-work item "Trailing whitespace in `branch_id`" names; it is back-compat-verified against Story 13.2's checked-in `qa-behavioral-plan-flow-branches.md` fixture (all `branch_id` values are conformant kebab-case).
 
-**Forward-pointers.** Story 13.3 adds the iteration-contract scaffolding; it makes nothing *drive* a `must-visit` branch. Story 13.4 owns the `agents/qa.md` wrapper-prompt change (web + mobile parity) — making the QA agent populate `flow_branches[]` at plan-generation time and drive each `must-visit` branch at run time, composing `iterate_acs` and consuming `AcIterationResult.flow_branch_coverage`. Story 13.5 owns the multi-branch synthetic-story CI fixture + the reconciliation gate that catches a `must-visit` branch with no evidence and no marker. Story 13.6 (the prerequisite — already landed) owns the `schemas/marker-taxonomy.yaml` v1.5 → v1.6 PATCH bump declaring the `heuristic-skipped: flow-branch` sub-classification. This addendum is a clarification of FR22c + the Story 4.6 iteration contract + Pattern 8 — NOT a new architectural decision; no new ADR is introduced and the existing addenda above (including Story 13.2's) are not modified.
+**Forward-pointers.** Story 13.3 adds the iteration-contract scaffolding; it makes nothing _drive_ a `must-visit` branch. Story 13.4 owns the `agents/qa.md` wrapper-prompt change (web + mobile parity) — making the QA agent populate `flow_branches[]` at plan-generation time and drive each `must-visit` branch at run time, composing `iterate_acs` and consuming `AcIterationResult.flow_branch_coverage`. Story 13.5 owns the multi-branch synthetic-story CI fixture + the reconciliation gate that catches a `must-visit` branch with no evidence and no marker. Story 13.6 (the prerequisite — already landed) owns the `schemas/marker-taxonomy.yaml` v1.5 → v1.6 PATCH bump declaring the `heuristic-skipped: flow-branch` sub-classification. This addendum is a clarification of FR22c + the Story 4.6 iteration contract + Pattern 8 — NOT a new architectural decision; no new ADR is introduced and the existing addenda above (including Story 13.2's) are not modified.
 
 ## QA Within-AC Flow-Branch Coverage CI Gate (FR22c / Story 13.5)
 
-This addendum records the FR22c within-AC flow-branch *coverage gate* landed by Story 13.5 at `tools/loud-fail-harness/src/loud_fail_harness/flow_branch_coverage_gate.py` — a new CI gate, exposed as the `flow-branch-coverage-gate` `[project.scripts]` console entry and wired as the final step of `.github/workflows/ci.yml`. Story 13.5 is the `(CI fixture)` step of the Epic 13 QA flow-branch-coverage patch epic (Sprint Change Proposal 2026-05-20, dependency chain `13.1 → 13.2 (schema) → 13.3 (iteration) → 13.4 (wrapper prompt) → 13.5 (CI fixture) → 13.7`). Stories 13.2 / 13.3 / 13.4 built the FR22c contract; nothing enforced it in CI until this gate. The governing architectural pattern is the outer-workspace Architecture's "Pattern 8: Within-AC Flow-Branch Enumeration (QA)", which explicitly names this gate: "Skipping a branch at run time without an `intentionally-skipped` disposition in the plan is a contract violation surfaced via the existing CI fixture-driven reconciliation gate (Story 1.8 pattern, extended via Story FR22c-fixture in this patch epic)." THIS addendum is the inner-repo restatement of the CI-gate layer, parallel to the Story 13.2 + Story 13.3 addenda above.
+This addendum records the FR22c within-AC flow-branch _coverage gate_ landed by Story 13.5 at `tools/loud-fail-harness/src/loud_fail_harness/flow_branch_coverage_gate.py` — a new CI gate, exposed as the `flow-branch-coverage-gate` `[project.scripts]` console entry and wired as the final step of `.github/workflows/ci.yml`. Story 13.5 is the `(CI fixture)` step of the Epic 13 QA flow-branch-coverage patch epic (Sprint Change Proposal 2026-05-20, dependency chain `13.1 → 13.2 (schema) → 13.3 (iteration) → 13.4 (wrapper prompt) → 13.5 (CI fixture) → 13.7`). Stories 13.2 / 13.3 / 13.4 built the FR22c contract; nothing enforced it in CI until this gate. The governing architectural pattern is the outer-workspace Architecture's "Pattern 8: Within-AC Flow-Branch Enumeration (QA)", which explicitly names this gate: "Skipping a branch at run time without an `intentionally-skipped` disposition in the plan is a contract violation surfaced via the existing CI fixture-driven reconciliation gate (Story 1.8 pattern, extended via Story FR22c-fixture in this patch epic)." THIS addendum is the inner-repo restatement of the CI-gate layer, parallel to the Story 13.2 + Story 13.3 addenda above.
 
-**Fixture-driven reconciliation model — plan obligation vs. recorded outcome.** The gate is a pure fixture-driven reconciler — the Story 1.7 (`fixture-coverage`) / Story 1.8 (`fr33-fixture-gate`) pattern. It does not run a QA agent, invoke `iterate_acs`, drive a product, or emit production markers. Per fixture case it parses a synthetic QA Behavioral Plan (`qa-behavioral-plan.md`) by calling Story 13.2's `parse_plan_section` AS-IS, then reconciles, per AC and per enumerated `FlowBranch`, the plan-side coverage *obligation* against a recorded run *outcome*. The corpus is gate-internal — it lives at `tools/loud-fail-harness/tests/fixtures/flow-branch-coverage/` (the `runtime-captures/` precedent: a QA-plan paired with a recorded run-outcome has no standalone meaning outside this gate), NOT under `examples/synthetic-stories/` (which is keyed by marker *class* and governed by `fixture-coverage` / `fr33-fixture-gate`). Negative cases are split into the sibling `tests/fixtures/flow-branch-coverage-failure-cases/`, kept out of the CI corpus so the gate stays green.
+**Fixture-driven reconciliation model — plan obligation vs. recorded outcome.** The gate is a pure fixture-driven reconciler — the Story 1.7 (`fixture-coverage`) / Story 1.8 (`fr33-fixture-gate`) pattern. It does not run a QA agent, invoke `iterate_acs`, drive a product, or emit production markers. Per fixture case it parses a synthetic QA Behavioral Plan (`qa-behavioral-plan.md`) by calling Story 13.2's `parse_plan_section` AS-IS, then reconciles, per AC and per enumerated `FlowBranch`, the plan-side coverage _obligation_ against a recorded run _outcome_. The corpus is gate-internal — it lives at `tools/loud-fail-harness/tests/fixtures/flow-branch-coverage/` (the `runtime-captures/` precedent: a QA-plan paired with a recorded run-outcome has no standalone meaning outside this gate), NOT under `examples/synthetic-stories/` (which is keyed by marker _class_ and governed by `fixture-coverage` / `fr33-fixture-gate`). Negative cases are split into the sibling `tests/fixtures/flow-branch-coverage-failure-cases/`, kept out of the CI corpus so the gate stays green.
 
 **The two reconciliation halves.** `intentionally-skipped → marker`: fully plan-derivable. For every `intentionally-skipped` branch the gate REPLAYS Story 13.3's real `surface_flow_branch_skipped` (mirroring how `fr33-fixture-gate` replays `reconciler.reconcile` — replay-through-real-substrate is what earns the gate its trust: a regression in `surface_flow_branch_skipped`'s `sub_classification` fails the gate) and reconciles the resulting `flow-branch` sub-classification against the v1.6 marker taxonomy (Story 13.6) — confirming `heuristic-skipped` is a declared class and `flow-branch` is in its `sub_classifications`. `must-visit → evidence`: NOT plan-derivable — evidence is the QA agent's run-time output. The gate reconciles each `must-visit` branch against a recorded `flow-branch-outcomes.yaml` artifact (see below). A `must-visit` branch undischarged there — and a `must-visit` branch carries no marker by construction — is exactly the FR22c contract violation (Sprint Change Proposal, Story 4.6 erratum: "A `must-visit` branch with no evidence and no marker is a contract violation (CI fixture catches it).").
 
-**`flow-branch-outcomes.yaml` and the unlabeled-evidence resolution.** Each fixture case directory pairs its plan with a `flow-branch-outcomes.yaml` — a YAML mapping with a single top-level key `must_visit_evidence`, a list of `ac_id` / `branch_id` / `evidence_present` records, one per `must-visit` branch the case's run discharged with evidence. This artifact is the deliberate resolution of the unlabeled-per-branch-evidence problem Story 13.4 routed here: per-branch evidence rides UNLABELED inside `ac_results[i].evidence_refs`, with no convention distinguishing it from main-path evidence. The CI gate does NOT consume real unlabeled `evidence_refs` — it reconciles `must-visit` coverage against an explicit, `branch_id`-keyed *declared* outcome, the same architectural posture every harness fixture-driven gate takes (`fr33-fixture-gate` reconciles synthetic `expected_marker` declarations, not real orchestrator runs). CI = fixture-driven structural enforcement; real-run reconciliation is review-enforced via the PR bundle's operator-reviewable `flow_branch_coverage.must_visit_branch_ids` checklist (Story 13.4) — the two are complementary, exactly as `fr33-fixture-gate` (CI) and `fr33-runtime-gate` (runtime) are.
+**`flow-branch-outcomes.yaml` and the unlabeled-evidence resolution.** Each fixture case directory pairs its plan with a `flow-branch-outcomes.yaml` — a YAML mapping with a single top-level key `must_visit_evidence`, a list of `ac_id` / `branch_id` / `evidence_present` records, one per `must-visit` branch the case's run discharged with evidence. This artifact is the deliberate resolution of the unlabeled-per-branch-evidence problem Story 13.4 routed here: per-branch evidence rides UNLABELED inside `ac_results[i].evidence_refs`, with no convention distinguishing it from main-path evidence. The CI gate does NOT consume real unlabeled `evidence_refs` — it reconciles `must-visit` coverage against an explicit, `branch_id`-keyed _declared_ outcome, the same architectural posture every harness fixture-driven gate takes (`fr33-fixture-gate` reconciles synthetic `expected_marker` declarations, not real orchestrator runs). CI = fixture-driven structural enforcement; real-run reconciliation is review-enforced via the PR bundle's operator-reviewable `flow_branch_coverage.must_visit_branch_ids` checklist (Story 13.4) — the two are complementary, exactly as `fr33-fixture-gate` (CI) and `fr33-runtime-gate` (runtime) are.
 
 **Exit-code matrix.** `0` — every branch of every fixture case reconciled cleanly. `1` — at least one fixture-side finding, a closed set of exactly two categories: `must-visit-undischarged` (a `must-visit` branch with no recorded evidence and no marker) and `outcome-declaration-error` (a `flow-branch-outcomes.yaml` record that is dangling — names a non-enumerated or `intentionally-skipped` branch — or duplicates an `(ac_id, branch_id)` pair). `2` — a harness-level error: the fixtures directory is missing/unreadable, a plan is unparseable, a `flow-branch-outcomes.yaml` is malformed, the marker taxonomy is unreadable/malformed, or `flow-branch` is not declared under `heuristic-skipped` in the taxonomy. Harness-level errors are an exit-2 stderr path — NOT a finding category; the two exit-1 categories are equivalent fixture-side signals (no intra-exit-1 precedence); exit 2 wins over exit 1. The gate REPORTS with one-line remediation pointers — it does not auto-repair fixtures or auto-generate outcomes (sensor-not-advisor).
 

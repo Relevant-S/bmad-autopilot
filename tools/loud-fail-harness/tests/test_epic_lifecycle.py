@@ -45,10 +45,16 @@ import pathlib
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from loud_fail_harness import epic_lifecycle as epic_lifecycle_module
 from loud_fail_harness.epic_lifecycle import (
+    DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
+    EPIC_BUDGET_EXHAUSTED_MARKER,
     EpicStoryEnumerationError,
+    StoryLoopOutcome,
+    StoryLoopRunner,
+    apply_epic_budget,
     derive_epic_state,
     enumerate_epic_stories,
     fold_story_terminal,
@@ -58,6 +64,17 @@ from loud_fail_harness.epic_lifecycle import (
 from loud_fail_harness.epic_run_state import EpicRunState
 
 _NO_TRANSIENT: frozenset[str] = frozenset()
+
+
+def _outcome(terminal_status: str, retries_consumed: int = 0) -> StoryLoopOutcome:
+    """Build a :class:`StoryLoopOutcome` stub return (Story 15.2 — the runner
+    Protocol now carries the per-story retry count alongside the terminal
+    status). Default ``retries_consumed=0`` keeps the Story 15.1 parity tests
+    budget-neutral."""
+    return StoryLoopOutcome(
+        terminal_status=terminal_status,  # type: ignore[arg-type]
+        retries_consumed=retries_consumed,
+    )
 
 
 def _write_sprint_status(tmp_path: pathlib.Path, development_status: dict[str, str]) -> pathlib.Path:
@@ -263,9 +280,9 @@ def test_run_epic_loop_clean_run_completes(tmp_path: pathlib.Path) -> None:
     erp = tmp_path / "epic-run-state.yaml"
     dispatched: list[str] = []
 
-    def runner(*, story_id: str, index: int, total: int) -> str:
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
         dispatched.append(story_id)
-        return "merge-ready"
+        return _outcome("merge-ready")
 
     result = run_epic_loop(
         "epic-15",
@@ -294,8 +311,8 @@ def test_run_epic_loop_streams_progress_per_story(tmp_path: pathlib.Path) -> Non
     )
     lines: list[str] = []
 
-    def runner(*, story_id: str, index: int, total: int) -> str:
-        return "done"
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
+        return _outcome("done")
 
     run_epic_loop(
         "epic-15",
@@ -325,9 +342,9 @@ def test_run_epic_loop_pauses_on_escalation(tmp_path: pathlib.Path) -> None:
     dispatched: list[str] = []
     outcomes = iter(["merge-ready", "escalated", "merge-ready"])
 
-    def runner(*, story_id: str, index: int, total: int) -> str:
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
         dispatched.append(story_id)
-        return next(outcomes)
+        return _outcome(next(outcomes))
 
     result = run_epic_loop(
         "epic-15",
@@ -351,7 +368,7 @@ def test_run_epic_loop_pauses_on_escalation(tmp_path: pathlib.Path) -> None:
 def test_run_epic_loop_empty_epic_raises(tmp_path: pathlib.Path) -> None:
     sprint = _write_sprint_status(tmp_path, {"15-1-a": "done"})
 
-    def runner(*, story_id: str, index: int, total: int) -> str:
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
         raise AssertionError("runner must not be called for an empty epic")
 
     with pytest.raises(EpicStoryEnumerationError, match="no ready-for-dev"):
@@ -370,8 +387,8 @@ def test_run_epic_loop_default_taxonomy_path(tmp_path: pathlib.Path) -> None:
     (find_repo_root at call time) without error. Smoke for the default path."""
     sprint = _write_sprint_status(tmp_path, {"15-1-a": "ready-for-dev"})
 
-    def runner(*, story_id: str, index: int, total: int) -> str:
-        return "merge-ready"
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
+        return _outcome("merge-ready")
 
     result = run_epic_loop(
         "epic-15",
@@ -415,8 +432,8 @@ def test_epic_lifecycle_does_not_import_orchestrator_run_entry() -> None:
 def test_final_state_is_epic_run_state(tmp_path: pathlib.Path) -> None:
     sprint = _write_sprint_status(tmp_path, {"15-1-a": "ready-for-dev"})
 
-    def runner(*, story_id: str, index: int, total: int) -> str:
-        return "merge-ready"
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
+        return _outcome("merge-ready")
 
     result = run_epic_loop(
         "epic-15",
@@ -427,3 +444,273 @@ def test_final_state_is_epic_run_state(tmp_path: pathlib.Path) -> None:
         transient_marker_classes=_NO_TRANSIENT,
     )
     assert isinstance(result.final_state, EpicRunState)
+
+
+# ---------------------------------------------------------------------------
+# Per-epic budget: StoryLoopOutcome shape (AC-3)
+# ---------------------------------------------------------------------------
+
+
+def test_story_loop_outcome_rejects_negative_retries() -> None:
+    with pytest.raises(ValidationError):
+        StoryLoopOutcome(terminal_status="merge-ready", retries_consumed=-1)
+
+
+def test_story_loop_outcome_is_frozen() -> None:
+    outcome = StoryLoopOutcome(terminal_status="done", retries_consumed=0)
+    with pytest.raises((ValidationError, TypeError, AttributeError)):
+        outcome.retries_consumed = 5  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Per-epic budget: apply_epic_budget truth table (AC-4, AC-6)
+# ---------------------------------------------------------------------------
+
+
+def test_apply_epic_budget_under_budget_continues() -> None:
+    # in-progress, consumed < effective_budget → unchanged, no marker.
+    assert apply_epic_budget(
+        "epic-in-progress", 3, 6, has_undispatched=True
+    ) == ("epic-in-progress", False)
+
+
+def test_apply_epic_budget_exhausted_with_undispatched_pauses_and_emits() -> None:
+    assert apply_epic_budget(
+        "epic-in-progress", 6, 6, has_undispatched=True
+    ) == ("epic-paused-on-budget", True)
+
+
+def test_apply_epic_budget_exhausted_on_final_story_is_complete_no_marker() -> None:
+    # The last story completed within total budget (no undispatched left) →
+    # epic-complete, NOT a pause; the pause guards FUTURE dispatch (AC-4).
+    assert apply_epic_budget(
+        "epic-complete", 6, 6, has_undispatched=False
+    ) == ("epic-complete", False)
+
+
+def test_apply_epic_budget_escalation_precedence_marker_additive() -> None:
+    # Escalation wins the single-valued current_state; the budget marker still
+    # emits additively when the budget would have paused future dispatch (AC-6).
+    assert apply_epic_budget(
+        "epic-paused-on-escalation", 6, 6, has_undispatched=True
+    ) == ("epic-paused-on-escalation", True)
+
+
+def test_apply_epic_budget_escalation_on_final_story_no_marker() -> None:
+    # Escalated boundary story is the last one — no undispatched dispatch to
+    # guard, so the budget marker does NOT emit (escalation still pauses).
+    assert apply_epic_budget(
+        "epic-paused-on-escalation", 6, 6, has_undispatched=False
+    ) == ("epic-paused-on-escalation", False)
+
+
+def test_apply_epic_budget_zero_effective_budget_is_total() -> None:
+    # Degenerate effective_budget == 0 (a zero-story epic never enumerates, but
+    # the pure helper must be total) → never reported as exhausted.
+    assert apply_epic_budget(
+        "epic-in-progress", 0, 0, has_undispatched=True
+    ) == ("epic-in-progress", False)
+
+
+# ---------------------------------------------------------------------------
+# Per-epic budget: multiplier threading + run_epic_loop enforcement
+# (AC-2, AC-3, AC-4, AC-5, AC-6)
+# ---------------------------------------------------------------------------
+
+
+def _retry_runner(
+    retries_by_story: dict[str, int],
+    *,
+    status_by_story: dict[str, str] | None = None,
+    dispatched: list[str] | None = None,
+) -> StoryLoopRunner:
+    statuses = status_by_story or {}
+
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
+        if dispatched is not None:
+            dispatched.append(story_id)
+        return _outcome(
+            statuses.get(story_id, "merge-ready"),
+            retries_by_story.get(story_id, 0),
+        )
+
+    return runner
+
+
+def test_run_epic_loop_threads_resolved_multiplier(tmp_path: pathlib.Path) -> None:
+    """AC-2: the resolved multiplier is threaded into init so
+    ``effective_budget = multiplier × story_count``."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=tmp_path / "e.yaml",
+        story_loop_runner=_retry_runner({}),
+        multiplier=5,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.per_epic_retry_budget.effective_budget == 10
+    assert result.final_state.per_epic_retry_budget.multiplier == 5
+
+
+def test_run_epic_loop_pauses_on_budget_at_boundary(tmp_path: pathlib.Path) -> None:
+    """AC-3 / AC-4 / AC-5: cumulative retries exhaust the per-epic budget →
+    pause at the NEXT completion boundary, in-flight story finishes, marker
+    persisted, downstream prefix stops, consumed accumulated."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "15-1-a": "ready-for-dev",
+            "15-2-b": "ready-for-dev",
+            "15-3-c": "ready-for-dev",
+        },
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    dispatched: list[str] = []
+    # multiplier=1, story_count=3 → effective_budget=3. story1=2 (cumulative 2,
+    # continue), story2=2 (cumulative 4 >= 3, undispatched remain → pause).
+    runner = _retry_runner(
+        {"15-1-a": 2, "15-2-b": 2, "15-3-c": 99},
+        dispatched=dispatched,
+    )
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=runner,
+        multiplier=1,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    # 15-3-c did NOT dispatch (sensor-not-advisor; downstream prefix stops).
+    assert dispatched == ["15-1-a", "15-2-b"]
+    assert result.dispatched_story_ids == ("15-1-a", "15-2-b")
+    assert result.paused_on_story_id == "15-2-b"
+    assert result.final_state.current_state == "epic-paused-on-budget"
+    # The in-flight boundary story FINISHED (not interrupted) — terminal.
+    assert result.final_state.per_story_status["15-2-b"] == "merge-ready"
+    assert EPIC_BUDGET_EXHAUSTED_MARKER in result.final_state.active_markers
+    assert result.final_state.per_epic_retry_budget.consumed == 4
+    on_disk = yaml.safe_load(erp.read_text(encoding="utf-8"))
+    assert on_disk["current_state"] == "epic-paused-on-budget"
+    assert EPIC_BUDGET_EXHAUSTED_MARKER in on_disk["active_markers"]
+    assert on_disk["per_epic_retry_budget"]["consumed"] == 4
+    assert on_disk["per_story_status"]["15-3-c"] == "ready-for-dev"
+
+
+def test_run_epic_loop_exhaust_on_final_story_completes(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-4: exhausting the budget exactly on the final story is NOT a pause —
+    the epic completes and the marker does NOT emit."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    # multiplier=1, story_count=2 → effective_budget=2. 1 + 1 == 2 on the final
+    # story, no undispatched remain.
+    runner = _retry_runner({"15-1-a": 1, "15-2-b": 1})
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=runner,
+        multiplier=1,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "epic-complete"
+    assert result.paused_on_story_id is None
+    assert EPIC_BUDGET_EXHAUSTED_MARKER not in result.final_state.active_markers
+    assert result.final_state.per_epic_retry_budget.consumed == 2
+
+
+def test_run_epic_loop_escalation_precedence_marker_additive(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-6: a boundary story that BOTH escalated AND exhausted the budget →
+    current_state is epic-paused-on-escalation, marker still emitted."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "15-1-a": "ready-for-dev",
+            "15-2-b": "ready-for-dev",
+            "15-3-c": "ready-for-dev",
+        },
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    # multiplier=1, story_count=3 → effective_budget=3. story1 escalates AND
+    # consumes 3 (cumulative 3 >= 3, undispatched remain).
+    runner = _retry_runner(
+        {"15-1-a": 3},
+        status_by_story={"15-1-a": "escalated"},
+    )
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=runner,
+        multiplier=1,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "epic-paused-on-escalation"
+    assert result.paused_on_story_id == "15-1-a"
+    assert EPIC_BUDGET_EXHAUSTED_MARKER in result.final_state.active_markers
+
+
+def test_run_epic_loop_budget_marker_survives_transient_filter(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-5: the durable epic-budget-exhausted marker is NEVER stripped by the
+    transient write-back filter, even when a transient class IS being filtered."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    runner = _retry_runner({"15-1-a": 2})
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=runner,
+        multiplier=1,
+        transient_marker_classes=frozenset({"worktree-stale-lock"}),
+    )
+    assert result.final_state.current_state == "epic-paused-on-budget"
+    assert EPIC_BUDGET_EXHAUSTED_MARKER in result.final_state.active_markers
+
+
+def test_run_epic_loop_zero_retries_completes_unchanged(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-7 regression: an epic that consumes zero retries reaches epic-complete
+    exactly as in Story 15.1 (no behaviour change when the budget is never
+    approached); consumed stays 0; no marker."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=tmp_path / "e.yaml",
+        story_loop_runner=_retry_runner({}),
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "epic-complete"
+    assert result.final_state.per_epic_retry_budget.consumed == 0
+    assert result.final_state.active_markers == ()
+    # Default multiplier is the single-sourced DEFAULT_PER_EPIC_RETRY_MULTIPLIER.
+    assert (
+        result.final_state.per_epic_retry_budget.multiplier
+        == DEFAULT_PER_EPIC_RETRY_MULTIPLIER
+    )

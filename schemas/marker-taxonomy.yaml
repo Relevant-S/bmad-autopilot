@@ -185,11 +185,40 @@
 #                            ADR-003 substrate-component-4 enumeration-
 #                            equivalence is unaffected (it audits marker_class
 #                            membership, not entry sub-fields).
+#   1.9 → 1.10 (Story 15.2) — additive: appended `epic-budget-exhausted` as a
+#                            NEW top-level marker class for the per-epic
+#                            cumulative retry-budget exhaustion surface (FR-P2-1;
+#                            `per_epic_retry_budget_multiplier × story_count`
+#                            consumed with undispatched stories remaining ->
+#                            `epic-paused-on-budget` at the next story-completion
+#                            boundary). Top-level addition (NOT folded under
+#                            `retry-budget-exhausted`): the categorical axis is
+#                            "cumulative EPIC-scope cost ceiling" — distinct from
+#                            `retry-budget-exhausted` (single-story per-story
+#                            budget, Story 5.6) and `parallel-story-state-
+#                            pollution` (cross-story write-collision). Default
+#                            `durable` lifetime by omission, so it survives the
+#                            Story 15.1 transient write-back filter and is never
+#                            stripped (marker-permanence rule, Story 1.4).
+#                            `pointer_context_fields: [epic_id, run_id, consumed,
+#                            effective_budget]`; `sub_classifications: []`. The
+#                            top-level 32-class closed-set is the new invariant
+#                            (was 31 since Story 14.5). The documented bump rule
+#                            above would call a new top-level class a MINOR bump;
+#                            this entry is treated as PATCH per epics-phase-2.md
+#                            line 70 ("new Phase 2 marker classes land with PATCH
+#                            or MINOR bumps only, no MAJOR") + line 411 + the
+#                            Story 14.3 / 14.5 new-Phase-2-class-as-PATCH
+#                            precedent. The runtime emitter lands in this story
+#                            (`epic_lifecycle.run_epic_loop` appends
+#                            `EPIC_BUDGET_EXHAUSTED_MARKER` to the epic-run-state
+#                            `active_markers`) — NOT a flip-the-switch deferral.
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
 # schema MINOR bump for Story 15.1 optional `lifetime` field (transient/durable axis; default durable) — additive optional field per the documented bump rule
-schema_version: "1.9"
+# schema PATCH bump for Story 15.2 epic-budget-exhausted new top-level class (precedent: epics-phase-2.md line 70 + line 411 + Story 14.3/14.5)
+schema_version: "1.10"
 
 markers:
 
@@ -642,3 +671,26 @@ markers:
       - shared-port-collision
       - shared-evidence-root-collision
       - aggregate-run-state-cross-write
+
+  - marker_class: epic-budget-exhausted
+    diagnostic_pointer: |
+      FR-P2-1 / Epic 15 Story 15.2 — the cumulative per-epic retry budget
+      (`per_epic_retry_budget_multiplier × story_count`, separate from and
+      additive on top of the per-story `retry_budget`) was exhausted while
+      undispatched stories remained. The epic paused at the next story-
+      completion boundary (`epic-paused-on-budget`); the in-flight story was
+      allowed to FINISH (sensor-not-advisor — the Orchestrator never interrupts
+      an in-flight story). Normal-flow cost-bounding halt, NOT a failure of any
+      single specialist. Distinct from `retry-budget-exhausted` (per-story
+      budget, one story's loop) and `epic-paused-on-escalation` (a quality
+      issue — a contained story escalated; escalation takes `current_state`
+      precedence while this marker still emits additively). Exhaustion exactly
+      on the final story is NOT a pause (the epic completes). Budget overage for
+      epic `{epic_id}` (run `{run_id}`): consumed `{consumed}` of
+      `{effective_budget}`. Remediation (the human decides): raise
+      `per_epic_retry_budget_multiplier` in `_bmad/automation/config.yaml`, or
+      split the epic, then re-dispatch the undispatched stories; inspect the
+      running epic-level PR bundle (Story 15.3) for the per-story retry
+      breakdown.
+    pointer_context_fields: [epic_id, run_id, consumed, effective_budget]
+    sub_classifications: []

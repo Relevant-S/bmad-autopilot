@@ -45,18 +45,17 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_9(taxonomy_data: dict) -> None:
-    """Story 15.1 bumps schema_version from ``"1.8"`` to ``"1.9"`` per the
-    file's documented MINOR-bump rule for a new OPTIONAL field — the
-    ``lifetime`` field (``transient`` | ``durable``, default ``durable``)
-    added to the ``worktree-stale-lock`` entry per AC-6. This is a new
-    top-level field, NOT a new marker class; the 31-class closed-set is
-    preserved (the authoritative count is the 31-entry
-    ``CANONICAL_MARKER_CLASSES`` in ``test_reconciler.py``). Prior Story
-    14.5 bumped 1.7 → 1.8 for the ``parallel-story-state-pollution``
-    top-level class.
+def test_taxonomy_schema_version_is_1_10(taxonomy_data: dict) -> None:
+    """Story 15.2 bumps schema_version from ``"1.9"`` to ``"1.10"`` for the
+    new top-level marker class ``epic-budget-exhausted`` (per-epic cumulative
+    retry-budget exhaustion; FR-P2-1). Treated as PATCH per epics-phase-2.md
+    line 70 + line 411 + the Story 14.3 / 14.5 new-Phase-2-class-as-PATCH
+    precedent; the closed-set grows 31 → 32 (the authoritative count is the
+    ``CANONICAL_MARKER_CLASSES`` list in ``test_reconciler.py``). Prior
+    Story 15.1 bumped 1.8 → 1.9 for the OPTIONAL ``lifetime`` field on the
+    ``worktree-stale-lock`` entry.
     """
-    assert taxonomy_data.get("schema_version") == "1.9"
+    assert taxonomy_data.get("schema_version") == "1.10"
 
 
 def test_worktree_stale_lock_declares_transient_lifetime(
@@ -92,6 +91,27 @@ def test_lifetime_field_is_optional_and_defaults_durable(
                 f"{marker_class}: only worktree-stale-lock is transient at "
                 f"Story 15.1; an explicit lifetime here must be 'durable'"
             )
+
+
+def test_epic_budget_exhausted_entry_shape(taxonomy_data: dict) -> None:
+    """Story 15.2 AC-5: ``epic-budget-exhausted`` is enumerated as a new
+    top-level marker class with the budget-context pointer fields, an empty
+    sub_classifications list, and (by omission) the durable default lifetime so
+    it survives the Story 15.1 transient write-back filter."""
+    by_class = {entry["marker_class"]: entry for entry in taxonomy_data["markers"]}
+    assert "epic-budget-exhausted" in by_class, (
+        "taxonomy missing the epic-budget-exhausted marker class"
+    )
+    entry = by_class["epic-budget-exhausted"]
+    assert entry["pointer_context_fields"] == [
+        "epic_id",
+        "run_id",
+        "consumed",
+        "effective_budget",
+    ]
+    assert entry["sub_classifications"] == []
+    assert "lifetime" not in entry  # durable by default → never stripped
+    assert entry["diagnostic_pointer"].strip()
 
 
 def test_heuristic_skipped_declares_flow_branch_sub_classification(
