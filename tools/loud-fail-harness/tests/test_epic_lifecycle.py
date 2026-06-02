@@ -57,11 +57,12 @@ from loud_fail_harness.epic_lifecycle import (
     apply_epic_budget,
     derive_epic_state,
     enumerate_epic_stories,
+    fold_story_cost,
     fold_story_terminal,
     init_epic_run_state,
     run_epic_loop,
 )
-from loud_fail_harness.epic_run_state import EpicRunState
+from loud_fail_harness.epic_run_state import EpicRunState, PerEpicCostPartition
 
 _NO_TRANSIENT: frozenset[str] = frozenset()
 
@@ -460,6 +461,145 @@ def test_story_loop_outcome_is_frozen() -> None:
     outcome = StoryLoopOutcome(terminal_status="done", retries_consumed=0)
     with pytest.raises((ValidationError, TypeError, AttributeError)):
         outcome.retries_consumed = 5  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Per-epic cost partition: StoryLoopOutcome.cost shape + fold_story_cost (AC-3)
+# ---------------------------------------------------------------------------
+
+
+def test_story_loop_outcome_cost_defaults_to_zero() -> None:
+    """Additive 0.0 default keeps the 15.1/15.2 stubs valid (backward-compat)."""
+    outcome = StoryLoopOutcome(terminal_status="merge-ready", retries_consumed=0)
+    assert outcome.cost == 0.0
+
+
+def test_story_loop_outcome_cost_is_frozen() -> None:
+    outcome = StoryLoopOutcome(
+        terminal_status="done", retries_consumed=0, cost=1.5
+    )
+    with pytest.raises((ValidationError, TypeError, AttributeError)):
+        outcome.cost = 2.0  # type: ignore[misc]
+
+
+def test_story_loop_outcome_rejects_negative_cost() -> None:
+    with pytest.raises(ValidationError):
+        StoryLoopOutcome(
+            terminal_status="merge-ready", retries_consumed=0, cost=-0.01
+        )
+
+
+def _seed_partition(per_story_cost: dict[str, float]) -> PerEpicCostPartition:
+    return PerEpicCostPartition(
+        per_story_cost=dict(per_story_cost),
+        epic_cost_total=sum(per_story_cost.values()),
+    )
+
+
+def test_fold_story_cost_sets_per_story_and_recomputes_total() -> None:
+    partition = _seed_partition({"15-1-a": 0.0, "15-2-b": 0.0})
+    folded = fold_story_cost(partition, "15-1-a", 1.25)
+    assert folded.per_story_cost["15-1-a"] == 1.25
+    assert folded.per_story_cost["15-2-b"] == 0.0
+    assert folded.epic_cost_total == 1.25
+
+
+def test_fold_story_cost_is_cumulative_per_story() -> None:
+    partition = _seed_partition({"15-1-a": 1.0, "15-2-b": 0.5})
+    folded = fold_story_cost(partition, "15-1-a", 0.75)
+    assert folded.per_story_cost["15-1-a"] == 1.75
+    assert folded.epic_cost_total == 2.25
+
+
+def test_fold_story_cost_zero_contribution_keeps_total() -> None:
+    partition = _seed_partition({"15-1-a": 2.0, "15-2-b": 0.0})
+    folded = fold_story_cost(partition, "15-2-b", 0.0)
+    assert folded.per_story_cost["15-2-b"] == 0.0
+    assert folded.epic_cost_total == 2.0
+
+
+def test_fold_story_cost_empty_partition_total() -> None:
+    partition = _seed_partition({})
+    folded = fold_story_cost(partition, "15-1-a", 3.5)
+    assert dict(folded.per_story_cost) == {"15-1-a": 3.5}
+    assert folded.epic_cost_total == 3.5
+
+
+def test_fold_story_cost_does_not_mutate_input() -> None:
+    partition = _seed_partition({"15-1-a": 0.0})
+    fold_story_cost(partition, "15-1-a", 1.0)
+    assert partition.per_story_cost["15-1-a"] == 0.0
+    assert partition.epic_cost_total == 0.0
+
+
+def test_fold_story_cost_rejects_negative() -> None:
+    partition = _seed_partition({"15-1-a": 0.0})
+    with pytest.raises(ValueError, match="non-negative"):
+        fold_story_cost(partition, "15-1-a", -1.0)
+
+
+def test_run_epic_loop_accumulates_cost_partition(tmp_path: pathlib.Path) -> None:
+    """Integration: per-story costs surfaced via StoryLoopOutcome.cost fold into
+    per_epic_cost_partition and persist on disk; the cost fold composes with the
+    existing retry/terminal folds (AC-3)."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    costs = {"15-1-a": 1.25, "15-2-b": 0.75}
+    retries = {"15-1-a": 1, "15-2-b": 0}
+
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
+        return StoryLoopOutcome(
+            terminal_status="merge-ready",  # type: ignore[arg-type]
+            retries_consumed=retries[story_id],
+            cost=costs[story_id],
+        )
+
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=runner,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    partition = result.final_state.per_epic_cost_partition
+    assert partition.per_story_cost["15-1-a"] == 1.25
+    assert partition.per_story_cost["15-2-b"] == 0.75
+    assert partition.epic_cost_total == 2.0
+    # The cost fold rode the existing advance — persisted on disk (AC-3).
+    on_disk = yaml.safe_load(erp.read_text(encoding="utf-8"))
+    assert on_disk["per_epic_cost_partition"]["epic_cost_total"] == 2.0
+    assert on_disk["per_epic_cost_partition"]["per_story_cost"] == {
+        "15-1-a": 1.25,
+        "15-2-b": 0.75,
+    }
+    # Cost fold composes with the retry fold (15-1-a consumed 1 retry).
+    assert result.final_state.per_epic_retry_budget.consumed == 1
+
+
+def test_run_epic_loop_default_cost_zero_backward_compat(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A runner that returns the 15.2-shaped outcome (no cost) keeps the
+    partition zeroed — additive default holds end-to-end."""
+    sprint = _write_sprint_status(tmp_path, {"15-1-a": "ready-for-dev"})
+    erp = tmp_path / "epic-run-state.yaml"
+
+    def runner(*, story_id: str, index: int, total: int) -> StoryLoopOutcome:
+        return _outcome("merge-ready")
+
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=runner,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.per_epic_cost_partition.epic_cost_total == 0.0
 
 
 # ---------------------------------------------------------------------------

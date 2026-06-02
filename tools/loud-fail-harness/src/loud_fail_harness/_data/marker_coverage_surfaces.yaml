@@ -46,9 +46,13 @@ surfaces:
     file_paths:
       - tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py
       - tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_escalation.py
+      - tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_epic.py
     description: |-
-      PR-bundle and escalation-bundle assembler (Story 2.11 + Story 6.1). Renders the merge-
-      ready PR bundle from envelope + event log + run-state.
+      PR-bundle, escalation-bundle, and epic-bundle assembler (Story 2.11 + Story 6.1 +
+      Story 15.3). Renders the merge-ready PR bundle from envelope + event log + run-state,
+      and the running/final epic-level PR bundle from the epic-run-state cache. The epic
+      assembler's main() routes assembler-logic failures through the SAME
+      surface_assembly_failure path (bundle_assembly_failure.py) — no new marker class.
   - name: cost-telemetry-pipeline
     category: cost-telemetry
     file_paths:
@@ -3380,7 +3384,7 @@ verdicts:
   - marker_class: epic-budget-exhausted
     surface_name: orchestrator-state-machine
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/epic_lifecycle.py:611
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/epic_lifecycle.py:654
     audit_date: "2026-06-02"
   - marker_class: epic-budget-exhausted
     surface_name: reconciliation-gate-fixture

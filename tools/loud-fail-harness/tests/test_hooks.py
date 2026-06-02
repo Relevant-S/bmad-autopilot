@@ -521,6 +521,127 @@ def test_stop_hook_within_eighteen_line_budget(hooks_dir: pathlib.Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# stop.sh — epic-scope dispatch branch (Story 15.3)                           #
+# --------------------------------------------------------------------------- #
+
+
+_EPIC_RUN_STATE_YAML = """schema_version: "1.0"
+epic_id: "epic-15"
+run_id: "run-epic-1"
+current_state: "epic-paused-on-budget"
+story_ids:
+  - "2-7-test"
+  - "2-8-other"
+per_story_status:
+  "2-7-test": "merge-ready"
+  "2-8-other": "in-progress"
+per_epic_retry_budget:
+  multiplier: 2
+  story_count: 2
+  effective_budget: 4
+  consumed: 4
+per_epic_cost_partition:
+  per_story_cost:
+    "2-7-test": 1.25
+    "2-8-other": 0.0
+  epic_cost_total: 1.25
+active_markers:
+  - "epic-budget-exhausted"
+"""
+
+
+def _write_epic_run_state(repo: pathlib.Path) -> pathlib.Path:
+    erp = repo / "_bmad" / "automation" / "epic-run-state.yaml"
+    erp.parent.mkdir(parents=True, exist_ok=True)
+    erp.write_text(_EPIC_RUN_STATE_YAML, encoding="utf-8")
+    return erp
+
+
+def _strip_generated(body: str) -> str:
+    return "\n".join(
+        line for line in body.splitlines() if not line.startswith("Generated:")
+    )
+
+
+def test_stop_epic_scope_renders_epic_bundle(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """Story 15.3 AC-1 / AC-4: with an epic-run-state cache present the Stop
+    hook ADDITIONALLY renders the running/final epic-level PR bundle to its
+    deterministic path — alongside (not replacing) the per-story bundle."""
+    _write_run_state(fixture_repo, story_id="2-7-test", current_state="done")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-test", run_id="r1")
+    _write_epic_run_state(fixture_repo)
+    result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    # Per-story bundle still written.
+    assert (
+        fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-test" / "r1.md"
+    ).exists()
+    # Epic bundle written at the deterministic epic-pr-bundles path.
+    epic_bundle = (
+        fixture_repo
+        / "_bmad-output"
+        / "epic-pr-bundles"
+        / "epic-15"
+        / "run-epic-1.md"
+    )
+    assert epic_bundle.exists()
+    body = epic_bundle.read_text(encoding="utf-8")
+    assert body.startswith("# Epic PR bundle — epic epic-15 (run run-epic-1)")
+    assert "## Stories" in body
+    assert "### epic-budget-exhausted" in body
+
+
+def test_stop_per_story_scope_skips_epic_branch(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """Story 15.3 AC-5: a per-story-only invocation (no epic-run-state) reaches
+    the per-story branch unchanged; the epic branch is skipped (no epic bundle
+    dir materialized)."""
+    _write_run_state(fixture_repo, story_id="2-7-test", current_state="done")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-test", run_id="r1")
+    result = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
+    assert result.returncode == 0, f"stderr={result.stderr!r}"
+    assert (
+        fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-test" / "r1.md"
+    ).exists()
+    assert not (fixture_repo / "_bmad-output" / "epic-pr-bundles").exists()
+
+
+def test_stop_per_story_bundle_bit_identical_regardless_of_epic_scope(
+    fixture_repo: pathlib.Path, hooks_dir: pathlib.Path
+) -> None:
+    """Story 15.3 AC-5 regression witness: the per-story bundle (modulo the
+    wall-clock ``Generated:`` line) is byte-identical whether or not an
+    epic-run-state cache is present — the epic-scope branch is purely additive
+    and does not perturb ``assemble_bundle``'s per-story output."""
+    _write_run_state(fixture_repo, story_id="2-7-test", current_state="done")
+    _seed_canonical_dispatch_logs(fixture_repo, story_id="2-7-test", run_id="r1")
+    ps_bundle = (
+        fixture_repo / "_bmad-output" / "pr-bundles" / "2-7-test" / "r1.md"
+    )
+
+    r1 = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
+    assert r1.returncode == 0, f"stderr={r1.stderr!r}"
+    without_epic = _strip_generated(ps_bundle.read_text(encoding="utf-8"))
+    assert not (fixture_repo / "_bmad-output" / "epic-pr-bundles").exists()
+
+    _write_epic_run_state(fixture_repo)
+    r2 = _invoke_hook(hooks_dir / "stop.sh", fixture_repo)
+    assert r2.returncode == 0, f"stderr={r2.stderr!r}"
+    with_epic = _strip_generated(ps_bundle.read_text(encoding="utf-8"))
+    assert with_epic == without_epic
+    assert (
+        fixture_repo
+        / "_bmad-output"
+        / "epic-pr-bundles"
+        / "epic-15"
+        / "run-epic-1.md"
+    ).exists()
+
+
+# --------------------------------------------------------------------------- #
 # session-start.sh                                                            #
 # --------------------------------------------------------------------------- #
 

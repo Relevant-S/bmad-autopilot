@@ -154,6 +154,13 @@ class StoryLoopOutcome(BaseModel):
 
     terminal_status: PerStoryStatus
     retries_consumed: int = Field(ge=0)
+    # Story 15.3 (AC-3 / NFR-P5): the per-epic cost partition consumes the SUM of
+    # per-story costs. The injected runner sources this from the per-story cost
+    # aggregation it already owns (Epic-18-worktree-safe — the epic loop never
+    # reads a per-story cost path the worktree relocation would break; mirrors the
+    # 15.2 ``retries_consumed`` rationale). Default ``0.0`` keeps the 15.1/15.2
+    # test stubs valid (additive within the Epic-15 epic-layer seam).
+    cost: float = Field(default=0.0, ge=0)
 
 
 class StoryLoopRunner(Protocol):
@@ -454,6 +461,47 @@ def fold_story_terminal(
     )
 
 
+def fold_story_cost(
+    partition: PerEpicCostPartition,
+    story_id: str,
+    cost: float,
+) -> PerEpicCostPartition:
+    """Fold one story's aggregated cost into the per-epic cost partition (pure).
+
+    Returns a NEW :class:`~loud_fail_harness.epic_run_state.PerEpicCostPartition`
+    with ``per_story_cost[story_id]`` accumulated (cumulative — added to any
+    existing contribution; the partition is seeded at ``0.0`` per story by
+    :func:`init_epic_run_state`) and ``epic_cost_total`` recomputed as the sum of
+    all per-story costs (the rolled-up lower bound). Does NOT persist (the caller
+    composes :func:`~loud_fail_harness.epic_run_state.advance_epic_run_state`);
+    does NOT leak into :func:`derive_epic_state`, which stays a pure function of
+    ``per_story_status`` (Story 15.3 AC-3 — layer alongside ``fold_story_terminal``
+    / the budget fold).
+
+    Stays a TOTAL function (defined for every input) per Story 15.3 Dev Notes
+    "Input-hardening": a negative contribution is the sole rejection
+    (``StoryLoopOutcome.cost`` is ``ge=0``; this guards the fold helper's own
+    unit-tested surface). When per-story cost telemetry is unavailable the
+    contribution is ``0.0`` (``cost-telemetry-unavailable`` already surfaced at
+    the per-story boundary, Story 6.4) and the epic total is a lower bound.
+
+    Raises:
+        ValueError: ``cost`` is negative.
+    """
+    if cost < 0:
+        raise ValueError(
+            f"fold_story_cost: cost must be non-negative; got {cost!r}"
+        )
+    new_per_story: dict[str, float] = dict(partition.per_story_cost)
+    new_per_story[story_id] = new_per_story.get(story_id, 0.0) + cost
+    return partition.model_copy(
+        update={
+            "per_story_cost": new_per_story,
+            "epic_cost_total": sum(new_per_story.values()),
+        }
+    )
+
+
 def _format_epic_progress(
     index: int,
     total: int,
@@ -604,6 +652,14 @@ def run_epic_loop(
         active_markers = epic_state.active_markers
         if emit_marker and EPIC_BUDGET_EXHAUSTED_MARKER not in active_markers:
             active_markers = (*active_markers, EPIC_BUDGET_EXHAUSTED_MARKER)
+        # Fold this story's aggregated cost into the per-epic cost partition
+        # (AC-3 / NFR-P5) alongside the terminal + budget folds. The runner
+        # surfaces the cost through the SAME StoryLoopOutcome channel as
+        # retries_consumed (Epic-18-worktree-safe); the mutation rides the
+        # existing advance_epic_run_state call below (no inline writes).
+        new_partition = fold_story_cost(
+            epic_state.per_epic_cost_partition, story_id, outcome.cost
+        )
         epic_state = epic_state.model_copy(
             update={
                 "per_epic_retry_budget": budget.model_copy(
@@ -611,6 +667,7 @@ def run_epic_loop(
                 ),
                 "current_state": resolved_state,
                 "active_markers": active_markers,
+                "per_epic_cost_partition": new_partition,
             }
         )
 
@@ -660,6 +717,7 @@ __all__ = [
     "apply_epic_budget",
     "derive_epic_state",
     "enumerate_epic_stories",
+    "fold_story_cost",
     "fold_story_terminal",
     "init_epic_run_state",
     "run_epic_loop",
