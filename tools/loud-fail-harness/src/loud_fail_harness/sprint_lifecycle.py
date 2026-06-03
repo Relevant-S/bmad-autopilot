@@ -92,10 +92,10 @@ from __future__ import annotations
 import pathlib
 import re
 from collections.abc import Callable, Mapping
-from typing import ClassVar, Final, Protocol, get_args
+from typing import ClassVar, Final, Literal, Protocol, get_args
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from loud_fail_harness.epic_lifecycle import (
     StoryLoopRunner,
@@ -111,15 +111,29 @@ from loud_fail_harness.epic_run_state import (
     epic_run_state_path_for,
 )
 from loud_fail_harness.reconciler import load_marker_lifetimes
+from loud_fail_harness.retry_budget import (
+    DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
+    DEFAULT_RETRY_BUDGET,
+    DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
+)
 
-#: The per-sprint retry-budget multiplier used to SEED the
-#: ``per_sprint_retry_budget`` structure (Story 16.1 Dev Notes scope boundary).
-#: ``effective_budget = multiplier × epic_count``. Story 16.1 does NOT enforce a
-#: per-sprint cumulative budget — it only reaches ``sprint-paused-on-budget`` via
-#: a contained epic's own ``epic-paused-on-budget`` return. The authoritative
-#: formula + config resolution (``per_sprint_retry_budget`` in ``config.yaml``)
-#: is Story 16.2's deliverable; this constant is the structural seed only.
-DEFAULT_PER_SPRINT_RETRY_MULTIPLIER: Final[int] = 2
+# ``DEFAULT_PER_SPRINT_RETRY_MULTIPLIER`` (the leading term of the per-sprint
+# effective-budget formula), ``DEFAULT_RETRY_BUDGET`` (the per-story term), and
+# ``DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD`` are imported from
+# :mod:`loud_fail_harness.retry_budget` (their canonical home alongside the
+# per-epic default; the move mirrors Story 15.2's
+# ``DEFAULT_PER_EPIC_RETRY_MULTIPLIER`` relocation, which avoids the circular
+# import the inverse direction would create) and consumed below as the
+# ``init_sprint_run_state`` / ``run_sprint_loop`` defaults.
+
+#: The sprint-scope systemic-escalation marker class (Story 16.2). Sourced
+#: verbatim from ``schemas/marker-taxonomy.yaml`` (single-source-of-truth posture
+#: mirroring ``EPIC_BUDGET_EXHAUSTED_MARKER`` one scope down). ``durable`` by
+#: taxonomy default, so :func:`advance_sprint_run_state`'s transient-class filter
+#: never strips it. INFORMATIONAL: emitting it does NOT change ``current_state``.
+SPRINT_ESCALATION_RATE_EXCEEDED_MARKER: Final[
+    Literal["sprint-escalation-rate-exceeded"]
+] = "sprint-escalation-rate-exceeded"
 
 _VALID_EPIC_STATES: frozenset[str] = frozenset(get_args(EpicCurrentState))
 _VALID_PER_STORY_STATUSES: frozenset[str] = frozenset(get_args(PerStoryStatus))
@@ -176,12 +190,23 @@ class EpicLoopOutcome(BaseModel):
     The epic-scope analogue of
     :class:`~loud_fail_harness.epic_lifecycle.StoryLoopOutcome`. In production
     the injected :class:`EpicLoopRunner` drives one epic through the UNCHANGED
-    ``epic_lifecycle.run_epic_loop`` and returns its terminal
-    :data:`~loud_fail_harness.epic_run_state.EpicCurrentState`
-    (``run_epic_loop(...).final_state.current_state``). Story 16.2's per-sprint
-    budget will extend this envelope additively (mirroring how Story 15.2 grew
-    ``StoryLoopOutcome`` with ``retries_consumed``); Story 16.1 needs only the
-    terminal state to fold.
+    ``epic_lifecycle.run_epic_loop`` and populates this envelope from the
+    resulting :class:`~loud_fail_harness.epic_lifecycle.RunEpicLoopResult`:
+
+    * ``terminal_state`` ← ``result.final_state.current_state``.
+    * ``retries_consumed`` ← ``result.final_state.per_epic_retry_budget.consumed``
+      (Story 16.2 AC-3 — folded into the cumulative ``per_sprint_retry_budget``).
+    * ``stories_completed`` ← ``len(result.dispatched_story_ids)`` (Story 16.2
+      AC-5 — the running denominator of the sprint escalation rate).
+    * ``escalated_count`` ← ``1`` when ``terminal_state ==
+      "epic-paused-on-escalation"`` else ``0`` (the epic loop pauses on the FIRST
+      escalation, so at most one escalated story is observable per epic —
+      consistent with sensor-not-advisor).
+
+    Story 16.1 needed only ``terminal_state`` to fold; Story 16.2 grew the
+    envelope ADDITIVELY (mirroring how Story 15.2 grew ``StoryLoopOutcome`` with
+    ``retries_consumed``). The three new fields default to ``0`` so Story 16.1's
+    ``EpicLoopOutcome(terminal_state=...)`` test stubs stay valid.
 
     Frozen; field declaration order is load-bearing for byte-stable
     ``model_dump_json()`` output.
@@ -190,6 +215,18 @@ class EpicLoopOutcome(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     terminal_state: EpicCurrentState
+    retries_consumed: int = Field(default=0, ge=0)
+    stories_completed: int = Field(default=0, ge=0)
+    escalated_count: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _escalated_count_bounded(self) -> "EpicLoopOutcome":
+        if self.escalated_count > self.stories_completed:
+            raise ValueError(
+                f"escalated_count ({self.escalated_count}) cannot exceed "
+                f"stories_completed ({self.stories_completed})"
+            )
+        return self
 
 
 class EpicLoopRunner(Protocol):
@@ -378,6 +415,33 @@ def enumerate_sprint_units(
     return epic_units, unassigned_units
 
 
+def compute_per_sprint_effective_budget(
+    multiplier: int,
+    epic_count: int,
+    per_story_budget: int,
+    unassigned_story_count: int,
+) -> int:
+    """Compute the per-sprint effective retry budget (Story 16.2 AC-2).
+
+    The authoritative formula Story 16.1 deferred::
+
+        effective_budget = multiplier × epic_count
+                         + per_story_budget × unassigned_story_count
+
+    The leading term mirrors the per-epic computation one scope down
+    (``multiplier × story_count``); the trailing term accounts for the
+    unassigned stories the sprint dispatches via the per-story loop (each gets
+    the per-story ``retry_budget`` worth of headroom). For a sprint whose stories
+    are all epic-assigned (``unassigned_story_count == 0`` — the THIS-workspace
+    case) the formula reduces to ``multiplier × epic_count``, bit-identical to
+    Story 16.1's structure seed.
+
+    Pure; total for all non-negative inputs (the caller guards ``multiplier >= 1``
+    via the config resolver / model field).
+    """
+    return multiplier * epic_count + per_story_budget * unassigned_story_count
+
+
 def init_sprint_run_state(
     sprint_id: str,
     run_id: str,
@@ -385,19 +449,32 @@ def init_sprint_run_state(
     unassigned_story_ids: tuple[str, ...],
     *,
     multiplier: int = DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
+    per_story_budget: int = DEFAULT_RETRY_BUDGET,
+    effective_budget_override: int | None = None,
 ) -> SprintRunState:
     """Seed a fresh
     :class:`~loud_fail_harness.epic_run_state.SprintRunState` at
-    ``sprint-in-progress`` (AC-1).
+    ``sprint-in-progress`` (AC-1 / AC-2).
 
     ``per_epic_status`` is seeded ``epic-in-progress`` for each epic
     (pre-dispatch); ``unassigned_story_ids`` is recorded in document order
-    (possibly empty). ``per_sprint_retry_budget`` is populated as a STRUCTURE
-    (``effective_budget = multiplier × epic_count``, ``consumed = 0``); per-
-    sprint budget ENFORCEMENT is Story 16.2 (Dev Notes scope boundary).
-    ``active_markers`` is empty.
+    (possibly empty). ``per_sprint_retry_budget`` is populated with
+    ``effective_budget`` computed from the Story 16.2 formula
+    (:func:`compute_per_sprint_effective_budget`) — or replaced by
+    ``effective_budget_override`` when the config supplies an absolute
+    ``per_sprint_retry_budget`` (the ``multiplier`` / ``epic_count`` fields still
+    record the formula inputs for observability). ``consumed`` starts at 0;
+    ``active_markers`` is empty. Per-sprint budget ENFORCEMENT (folding ``consumed``
+    + the ``sprint-paused-on-budget`` pause) happens in :func:`run_sprint_loop`.
     """
     epic_count = len(epic_ids)
+    unassigned_count = len(unassigned_story_ids)
+    computed = compute_per_sprint_effective_budget(
+        multiplier, epic_count, per_story_budget, unassigned_count
+    )
+    effective_budget = (
+        computed if effective_budget_override is None else effective_budget_override
+    )
     return SprintRunState(
         schema_version="1.0",
         sprint_id=sprint_id,
@@ -409,7 +486,7 @@ def init_sprint_run_state(
         per_sprint_retry_budget=PerSprintRetryBudget(
             multiplier=multiplier,
             epic_count=epic_count,
-            effective_budget=multiplier * epic_count,
+            effective_budget=effective_budget,
             consumed=0,
         ),
         active_markers=(),
@@ -456,6 +533,57 @@ def derive_sprint_state(
     if (epic_states or story_states) and epics_done and stories_done:
         return "sprint-complete"
     return "sprint-in-progress"
+
+
+def apply_sprint_budget(
+    base_state: SprintCurrentState,
+    consumed: int,
+    effective_budget: int,
+    *,
+    has_undispatched: bool,
+) -> SprintCurrentState:
+    """Layer per-sprint cumulative-budget enforcement ON TOP of
+    :func:`derive_sprint_state` (Story 16.2 AC-4 / AC-7).
+
+    The sprint-scope sibling of
+    :func:`~loud_fail_harness.epic_lifecycle.apply_epic_budget`.
+    :func:`derive_sprint_state` stays a PURE function of the two status maps
+    (budget logic does NOT leak into it). This helper takes its result
+    (``base_state``) plus the cumulative budget figures and returns the resolved
+    ``current_state``.
+
+    Returns ``sprint-paused-on-budget`` ONLY when ``base_state`` is
+    ``sprint-in-progress`` AND the budget is exhausted (``effective_budget > 0``
+    AND ``consumed >= effective_budget``) AND undispatched units remain — i.e. the
+    exhaustion would guard FUTURE dispatch. Otherwise ``base_state`` is returned
+    unchanged:
+
+    * ``sprint-paused-on-escalation`` wins the single-valued ``current_state``
+      (escalation precedence — the proximate human-actionable quality signal;
+      mirrors ``apply_epic_budget`` one scope down).
+    * ``sprint-complete`` is preserved — a completed sprint never pauses;
+      exhausting the budget exactly on the final unit (no undispatched units) is
+      NOT a pause (the pause guards future dispatch, not a completed sprint).
+
+    Unlike the epic scope, this story emits NO dedicated budget marker: the
+    cumulative per-sprint pause is self-surfacing via the ``sprint-paused-on-
+    budget`` STATE (see the module's marker-scope note + the story's "Why no
+    sprint-budget-exhausted marker"). So this helper returns only the resolved
+    state, not an ``(state, emit_marker)`` pair.
+
+    The ``effective_budget > 0`` guard keeps the helper total for the degenerate
+    zero-budget case (a zero-unit sprint never enumerates — ``run_sprint_loop``
+    raises :exc:`SprintUnitEnumerationError` first — but the pure helper must not
+    report a never-approached budget as instantly exhausted). An explicit
+    ``per_sprint_retry_budget: 0`` config override is treated identically — as no
+    ceiling — because ``0 >= 0`` would otherwise pause after the first unit
+    regardless of retries consumed. Operators wanting to limit sprint-scope retries
+    should use a positive integer (minimum useful value: ``1``).
+    """
+    exhausted = effective_budget > 0 and consumed >= effective_budget
+    if base_state == "sprint-in-progress" and exhausted and has_undispatched:
+        return "sprint-paused-on-budget"
+    return base_state
 
 
 def fold_epic_terminal(
@@ -574,6 +702,9 @@ def run_sprint_loop(
     story_loop_runner: StoryLoopRunner,
     repo_root: pathlib.Path | None = None,
     multiplier: int = DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
+    per_story_budget: int = DEFAULT_RETRY_BUDGET,
+    effective_budget_override: int | None = None,
+    sprint_escalation_rate_threshold: float = DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
     progress_sink: ProgressSink | None = None,
     transient_marker_classes: frozenset[str] | None = None,
     taxonomy_path: pathlib.Path | None = None,
@@ -586,48 +717,49 @@ def run_sprint_loop(
         1. **Enumerate** the sprint units via :func:`_parse_sprint_units`
            (document order; AC-1). Zero units → :exc:`SprintUnitEnumerationError`.
         2. **Initialize** the sprint-run-state cache via
-           :func:`init_sprint_run_state` and persist it via
-           :func:`~loud_fail_harness.epic_run_state.advance_sprint_run_state`
-           (atomic write + transient-marker filter; AC-1 / AC-3 / AC-7).
-        3. **Dispatch sequentially** — for each unit in order, drive an EPIC
-           unit through the injected ``epic_loop_runner`` (supplying a per-epic-
-           addressed ``epic_run_state_path`` via
-           :func:`~loud_fail_harness.epic_run_state.epic_run_state_path_for`;
-           AC-3) or an UNASSIGNED STORY unit through the injected
-           ``story_loop_runner`` (the UNCHANGED per-story loop; AC-2), fold the
-           terminal outcome into the sprint aggregate, persist the advance, and
-           surface the "unit K of T" framing line via ``progress_sink`` (AC-5).
-        4. **Pause on a contained-unit pause/escalation** — when folding a unit
-           transitions the sprint to ``sprint-paused-on-escalation`` /
-           ``sprint-paused-on-budget``, STOP; the downstream units do NOT auto-
-           advance (AC-4; sensor-not-advisor).
+           :func:`init_sprint_run_state` (Story 16.2 — ``effective_budget`` from
+           the formula ``multiplier × epic_count + per_story_budget ×
+           unassigned_count``, or the absolute ``effective_budget_override``) and
+           persist it (atomic write + transient-marker filter; AC-1 / AC-3 / AC-7).
+        3. **Dispatch sequentially** — for each unit in order, drive an EPIC unit
+           through the injected ``epic_loop_runner`` (per-epic-addressed
+           ``epic_run_state_path``; AC-3) or an UNASSIGNED STORY unit through the
+           injected ``story_loop_runner`` (the UNCHANGED per-story loop; AC-2),
+           fold the terminal outcome into the sprint aggregate, fold the unit's
+           ``retries_consumed`` into the cumulative ``per_sprint_retry_budget``
+           (Story 16.2 AC-3), apply the per-sprint budget pause
+           (:func:`apply_sprint_budget`; AC-4), update the running escalation
+           tally and emit the informational ``sprint-escalation-rate-exceeded``
+           marker when the rate crosses the threshold (AC-5), persist the advance,
+           and surface the "unit K of T" framing line (AC-5/NFR-O1).
+        4. **Pause on a contained-unit pause/escalation OR per-sprint budget
+           exhaustion** — when folding/budget transitions the sprint to
+           ``sprint-paused-on-escalation`` / ``sprint-paused-on-budget``, STOP; the
+           downstream units do NOT auto-advance (AC-4; sensor-not-advisor). The
+           escalation-rate marker is INFORMATIONAL and does NOT itself pause.
 
-    Units run strictly sequentially (parallel is Epic 18 — no concurrent
-    dispatch here; AC-2). The transient-class set is resolved ONCE and threaded
-    through every ``advance_sprint_run_state`` call so a recovery-recomputed
-    transient marker never persists into the aggregate (AC-7). This story emits
-    NO retrospective artifact and NO ``sprint-status-artifact-*.md`` (AC-6) —
-    the only persisted output is the ``sprint-run-state.yaml`` cache plus the
-    per-unit caches the contained loops already write.
+    Units run strictly sequentially (parallel is Epic 18; AC-2). The transient-
+    class set is resolved ONCE and threaded through every
+    ``advance_sprint_run_state`` call (AC-7). This story emits NO retrospective
+    artifact and NO ``sprint-status-artifact-*.md`` (AC-6) — the only persisted
+    output is the ``sprint-run-state.yaml`` cache plus the per-unit caches.
 
     Args:
-        sprint_id: Free-form sprint run label (Story 16.1 Dev Notes — it labels
-            the run; it does NOT slice ``development_status``).
-        run_id: Orchestrator-domain identifier correlating the sprint dispatch
-            with the ``sprint-run-state.yaml`` record (ADR-005 Consequence 1).
+        sprint_id: Free-form sprint run label (Story 16.1 Dev Notes).
+        run_id: Orchestrator-domain identifier (ADR-005 Consequence 1).
         sprint_status_path: Caller-controlled path to ``sprint-status.yaml``.
-        sprint_run_state_path: Caller-controlled on-disk path for the sprint-
-            run-state cache.
-        epic_loop_runner: The per-epic driver Protocol (AC-2). Returns an
-            :class:`EpicLoopOutcome` carrying the epic's terminal state.
-        story_loop_runner: The UNCHANGED per-story driver Protocol reused from
-            Epic 15 (AC-2), for unassigned-story units.
-        repo_root: Optional root for per-epic ``epic_run_state_path_for``
-            addressing (tests pass ``tmp_path``; the orchestrator knows its own
-            root). When ``None`` the path helper resolves ``find_repo_root()``
-            at call time.
-        multiplier: The per-sprint retry-budget multiplier seeding the budget
-            STRUCTURE (Story 16.2 owns enforcement + config resolution).
+        sprint_run_state_path: Caller-controlled on-disk sprint-run-state path.
+        epic_loop_runner: The per-epic driver Protocol (AC-2), returning an
+            :class:`EpicLoopOutcome` carrying the epic's terminal state plus its
+            ``retries_consumed`` / ``stories_completed`` / ``escalated_count``.
+        story_loop_runner: The UNCHANGED per-story driver Protocol (AC-2).
+        repo_root: Optional root for per-epic ``epic_run_state_path_for`` (AC-3).
+        multiplier: The per-sprint retry-budget multiplier (leading formula term).
+        per_story_budget: The per-story ``retry_budget`` (the unassigned-story
+            formula term).
+        effective_budget_override: Absolute ``per_sprint_retry_budget`` config
+            override of the computed ``effective_budget`` (``None`` → auto-compute).
+        sprint_escalation_rate_threshold: The escalation-rate threshold (AC-5).
         progress_sink: Optional sprint-progress framing sink (AC-5).
         transient_marker_classes / taxonomy_path: Forwarded to
             ``advance_sprint_run_state`` (AC-7).
@@ -663,8 +795,15 @@ def run_sprint_loop(
         )
 
     sprint_state = init_sprint_run_state(
-        sprint_id, run_id, epic_units, unassigned_units, multiplier=multiplier
+        sprint_id,
+        run_id,
+        epic_units,
+        unassigned_units,
+        multiplier=multiplier,
+        per_story_budget=per_story_budget,
+        effective_budget_override=effective_budget_override,
     )
+    effective_budget = sprint_state.per_sprint_retry_budget.effective_budget
     advance = advance_sprint_run_state(
         sprint_run_state_path,
         sprint_state,
@@ -678,6 +817,14 @@ def run_sprint_loop(
     per_unassigned_status: dict[str, str] = {
         story_id: "ready-for-dev" for story_id in unassigned_units
     }
+
+    # Cumulative escalation tally over COMPLETED stories (Story 16.2 AC-5). The
+    # denominator is the running total of stories the sprint has completed so far
+    # (not the full planned count — the "after any per-story completion" reading);
+    # both are re-derivable from the per-unit caches, so they are tracked
+    # transiently rather than persisted (ADR-005 / NFR-R8).
+    stories_completed_total = 0
+    escalated_stories_total = 0
 
     total = len(ordered_units)
     dispatched: list[str] = []
@@ -705,6 +852,9 @@ def run_sprint_loop(
                 outcome_state,
                 per_unassigned_status=per_unassigned_status,
             )
+            unit_retries = epic_outcome.retries_consumed
+            unit_stories = epic_outcome.stories_completed
+            unit_escalated = epic_outcome.escalated_count
         else:
             story_outcome = story_loop_runner(
                 story_id=unit_id, index=index, total=total
@@ -722,6 +872,48 @@ def run_sprint_loop(
                 outcome_state,
                 per_unassigned_status=per_unassigned_status,
             )
+            unit_retries = story_outcome.retries_consumed
+            unit_stories = 1
+            unit_escalated = 1 if outcome_state == "escalated" else 0
+
+        # Fold the unit's retry consumption into the cumulative per-sprint budget
+        # and apply the budget pause ON TOP of the just-derived current_state
+        # (AC-3 / AC-4). has_undispatched guards FUTURE dispatch — exhausting on
+        # the final unit is sprint-complete, not a pause.
+        new_consumed = sprint_state.per_sprint_retry_budget.consumed + unit_retries
+        new_budget = sprint_state.per_sprint_retry_budget.model_copy(
+            update={"consumed": new_consumed}
+        )
+        has_undispatched = index < total
+        resolved_state = apply_sprint_budget(
+            sprint_state.current_state,
+            new_consumed,
+            effective_budget,
+            has_undispatched=has_undispatched,
+        )
+
+        # Update the running escalation tally and emit the informational marker
+        # additively when the rate crosses the threshold (AC-5). Idempotent — the
+        # durable marker is appended at most once per run; it does NOT change
+        # current_state and does NOT break the loop (sensor-not-advisor).
+        stories_completed_total += unit_stories
+        escalated_stories_total += unit_escalated
+        new_markers = sprint_state.active_markers
+        if (
+            stories_completed_total > 0
+            and escalated_stories_total / stories_completed_total
+            > sprint_escalation_rate_threshold
+            and SPRINT_ESCALATION_RATE_EXCEEDED_MARKER not in new_markers
+        ):
+            new_markers = (*new_markers, SPRINT_ESCALATION_RATE_EXCEEDED_MARKER)
+
+        sprint_state = sprint_state.model_copy(
+            update={
+                "per_sprint_retry_budget": new_budget,
+                "current_state": resolved_state,
+                "active_markers": new_markers,
+            }
+        )
 
         advance = advance_sprint_run_state(
             sprint_run_state_path,
@@ -759,11 +951,15 @@ def run_sprint_loop(
 
 __all__ = [
     "DEFAULT_PER_SPRINT_RETRY_MULTIPLIER",
+    "DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD",
     "EpicLoopOutcome",
     "EpicLoopRunner",
     "ProgressSink",
     "RunSprintLoopResult",
+    "SPRINT_ESCALATION_RATE_EXCEEDED_MARKER",
     "SprintUnitEnumerationError",
+    "apply_sprint_budget",
+    "compute_per_sprint_effective_budget",
     "derive_sprint_state",
     "enumerate_sprint_units",
     "fold_epic_terminal",

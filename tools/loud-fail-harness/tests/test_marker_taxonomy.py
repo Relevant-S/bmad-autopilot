@@ -45,17 +45,16 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_10(taxonomy_data: dict) -> None:
-    """Story 15.2 bumps schema_version from ``"1.9"`` to ``"1.10"`` for the
-    new top-level marker class ``epic-budget-exhausted`` (per-epic cumulative
-    retry-budget exhaustion; FR-P2-1). Treated as PATCH per epics-phase-2.md
-    line 70 + line 411 + the Story 14.3 / 14.5 new-Phase-2-class-as-PATCH
-    precedent; the closed-set grows 31 → 32 (the authoritative count is the
+def test_taxonomy_schema_version_is_1_11(taxonomy_data: dict) -> None:
+    """Story 16.2 bumps schema_version from ``"1.10"`` to ``"1.11"`` for the
+    new top-level marker class ``sprint-escalation-rate-exceeded`` (sprint-scope
+    systemic-escalation signal; FR-P2-2). Treated as PATCH per epics-phase-2.md
+    line 70 + line 149 + the Story 14.3 / 14.5 / 15.2 new-Phase-2-class-as-PATCH
+    precedent; the closed-set grows 32 → 33 (the authoritative count is the
     ``CANONICAL_MARKER_CLASSES`` list in ``test_reconciler.py``). Prior
-    Story 15.1 bumped 1.8 → 1.9 for the OPTIONAL ``lifetime`` field on the
-    ``worktree-stale-lock`` entry.
+    Story 15.2 bumped 1.9 → 1.10 for the ``epic-budget-exhausted`` entry.
     """
-    assert taxonomy_data.get("schema_version") == "1.10"
+    assert taxonomy_data.get("schema_version") == "1.11"
 
 
 def test_worktree_stale_lock_declares_transient_lifetime(

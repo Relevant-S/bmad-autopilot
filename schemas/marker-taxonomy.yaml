@@ -213,12 +213,49 @@
 #                            (`epic_lifecycle.run_epic_loop` appends
 #                            `EPIC_BUDGET_EXHAUSTED_MARKER` to the epic-run-state
 #                            `active_markers`) — NOT a flip-the-switch deferral.
+#   1.10 → 1.11 (Story 16.2) — additive: appended `sprint-escalation-rate-
+#                            exceeded` as a NEW top-level marker class for the
+#                            sprint-scope systemic-escalation signal (FR-P2-2;
+#                            cumulative `escalated_stories / stories_completed`
+#                            exceeding `sprint_escalation_rate_threshold`, default
+#                            0.25). Top-level addition (NOT folded under
+#                            `epic-paused-on-escalation` or `retry-budget-
+#                            exhausted`): the categorical axis is "SPRINT-scope
+#                            systemic quality signal" — distinct from the per-epic
+#                            escalation pause one scope down and from the cost-axis
+#                            `sprint-paused-on-budget` state (which is a lifecycle
+#                            STATE, not a marker; this story adds NO
+#                            `sprint-budget-exhausted` marker — the budget pause is
+#                            self-surfacing via `current_state`, whereas the rate
+#                            signal does NOT change state and would be invisible
+#                            without a marker). INFORMATIONAL / non-blocking
+#                            (sensor-not-advisor — the sprint continues). Default
+#                            `durable` lifetime by omission, so it survives the
+#                            Story 16.1 transient write-back filter and is never
+#                            stripped (marker-permanence rule, Story 1.4).
+#                            `pointer_context_fields: [sprint_id, run_id,
+#                            escalated_stories, stories_completed, threshold]`;
+#                            `sub_classifications: []`. The top-level 33-class
+#                            closed-set is the new invariant (was 32 since Story
+#                            15.2). The documented bump rule above would call a new
+#                            top-level class a MINOR bump; this entry is treated as
+#                            PATCH per epics-phase-2.md line 70 ("new Phase 2 marker
+#                            classes land with PATCH or MINOR bumps only, no
+#                            MAJOR") + line 149 (Epic 16's named `sprint-escalation-
+#                            rate-exceeded` marker addition) + the Story 14.3 / 14.5
+#                            / 15.2 new-Phase-2-class-as-PATCH precedent. The
+#                            runtime emitter lands in this story
+#                            (`sprint_lifecycle.run_sprint_loop` appends
+#                            `SPRINT_ESCALATION_RATE_EXCEEDED_MARKER` to the
+#                            sprint-run-state `active_markers`) — NOT a flip-the-
+#                            switch deferral.
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
 # schema MINOR bump for Story 15.1 optional `lifetime` field (transient/durable axis; default durable) — additive optional field per the documented bump rule
 # schema PATCH bump for Story 15.2 epic-budget-exhausted new top-level class (precedent: epics-phase-2.md line 70 + line 411 + Story 14.3/14.5)
-schema_version: "1.10"
+# schema PATCH bump for Story 16.2 sprint-escalation-rate-exceeded new top-level class (precedent: epics-phase-2.md line 70 + line 149 marker-additions)
+schema_version: "1.11"
 
 markers:
 
@@ -693,4 +730,27 @@ markers:
       running epic-level PR bundle (Story 15.3) for the per-story retry
       breakdown.
     pointer_context_fields: [epic_id, run_id, consumed, effective_budget]
+    sub_classifications: []
+
+  - marker_class: sprint-escalation-rate-exceeded
+    diagnostic_pointer: |
+      FR-P2-2 / Epic 16 Story 16.2 — the cumulative sprint escalation rate
+      (`escalated_stories / stories_completed`) exceeded the configured
+      `sprint_escalation_rate_threshold` (default 0.25, calibrated from the PRD's
+      15–25% retry-budget-exhaustion target band). INFORMATIONAL, not blocking
+      (sensor-not-advisor): the sprint CONTINUES dispatching and the marker does
+      NOT change `current_state` — it surfaces systemic escalation as a quality-
+      axis signal so the practitioner can decide whether to pause the sprint
+      manually. Distinct from `sprint-paused-on-budget` (the cost-axis surface: a
+      cumulative per-sprint retry-budget pause — different remediation) and from
+      `epic-paused-on-escalation` (a single contained epic's escalation, one scope
+      down). Sprint `{sprint_id}` (run `{run_id}`): `{escalated_stories}` of
+      `{stories_completed}` completed stories escalated, above threshold
+      `{threshold}`. Remediation (the human decides): inspect the escalated
+      stories' per-story escalation bundles for a systemic root cause (recurring
+      AC ambiguity, environmental flakiness, an under-specified epic), then
+      decide whether to pause the sprint; tune `sprint_escalation_rate_threshold`
+      in `_bmad/automation/config.yaml` if the default does not fit this sprint's
+      risk profile.
+    pointer_context_fields: [sprint_id, run_id, escalated_stories, stories_completed, threshold]
     sub_classifications: []

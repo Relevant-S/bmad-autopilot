@@ -867,7 +867,14 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # perspective, exactly like `worktree-stale-lock` /
     # `parallel-story-state-pollution`; the orphan-count increment 23 → 24 is
     # the load-bearing witness that the Story 15.2 taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 24 orphan marker class(es)" in text
+    #
+    # Post-Story-16.2 review: marker `sprint-escalation-rate-exceeded` newly
+    # enumerated via PATCH bump 1.10 → 1.11; zero `dependencies.yaml` /
+    # `escalation-bundles/*.yaml` / `orchestrator-event.yaml` reference (emitted
+    # at sprint-loop RUNTIME by `sprint_lifecycle.run_sprint_loop`). Structurally
+    # an orphan exactly like `epic-budget-exhausted`; the orphan-count increment
+    # 24 → 25 is the load-bearing witness that the Story 16.2 taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 25 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 

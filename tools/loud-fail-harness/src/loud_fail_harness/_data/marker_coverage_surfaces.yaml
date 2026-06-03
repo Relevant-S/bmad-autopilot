@@ -3426,3 +3426,113 @@ verdicts:
       (Story 15.2); the Review-BMAD specialist wrapper has no code path that
       produces this event.
     audit_date: "2026-06-02"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Sprint-scope escalation-rate signal (Story 16.2); emitted by the sprint
+      state machine into sprint-run-state active_markers, not by bundle
+      assembly. Epic 16 has no sprint-level PR bundle story.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is an orchestrator-state-machine accounting signal
+      (Story 16.2); the cost-telemetry pipeline has no code path that produces
+      this event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      The escalation-rate signal is computed inside the sequential sprint loop
+      (Story 16.2), not at SessionStart reattachment; the hook has no code path
+      that produces this event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      The escalation-rate marker is emitted by the sprint loop into the
+      sprint-run-state active_markers (Story 16.2); the Stop hook has no code
+      path that produces this event (Epic 16 has no sprint-level PR bundle).
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      The escalation-rate signal is a sprint-loop accounting event (Story
+      16.2); the SubagentStop hook has no code path that produces this event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is tracked at the sprint state machine (Story 16.2),
+      not in the per-specialist dispatch wrapper; the wrapper has no code path
+      that produces this event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      The orchestrator skill prose (run-sprint.md) NAMES the escalation-rate
+      signal but does not itself emit the marker; the canonical emission is the
+      Python composition in sprint_lifecycle.run_sprint_loop (Story 16.2),
+      audited under the orchestrator-state-machine surface.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      The per-story run-state helpers persist per-story state; the escalation-
+      rate marker is emitted into the SPRINT-scope run-state by the sprint loop
+      (Story 16.2) via advance_sprint_run_state, audited under the
+      orchestrator-state-machine surface.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: orchestrator-state-machine
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/sprint_lifecycle.py:895
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is a runtime sprint-loop signal (Story 16.2); the
+      fixture-driven reconciliation gate has no code path that produces this
+      event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is emitted by the sprint loop (Story 16.2); the
+      runtime reconciliation gate audits emission coverage but does not itself
+      produce this event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is an orchestrator-altitude sprint signal (Story
+      16.2); the Dev specialist wrapper has no code path that produces this
+      event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is an orchestrator-altitude sprint signal (Story
+      16.2); the QA specialist wrapper has no code path that produces this
+      event.
+    audit_date: "2026-06-03"
+  - marker_class: sprint-escalation-rate-exceeded
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      The escalation rate is an orchestrator-altitude sprint signal (Story
+      16.2); the Review-BMAD specialist wrapper has no code path that produces
+      this event.
+    audit_date: "2026-06-03"

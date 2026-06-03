@@ -648,7 +648,10 @@ def test_schema_version_bumps_non_regression() -> None:
     # Story 15.2 bumped 1.9 → 1.10 (additive: new top-level marker class
     # `epic-budget-exhausted`; closed-set 31 → 32; treated as PATCH per
     # epics-phase-2.md line 70 + line 411 + the Story 14.3/14.5 precedent).
-    assert taxonomy_data["schema_version"] == "1.10"
+    # Story 16.2 bumped 1.10 → 1.11 (additive: new top-level marker class
+    # `sprint-escalation-rate-exceeded`; closed-set 32 → 33; treated as PATCH per
+    # epics-phase-2.md line 70 + line 149 + the Story 14.3/14.5/15.2 precedent).
+    assert taxonomy_data["schema_version"] == "1.11"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`

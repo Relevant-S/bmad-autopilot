@@ -143,6 +143,31 @@ _RETRY_BUDGET_FIELD: str = "retry_budget"
 #: per Pattern 1's structural-key boundary.
 _PER_EPIC_RETRY_BUDGET_MULTIPLIER_FIELD: str = "per_epic_retry_budget_multiplier"
 
+#: Default per-sprint retry-budget multiplier (Story 16.1 / 16.2 / FR-P2-2). The
+#: leading term of the per-sprint effective-budget formula
+#: ``multiplier × epic_count + per_story_budget × unassigned_story_count``.
+#: Canonical home is here (alongside :data:`DEFAULT_RETRY_BUDGET` and
+#: :data:`DEFAULT_PER_EPIC_RETRY_MULTIPLIER`); :mod:`loud_fail_harness.
+#: sprint_lifecycle` re-exports it. Equals the per-epic default of 2 by design
+#: (the same "2×" cost-bounding philosophy carried one scope up).
+DEFAULT_PER_SPRINT_RETRY_MULTIPLIER: int = 2
+
+#: Default sprint escalation-rate threshold (Story 16.2 / FR-P2-2). When the
+#: cumulative ``escalated_stories / stories_completed`` exceeds this fraction the
+#: orchestrator emits the informational ``sprint-escalation-rate-exceeded``
+#: marker (it does NOT pause — sensor-not-advisor). Calibrated from the PRD's
+#: 15–25% retry-budget-exhaustion target band (Technical Success criteria).
+DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD: float = 0.25
+
+#: Canonical per-sprint-budget-override config-file field name (Story 16.2). An
+#: ABSOLUTE override of the computed effective budget (NOT a multiplier — contrast
+#: ``per_epic_retry_budget_multiplier``). Snake_case per Pattern 1.
+_PER_SPRINT_RETRY_BUDGET_FIELD: str = "per_sprint_retry_budget"
+
+#: Canonical sprint-escalation-rate-threshold config-file field name (Story
+#: 16.2). Snake_case per Pattern 1's structural-key boundary.
+_SPRINT_ESCALATION_RATE_THRESHOLD_FIELD: str = "sprint_escalation_rate_threshold"
+
 
 class RetryBudgetConfigError(ValueError):
     """Raised on malformed ``retry_budget`` config input.
@@ -458,6 +483,238 @@ def read_per_epic_retry_budget_multiplier_from_config_file(
     return resolve_per_epic_retry_budget_multiplier(parsed, default=default)
 
 
+def resolve_per_sprint_retry_budget_override(
+    config: Mapping[str, Any] | None = None,
+    *,
+    default: int | None = None,
+) -> int | None:
+    """Resolve the optional per-sprint retry-budget ABSOLUTE override from a
+    config mapping (Story 16.2 / FR-P2-2).
+
+    Unlike :func:`resolve_per_epic_retry_budget_multiplier` (a multiplier), the
+    ``per_sprint_retry_budget`` field is an ABSOLUTE override of the auto-computed
+    effective budget. A return of ``None`` means "no override present — the caller
+    auto-computes from the formula ``multiplier × epic_count + per_story_budget ×
+    unassigned_story_count``";     a return of ``0`` is the degenerate unlimited case —
+    :func:`apply_sprint_budget`'s ``effective_budget > 0`` guard treats
+    ``effective_budget=0`` as no ceiling (never exhausted). The minimum effective
+    enforcement value is ``1`` (the sprint pauses once cumulative consumed ≥ 1
+    retry). The floor is therefore **0** (the same non-negative contract as
+    :func:`resolve_retry_budget`), and the absent-``None`` vs. explicit-``0``
+    distinction is load-bearing.
+
+    Per-input contract (mirrors :func:`resolve_retry_budget` except the absent
+    sentinel is ``None``, not a numeric default):
+
+    * ``config is None`` → ``default`` (``None``).
+    * field absent / value ``None`` → ``default`` (``None``).
+    * ``type(value) is int`` (not :class:`bool`) AND ``value >= 0`` → ``value``.
+    * any other value (string-int, float, ``bool``, negative) →
+      :exc:`RetryBudgetConfigError`.
+    """
+    if config is None:
+        return default
+
+    if _PER_SPRINT_RETRY_BUDGET_FIELD not in config:
+        return default
+
+    value = config[_PER_SPRINT_RETRY_BUDGET_FIELD]
+
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        raise RetryBudgetConfigError(
+            f"{_PER_SPRINT_RETRY_BUDGET_FIELD} must be a non-negative integer; "
+            f"got {value!r} ({type(value).__name__}) — booleans are rejected to "
+            f"avoid YAML truthy-coercion ambiguity — write the value as an "
+            f"unquoted integer in config.yaml (e.g., 'per_sprint_retry_budget: "
+            f"12'), or omit the field to auto-compute the budget"
+        )
+
+    if type(value) is not int:
+        raise RetryBudgetConfigError(
+            f"{_PER_SPRINT_RETRY_BUDGET_FIELD} must be a YAML int; "
+            f"got {value!r} ({type(value).__name__}) — write the value as an "
+            f"unquoted integer in config.yaml (e.g., 'per_sprint_retry_budget: "
+            f"12', not '\"12\"' or '12.0'), or omit the field to auto-compute"
+        )
+
+    if value < 0:
+        raise RetryBudgetConfigError(
+            f"{_PER_SPRINT_RETRY_BUDGET_FIELD} must be a non-negative integer; "
+            f"got {value!r} (int) — set it to a positive integer (minimum "
+            f"useful value: 1) or omit the field to auto-compute the budget"
+        )
+
+    return value
+
+
+def read_per_sprint_retry_budget_from_config_file(
+    config_path: pathlib.Path,
+    *,
+    default: int | None = None,
+) -> int | None:
+    """Read the optional ``per_sprint_retry_budget`` override from a YAML config
+    file (Story 16.2).
+
+    The per-sprint sibling of
+    :func:`read_per_epic_retry_budget_multiplier_from_config_file`; the
+    missing-file / empty-file / malformed-YAML / non-mapping contract is identical
+    (delegates value-shape validation to
+    :func:`resolve_per_sprint_retry_budget_override`). Returns ``None`` (the
+    ``default``) when no override is configured. Uses :func:`yaml.safe_load` per
+    the loud-fail security doctrine.
+    """
+    if not config_path.exists():
+        return default
+
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RetryBudgetConfigError(
+            f"failed to read {config_path}: {exc}"
+        ) from exc
+
+    if not raw_text.strip():
+        return default
+
+    try:
+        parsed = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise RetryBudgetConfigError(
+            f"{config_path} is not valid YAML; "
+            f"parser error: {exc} — fix the YAML syntax in "
+            f"{config_path} and re-run"
+        ) from exc
+
+    if parsed is None:
+        return default
+
+    if not isinstance(parsed, Mapping):
+        raise RetryBudgetConfigError(
+            f"{config_path} top-level must be a YAML mapping; "
+            f"got {type(parsed).__name__}: {parsed!r} — write the file as "
+            f"'per_sprint_retry_budget: 12' (key/value pairs at the top level), "
+            f"not as a list or scalar"
+        )
+
+    return resolve_per_sprint_retry_budget_override(parsed, default=default)
+
+
+def resolve_sprint_escalation_rate_threshold(
+    config: Mapping[str, Any] | None = None,
+    *,
+    default: float = DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
+) -> float:
+    """Resolve the sprint escalation-rate threshold from a config mapping
+    (Story 16.2 / FR-P2-2).
+
+    The threshold is a fraction in the half-open range ``(0.0, 1.0]``: when the
+    cumulative ``escalated_stories / stories_completed`` exceeds it, the sprint
+    loop emits the informational ``sprint-escalation-rate-exceeded`` marker. A
+    YAML int (e.g. ``1``) is accepted and coerced to ``float`` (``1.0``); a
+    ``bool`` is rejected (``int`` subclass). Zero / negative / ``> 1.0`` are
+    rejected: a threshold of 0 would fire on the first escalation (use a small
+    positive fraction instead) and a threshold above 1 can never be exceeded.
+
+    Per-input contract (mirrors :func:`resolve_retry_budget`'s shape):
+
+    * ``config is None`` → ``default``.
+    * field absent / value ``None`` → ``default``.
+    * ``int`` or ``float`` (not :class:`bool`) in ``(0.0, 1.0]`` → ``float(value)``.
+    * any other value (``bool``, string, ``<= 0.0``, ``> 1.0``) →
+      :exc:`RetryBudgetConfigError`.
+    """
+    if config is None:
+        return default
+
+    if _SPRINT_ESCALATION_RATE_THRESHOLD_FIELD not in config:
+        return default
+
+    value = config[_SPRINT_ESCALATION_RATE_THRESHOLD_FIELD]
+
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        raise RetryBudgetConfigError(
+            f"{_SPRINT_ESCALATION_RATE_THRESHOLD_FIELD} must be a number in "
+            f"(0.0, 1.0]; got {value!r} ({type(value).__name__}) — booleans are "
+            f"rejected to avoid YAML truthy-coercion ambiguity — write the value "
+            f"as an unquoted fraction in config.yaml (e.g., "
+            f"'sprint_escalation_rate_threshold: 0.25')"
+        )
+
+    if type(value) not in (int, float):
+        raise RetryBudgetConfigError(
+            f"{_SPRINT_ESCALATION_RATE_THRESHOLD_FIELD} must be a YAML number; "
+            f"got {value!r} ({type(value).__name__}) — write the value as an "
+            f"unquoted fraction in config.yaml (e.g., "
+            f"'sprint_escalation_rate_threshold: 0.25', not '\"0.25\"')"
+        )
+
+    coerced = float(value)
+    if not (0.0 < coerced <= 1.0):
+        raise RetryBudgetConfigError(
+            f"{_SPRINT_ESCALATION_RATE_THRESHOLD_FIELD} must be in the range "
+            f"(0.0, 1.0]; got {value!r} — a threshold of 0 would fire on the "
+            f"first escalation (use a small positive fraction) and a threshold "
+            f"above 1 can never be exceeded; set it to e.g. 0.25"
+        )
+
+    return coerced
+
+
+def read_sprint_escalation_rate_threshold_from_config_file(
+    config_path: pathlib.Path,
+    *,
+    default: float = DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
+) -> float:
+    """Read ``sprint_escalation_rate_threshold`` from a YAML config file
+    (Story 16.2).
+
+    The sibling of :func:`read_retry_budget_from_config_file`; the missing-file /
+    empty-file / malformed-YAML / non-mapping contract is identical (delegates
+    value-shape validation to :func:`resolve_sprint_escalation_rate_threshold`).
+    Uses :func:`yaml.safe_load` per the loud-fail security doctrine.
+    """
+    if not config_path.exists():
+        return default
+
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RetryBudgetConfigError(
+            f"failed to read {config_path}: {exc}"
+        ) from exc
+
+    if not raw_text.strip():
+        return default
+
+    try:
+        parsed = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise RetryBudgetConfigError(
+            f"{config_path} is not valid YAML; "
+            f"parser error: {exc} — fix the YAML syntax in "
+            f"{config_path} and re-run"
+        ) from exc
+
+    if parsed is None:
+        return default
+
+    if not isinstance(parsed, Mapping):
+        raise RetryBudgetConfigError(
+            f"{config_path} top-level must be a YAML mapping; "
+            f"got {type(parsed).__name__}: {parsed!r} — write the file as "
+            f"'sprint_escalation_rate_threshold: 0.25' (key/value pairs at the "
+            f"top level), not as a list or scalar"
+        )
+
+    return resolve_sprint_escalation_rate_threshold(parsed, default=default)
+
+
 def evaluate_retry_decision(
     run_state: RunState,
     resolved_budget: int,
@@ -515,12 +772,18 @@ def evaluate_retry_decision(
 
 __all__ = [
     "DEFAULT_PER_EPIC_RETRY_MULTIPLIER",
+    "DEFAULT_PER_SPRINT_RETRY_MULTIPLIER",
     "DEFAULT_RETRY_BUDGET",
+    "DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD",
     "RetryBudgetConfigError",
     "RetryDecision",
     "evaluate_retry_decision",
     "read_per_epic_retry_budget_multiplier_from_config_file",
+    "read_per_sprint_retry_budget_from_config_file",
     "read_retry_budget_from_config_file",
+    "read_sprint_escalation_rate_threshold_from_config_file",
     "resolve_per_epic_retry_budget_multiplier",
+    "resolve_per_sprint_retry_budget_override",
     "resolve_retry_budget",
+    "resolve_sprint_escalation_rate_threshold",
 ]

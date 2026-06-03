@@ -62,9 +62,13 @@ from loud_fail_harness.epic_lifecycle import StoryLoopOutcome
 from loud_fail_harness.epic_run_state import SprintRunState
 from loud_fail_harness.sprint_lifecycle import (
     DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
+    DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
+    SPRINT_ESCALATION_RATE_EXCEEDED_MARKER,
     EpicLoopOutcome,
     RunSprintLoopResult,
     SprintUnitEnumerationError,
+    apply_sprint_budget,
+    compute_per_sprint_effective_budget,
     derive_sprint_state,
     enumerate_sprint_units,
     fold_epic_terminal,
@@ -793,7 +797,10 @@ def test_run_sprint_loop_all_unassigned_sprint(tmp_path: pathlib.Path) -> None:
     assert dispatched == ["99-1-loose", "99-2-loose"]
     assert result.final_state.current_state == "sprint-complete"
     assert result.final_state.epic_ids == ()
-    assert result.final_state.per_sprint_retry_budget.effective_budget == 0
+    # Story 16.2: effective_budget = multiplier × epic_count (0) +
+    # per_story_budget × unassigned_count = 2 × 0 + 2 × 2 = 4 (was 0 under the
+    # 16.1 structure-only seed, which ignored the unassigned-story term).
+    assert result.final_state.per_sprint_retry_budget.effective_budget == 4
     assert result.paused_on_unit_id is None
     on_disk = yaml.safe_load(srs.read_text(encoding="utf-8"))
     assert on_disk["current_state"] == "sprint-complete"
@@ -942,3 +949,518 @@ def test_final_state_is_sprint_run_state(tmp_path: pathlib.Path) -> None:
     )
     assert isinstance(result.final_state, SprintRunState)
     assert isinstance(result, RunSprintLoopResult)
+
+
+# ===========================================================================
+# Story 16.2 — per-sprint budget + escalation-rate marker
+# ===========================================================================
+
+
+def _epic_outcome_full(
+    terminal_state: str,
+    *,
+    retries_consumed: int = 0,
+    stories_completed: int = 0,
+    escalated_count: int = 0,
+) -> EpicLoopOutcome:
+    return EpicLoopOutcome(
+        terminal_state=terminal_state,  # type: ignore[arg-type]
+        retries_consumed=retries_consumed,
+        stories_completed=stories_completed,
+        escalated_count=escalated_count,
+    )
+
+
+def _story_outcome_full(
+    terminal_status: str, *, retries_consumed: int = 0
+) -> StoryLoopOutcome:
+    return StoryLoopOutcome(
+        terminal_status=terminal_status,  # type: ignore[arg-type]
+        retries_consumed=retries_consumed,
+    )
+
+
+# --- compute_per_sprint_effective_budget (AC-2) ----------------------------
+
+
+def test_compute_budget_zero_unassigned_reduces_to_multiplier_times_epics() -> None:
+    assert compute_per_sprint_effective_budget(2, 3, 2, 0) == 6
+
+
+def test_compute_budget_adds_unassigned_per_story_term() -> None:
+    # 2*3 + 2*4 = 6 + 8 = 14
+    assert compute_per_sprint_effective_budget(2, 3, 2, 4) == 14
+
+
+def test_compute_budget_total_for_empty_sprint() -> None:
+    assert compute_per_sprint_effective_budget(2, 0, 2, 0) == 0
+
+
+# --- init_sprint_run_state budget wiring (AC-2) ----------------------------
+
+
+def test_init_default_path_bit_identical_to_story_16_1_seed() -> None:
+    # Zero unassigned + default multiplier + no override → multiplier × epic_count.
+    state = init_sprint_run_state("s1", "r1", ("epic-1", "epic-2"), ())
+    budget = state.per_sprint_retry_budget
+    assert budget.multiplier == DEFAULT_PER_SPRINT_RETRY_MULTIPLIER
+    assert budget.epic_count == 2
+    assert budget.effective_budget == 2 * 2
+    assert budget.consumed == 0
+
+
+def test_init_folds_unassigned_term_into_effective_budget() -> None:
+    state = init_sprint_run_state(
+        "s1", "r1", ("epic-1",), ("9-1-a", "9-2-b"), multiplier=2, per_story_budget=3
+    )
+    # 2*1 + 3*2 = 8
+    assert state.per_sprint_retry_budget.effective_budget == 8
+
+
+def test_init_override_replaces_computed_budget() -> None:
+    state = init_sprint_run_state(
+        "s1",
+        "r1",
+        ("epic-1", "epic-2", "epic-3"),
+        (),
+        multiplier=2,
+        effective_budget_override=1,
+    )
+    # multiplier/epic_count still record the formula inputs for observability.
+    assert state.per_sprint_retry_budget.multiplier == 2
+    assert state.per_sprint_retry_budget.epic_count == 3
+    assert state.per_sprint_retry_budget.effective_budget == 1
+
+
+# --- apply_sprint_budget truth table (AC-4 / AC-7) -------------------------
+
+
+def test_apply_sprint_budget_under_budget_unchanged() -> None:
+    assert (
+        apply_sprint_budget("sprint-in-progress", 1, 4, has_undispatched=True)
+        == "sprint-in-progress"
+    )
+
+
+def test_apply_sprint_budget_exhausted_with_undispatched_pauses() -> None:
+    assert (
+        apply_sprint_budget("sprint-in-progress", 4, 4, has_undispatched=True)
+        == "sprint-paused-on-budget"
+    )
+
+
+def test_apply_sprint_budget_exhausted_on_final_unit_not_a_pause() -> None:
+    assert (
+        apply_sprint_budget("sprint-complete", 4, 4, has_undispatched=False)
+        == "sprint-complete"
+    )
+
+
+def test_apply_sprint_budget_escalation_precedence_preserved() -> None:
+    # Escalation already won current_state; budget must NOT override it.
+    assert (
+        apply_sprint_budget(
+            "sprint-paused-on-escalation", 9, 4, has_undispatched=True
+        )
+        == "sprint-paused-on-escalation"
+    )
+
+
+def test_apply_sprint_budget_zero_budget_degenerate_total() -> None:
+    assert (
+        apply_sprint_budget("sprint-in-progress", 0, 0, has_undispatched=True)
+        == "sprint-in-progress"
+    )
+
+
+# --- run_sprint_loop budget enforcement (AC-3 / AC-4) ----------------------
+
+
+def test_run_sprint_loop_accumulates_consumed(tmp_path: pathlib.Path) -> None:
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        return _epic_outcome_full(
+            "epic-complete", retries_consumed=1, stories_completed=1
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        # 2 epics × multiplier 2 = effective 4; consumed 1+1 = 2 < 4 → complete.
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "sprint-complete"
+    assert result.final_state.per_sprint_retry_budget.consumed == 2
+    on_disk = yaml.safe_load(srs.read_text(encoding="utf-8"))
+    assert on_disk["per_sprint_retry_budget"]["consumed"] == 2
+
+
+def test_run_sprint_loop_pauses_on_cumulative_budget(
+    tmp_path: pathlib.Path,
+) -> None:
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+            "epic-17": "in-progress",
+            "17-1-c": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+    dispatched: list[str] = []
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        dispatched.append(epic_id)
+        # 3 epics × multiplier 2 = effective 6. Each epic consumes 3:
+        # after epic-15 consumed=3 (<6, continue); after epic-16 consumed=6
+        # (>=6) with epic-17 undispatched → pause on budget.
+        return _epic_outcome_full(
+            "epic-complete", retries_consumed=3, stories_completed=1
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "sprint-paused-on-budget"
+    assert result.paused_on_unit_id == "epic-16"
+    # epic-17 was NOT dispatched (downstream prefix-stopped).
+    assert dispatched == ["epic-15", "epic-16"]
+    assert result.dispatched_unit_ids == ("epic-15", "epic-16")
+    assert result.final_state.per_sprint_retry_budget.consumed == 6
+
+
+def test_run_sprint_loop_exact_on_final_unit_completes(
+    tmp_path: pathlib.Path,
+) -> None:
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        # effective 4; each epic consumes 2 → exactly 4 on the FINAL epic with
+        # no undispatched units remaining → sprint-complete, NOT a pause.
+        return _epic_outcome_full(
+            "epic-complete", retries_consumed=2, stories_completed=1
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "sprint-complete"
+    assert result.final_state.per_sprint_retry_budget.consumed == 4
+
+
+def test_run_sprint_loop_override_tightens_budget(tmp_path: pathlib.Path) -> None:
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+    dispatched: list[str] = []
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        dispatched.append(epic_id)
+        return _epic_outcome_full(
+            "epic-complete", retries_consumed=1, stories_completed=1
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        effective_budget_override=1,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    # override 1: after epic-15 consumed=1>=1 with epic-16 undispatched → pause.
+    assert result.final_state.current_state == "sprint-paused-on-budget"
+    assert dispatched == ["epic-15"]
+
+
+# --- run_sprint_loop escalation-rate marker (AC-5 / AC-7) ------------------
+
+
+def test_run_sprint_loop_emits_escalation_rate_marker(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Two unassigned stories; the first escalates → 1/1 = 1.0 > 0.25 threshold
+    # → marker emits. The story-escalation also pauses the sprint, so only the
+    # first unit dispatches; the marker is present on the paused state.
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "9-1-a": "ready-for-dev",
+            "9-2-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def story_runner(
+        *, story_id: str, index: int, total: int
+    ) -> StoryLoopOutcome:
+        return _story_outcome_full("escalated")
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=_unused_epic_runner,
+        story_loop_runner=story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert SPRINT_ESCALATION_RATE_EXCEEDED_MARKER in result.final_state.active_markers
+    on_disk = yaml.safe_load(srs.read_text(encoding="utf-8"))
+    assert SPRINT_ESCALATION_RATE_EXCEEDED_MARKER in on_disk["active_markers"]
+
+
+def test_run_sprint_loop_rate_marker_does_not_pause_and_coexists_with_complete(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Epic reports 4 completed stories, 1 escalated INTERNALLY but returns
+    # epic-complete (escalated_count surfaced for the rate; terminal is clean).
+    # 1/4 = 0.25 is NOT > 0.25; bump to 2/4 = 0.5 > 0.25 with escalated_count=2.
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"epic-16": "in-progress", "16-1-a": "ready-for-dev"},
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        return _epic_outcome_full(
+            "epic-complete",
+            retries_consumed=0,
+            stories_completed=4,
+            escalated_count=2,
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    # Rate 2/4 = 0.5 > 0.25 → marker emits; epic terminal clean → sprint-complete.
+    assert result.final_state.current_state == "sprint-complete"
+    assert SPRINT_ESCALATION_RATE_EXCEEDED_MARKER in result.final_state.active_markers
+
+
+def test_run_sprint_loop_rate_below_threshold_no_marker(
+    tmp_path: pathlib.Path,
+) -> None:
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"epic-16": "in-progress", "16-1-a": "ready-for-dev"},
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        # 1/5 = 0.2 < 0.25 → no marker.
+        return _epic_outcome_full(
+            "epic-complete", stories_completed=5, escalated_count=1
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "sprint-complete"
+    assert (
+        SPRINT_ESCALATION_RATE_EXCEEDED_MARKER
+        not in result.final_state.active_markers
+    )
+
+
+def test_run_sprint_loop_rate_marker_idempotent_single_append(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Two epics both with high escalation; the marker must be appended once.
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        return _epic_outcome_full(
+            "epic-complete", stories_completed=2, escalated_count=1
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    markers = result.final_state.active_markers
+    assert markers.count(SPRINT_ESCALATION_RATE_EXCEEDED_MARKER) == 1
+
+
+def test_run_sprint_loop_rate_marker_durable_survives_transient_filter(
+    tmp_path: pathlib.Path,
+) -> None:
+    # Even with a non-empty transient-class set, the durable rate marker must
+    # NOT be stripped (it is durable by taxonomy default).
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"9-1-a": "ready-for-dev"},
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def story_runner(
+        *, story_id: str, index: int, total: int
+    ) -> StoryLoopOutcome:
+        return _story_outcome_full("escalated")
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=_unused_epic_runner,
+        story_loop_runner=story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=frozenset({"worktree-stale-lock"}),
+    )
+    assert (
+        SPRINT_ESCALATION_RATE_EXCEEDED_MARKER in result.final_state.active_markers
+    )
+
+
+def test_run_sprint_loop_default_threshold_is_resolved_default() -> None:
+    assert DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD == 0.25
+
+
+def test_apply_sprint_budget_exhausted_without_undispatched_not_a_pause() -> None:
+    # All units dispatched (has_undispatched=False): no future dispatch to guard,
+    # so budget pause does NOT fire even when the budget is exhausted.
+    assert (
+        apply_sprint_budget("sprint-in-progress", 4, 4, has_undispatched=False)
+        == "sprint-in-progress"
+    )
+
+
+def test_run_sprint_loop_budget_pause_and_rate_marker_coexist(
+    tmp_path: pathlib.Path,
+) -> None:
+    # 3 epics, effective_budget = 3 × 2 = 6. Each epic: 3 retries consumed,
+    # 1 story completed, 1 escalated (rate 1/1 = 1.0 > 0.25 threshold).
+    # After epic-15: consumed=3 < 6, rate=1.0 → marker emits, sprint continues.
+    # After epic-16: consumed=6 >= 6, epic-17 undispatched → sprint-paused-on-budget.
+    # Marker already present (idempotent). Both conditions coexist.
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+            "epic-17": "in-progress",
+            "17-1-c": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "srs.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        return _epic_outcome_full(
+            "epic-complete",
+            retries_consumed=3,
+            stories_completed=1,
+            escalated_count=1,
+        )
+
+    result = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "sprint-paused-on-budget"
+    assert SPRINT_ESCALATION_RATE_EXCEEDED_MARKER in result.final_state.active_markers

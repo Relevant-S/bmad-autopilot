@@ -29,14 +29,20 @@ import yaml
 
 from loud_fail_harness.retry_budget import (
     DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
+    DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
     DEFAULT_RETRY_BUDGET,
+    DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
     RetryBudgetConfigError,
     RetryDecision,
     evaluate_retry_decision,
     read_per_epic_retry_budget_multiplier_from_config_file,
+    read_per_sprint_retry_budget_from_config_file,
     read_retry_budget_from_config_file,
+    read_sprint_escalation_rate_threshold_from_config_file,
     resolve_per_epic_retry_budget_multiplier,
+    resolve_per_sprint_retry_budget_override,
     resolve_retry_budget,
+    resolve_sprint_escalation_rate_threshold,
 )
 from loud_fail_harness.run_state import (
     CostToDateBySpecialist,
@@ -735,3 +741,257 @@ def test_read_per_epic_raises_for_non_utf8_file(
     config.write_bytes(b"\xff\xfe")  # invalid UTF-8
     with pytest.raises(RetryBudgetConfigError, match="failed to read"):
         read_per_epic_retry_budget_multiplier_from_config_file(config)
+
+
+# ===========================================================================
+# Story 16.2 — per-sprint retry-budget override resolver
+# ===========================================================================
+
+
+def test_resolve_per_sprint_override_none_config_returns_none() -> None:
+    assert resolve_per_sprint_retry_budget_override(None) is None
+
+
+def test_resolve_per_sprint_override_field_absent_returns_none() -> None:
+    assert resolve_per_sprint_retry_budget_override({}) is None
+
+
+def test_resolve_per_sprint_override_value_none_returns_none() -> None:
+    assert resolve_per_sprint_retry_budget_override(
+        {"per_sprint_retry_budget": None}
+    ) is None
+
+
+def test_resolve_per_sprint_override_valid_int() -> None:
+    assert (
+        resolve_per_sprint_retry_budget_override({"per_sprint_retry_budget": 12})
+        == 12
+    )
+
+
+def test_resolve_per_sprint_override_explicit_zero_distinct_from_absent() -> None:
+    # 0 is a meaningful override (no per-sprint retries), distinct from absent.
+    assert (
+        resolve_per_sprint_retry_budget_override({"per_sprint_retry_budget": 0})
+        == 0
+    )
+
+
+def test_resolve_per_sprint_override_rejects_bool() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
+        resolve_per_sprint_retry_budget_override({"per_sprint_retry_budget": True})
+
+
+def test_resolve_per_sprint_override_rejects_string_int() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML int"):
+        resolve_per_sprint_retry_budget_override({"per_sprint_retry_budget": "12"})
+
+
+def test_resolve_per_sprint_override_rejects_float() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML int"):
+        resolve_per_sprint_retry_budget_override({"per_sprint_retry_budget": 12.0})
+
+
+def test_resolve_per_sprint_override_rejects_negative() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="non-negative integer"):
+        resolve_per_sprint_retry_budget_override({"per_sprint_retry_budget": -1})
+
+
+def test_read_per_sprint_missing_file_returns_none(tmp_path: pathlib.Path) -> None:
+    assert (
+        read_per_sprint_retry_budget_from_config_file(tmp_path / "absent.yaml")
+        is None
+    )
+
+
+def test_read_per_sprint_empty_file_returns_none(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("", encoding="utf-8")
+    assert read_per_sprint_retry_budget_from_config_file(config) is None
+
+
+def test_read_per_sprint_comment_only_returns_none(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("# only a comment\n", encoding="utf-8")
+    assert read_per_sprint_retry_budget_from_config_file(config) is None
+
+
+def test_read_per_sprint_valid(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("per_sprint_retry_budget: 9\n", encoding="utf-8")
+    assert read_per_sprint_retry_budget_from_config_file(config) == 9
+
+
+def test_read_per_sprint_malformed_yaml_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("per_sprint_retry_budget: [\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="not valid YAML"):
+        read_per_sprint_retry_budget_from_config_file(config)
+
+
+def test_read_per_sprint_non_mapping_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("- just\n- a\n- list\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML mapping"):
+        read_per_sprint_retry_budget_from_config_file(config)
+
+
+def test_read_per_sprint_non_utf8_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_bytes(b"\xff\xfe")
+    with pytest.raises(RetryBudgetConfigError, match="failed to read"):
+        read_per_sprint_retry_budget_from_config_file(config)
+
+
+# ===========================================================================
+# Story 16.2 — sprint escalation-rate threshold resolver
+# ===========================================================================
+
+
+def test_resolve_threshold_none_config_returns_default() -> None:
+    assert (
+        resolve_sprint_escalation_rate_threshold(None)
+        == DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD
+    )
+
+
+def test_resolve_threshold_field_absent_returns_default() -> None:
+    assert (
+        resolve_sprint_escalation_rate_threshold({})
+        == DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD
+    )
+
+
+def test_resolve_threshold_value_none_returns_default() -> None:
+    assert (
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": None}
+        )
+        == DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD
+    )
+
+
+def test_resolve_threshold_valid_float() -> None:
+    assert (
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": 0.4}
+        )
+        == 0.4
+    )
+
+
+def test_resolve_threshold_int_coerced_to_float() -> None:
+    result = resolve_sprint_escalation_rate_threshold(
+        {"sprint_escalation_rate_threshold": 1}
+    )
+    assert result == 1.0
+    assert isinstance(result, float)
+
+
+def test_resolve_threshold_upper_bound_one_accepted() -> None:
+    assert (
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": 1.0}
+        )
+        == 1.0
+    )
+
+
+def test_resolve_threshold_rejects_bool() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": True}
+        )
+
+
+def test_resolve_threshold_rejects_string() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML number"):
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": "0.25"}
+        )
+
+
+def test_resolve_threshold_rejects_zero() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="range"):
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": 0.0}
+        )
+
+
+def test_resolve_threshold_rejects_above_one() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="range"):
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": 1.5}
+        )
+
+
+def test_resolve_threshold_rejects_negative() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="range"):
+        resolve_sprint_escalation_rate_threshold(
+            {"sprint_escalation_rate_threshold": -0.1}
+        )
+
+
+def test_read_threshold_missing_file_returns_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    assert (
+        read_sprint_escalation_rate_threshold_from_config_file(
+            tmp_path / "absent.yaml"
+        )
+        == DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD
+    )
+
+
+def test_read_threshold_empty_file_returns_default(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("", encoding="utf-8")
+    assert (
+        read_sprint_escalation_rate_threshold_from_config_file(config)
+        == DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD
+    )
+
+
+def test_read_threshold_valid(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("sprint_escalation_rate_threshold: 0.5\n", encoding="utf-8")
+    assert read_sprint_escalation_rate_threshold_from_config_file(config) == 0.5
+
+
+def test_read_threshold_malformed_yaml_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("sprint_escalation_rate_threshold: [\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="not valid YAML"):
+        read_sprint_escalation_rate_threshold_from_config_file(config)
+
+
+def test_read_threshold_non_mapping_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("- a\n- b\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML mapping"):
+        read_sprint_escalation_rate_threshold_from_config_file(config)
+
+
+def test_read_threshold_non_utf8_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_bytes(b"\xff\xfe")
+    with pytest.raises(RetryBudgetConfigError, match="failed to read"):
+        read_sprint_escalation_rate_threshold_from_config_file(config)
+
+
+def test_default_per_sprint_multiplier_is_two() -> None:
+    assert DEFAULT_PER_SPRINT_RETRY_MULTIPLIER == 2
+
+
+def test_read_per_sprint_resolver_error_propagates(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("per_sprint_retry_budget: true\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
+        read_per_sprint_retry_budget_from_config_file(config)
+
+
+def test_read_threshold_resolver_error_propagates(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("sprint_escalation_rate_threshold: true\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
+        read_sprint_escalation_rate_threshold_from_config_file(config)

@@ -27,9 +27,9 @@ Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
 Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9; Story 15.2 — 31→32 entries, schema_version 1.9→1.10):
-    [x] all 32 expected marker_class identifiers present         → test_taxonomy_has_32_canonical_markers
+    [x] all 33 expected marker_class identifiers present         → test_taxonomy_has_33_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.10" at top level                      → test_taxonomy_declares_schema_version_1_10
+    [x] schema_version: "1.11" at top level                      → test_taxonomy_declares_schema_version_1_11
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -136,6 +136,8 @@ CANONICAL_MARKER_CLASSES = [
     "parallel-story-state-pollution",
     # Story 15.2 — Epic 15 per-epic cumulative retry-budget exhaustion.
     "epic-budget-exhausted",
+    # Story 16.2 — Epic 16 sprint-scope systemic-escalation signal.
+    "sprint-escalation-rate-exceeded",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -374,9 +376,9 @@ def test_determinism_under_shuffle() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_taxonomy_has_32_canonical_markers(taxonomy_data: dict) -> None:
+def test_taxonomy_has_33_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 32
+    assert len(names) == 33
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
         "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
@@ -395,7 +397,7 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_10(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_11(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
@@ -417,7 +419,11 @@ def test_taxonomy_declares_schema_version_1_10(taxonomy_data: dict) -> None:
     # ``epic-budget-exhausted`` for the per-epic cumulative retry-budget
     # exhaustion surface; closed-set 31 → 32; treated as PATCH per
     # epics-phase-2.md line 70 + line 411 + the Story 14.3/14.5 precedent).
-    assert taxonomy_data.get("schema_version") == "1.10"
+    # Story 16.2 bumps 1.10 → 1.11 (additive: new top-level marker class
+    # ``sprint-escalation-rate-exceeded`` for the sprint-scope systemic-
+    # escalation signal; closed-set 32 → 33; treated as PATCH per
+    # epics-phase-2.md line 70 + line 149 + the Story 14.3/14.5/15.2 precedent).
+    assert taxonomy_data.get("schema_version") == "1.11"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -486,7 +492,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 32  # Story 15.2 appended epic-budget-exhausted
+    assert len(ids) == 33  # Story 16.2 appended sprint-escalation-rate-exceeded
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

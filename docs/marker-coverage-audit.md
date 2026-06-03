@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 448
-- Emitted: 41
-- Not-applicable: 406
+- Total intersections: 462
+- Emitted: 42
+- Not-applicable: 419
 - Scheduled-by-story: 1
 - Gaps: 0
 
@@ -413,6 +413,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | specialist-timeout | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
 | specialist-timeout | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | Specialist-dispatch-time degradation marker; this surface has no code path that produces this skip-event. |
+| sprint-escalation-rate-exceeded | bundle-assembler | not-applicable | `n/a` | 2026-06-03 | Sprint-scope escalation-rate signal (Story 16.2); emitted by the sprint state machine into sprint-run-state active_markers, not by bundle assembly. Epic 16 has no sprint-level PR bundle story. |
+| sprint-escalation-rate-exceeded | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-03 | The escalation rate is an orchestrator-state-machine accounting signal (Story 16.2); the cost-telemetry pipeline has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | hook-session-start | not-applicable | `n/a` | 2026-06-03 | The escalation-rate signal is computed inside the sequential sprint loop (Story 16.2), not at SessionStart reattachment; the hook has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | hook-stop | not-applicable | `n/a` | 2026-06-03 | The escalation-rate marker is emitted by the sprint loop into the sprint-run-state active_markers (Story 16.2); the Stop hook has no code path that produces this event (Epic 16 has no sprint-level PR bundle). |
+| sprint-escalation-rate-exceeded | hook-subagent-stop | not-applicable | `n/a` | 2026-06-03 | The escalation-rate signal is a sprint-loop accounting event (Story 16.2); the SubagentStop hook has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-03 | The escalation rate is tracked at the sprint state machine (Story 16.2), not in the per-specialist dispatch wrapper; the wrapper has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-03 | The orchestrator skill prose (run-sprint.md) NAMES the escalation-rate signal but does not itself emit the marker; the canonical emission is the Python composition in sprint_lifecycle.run_sprint_loop (Story 16.2), audited under the orchestrator-state-machine surface. |
+| sprint-escalation-rate-exceeded | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-03 | The per-story run-state helpers persist per-story state; the escalation- rate marker is emitted into the SPRINT-scope run-state by the sprint loop (Story 16.2) via advance_sprint_run_state, audited under the orchestrator-state-machine surface. |
+| sprint-escalation-rate-exceeded | orchestrator-state-machine | emitted | `tools/loud-fail-harness/src/loud_fail_harness/sprint_lifecycle.py:895` | 2026-06-03 |  |
+| sprint-escalation-rate-exceeded | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-03 | The escalation rate is a runtime sprint-loop signal (Story 16.2); the fixture-driven reconciliation gate has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-03 | The escalation rate is emitted by the sprint loop (Story 16.2); the runtime reconciliation gate audits emission coverage but does not itself produce this event. |
+| sprint-escalation-rate-exceeded | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-03 | The escalation rate is an orchestrator-altitude sprint signal (Story 16.2); the Dev specialist wrapper has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | specialist-wrapper-qa | not-applicable | `n/a` | 2026-06-03 | The escalation rate is an orchestrator-altitude sprint signal (Story 16.2); the QA specialist wrapper has no code path that produces this event. |
+| sprint-escalation-rate-exceeded | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-03 | The escalation rate is an orchestrator-altitude sprint signal (Story 16.2); the Review-BMAD specialist wrapper has no code path that produces this event. |
 | story-doc-version-out-of-window | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
 | story-doc-version-out-of-window | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
 | story-doc-version-out-of-window | hook-session-start | not-applicable | `n/a` | 2026-05-05 | FR43 N-2 version tolerance check fires only at orchestrator-state-machine story-doc load; this surface has no story-doc-load path. |
