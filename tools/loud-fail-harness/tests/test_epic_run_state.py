@@ -89,6 +89,7 @@ from loud_fail_harness import run_state as run_state_module
 from loud_fail_harness._shared import find_repo_root
 from loud_fail_harness.epic_run_state import (
     DEFAULT_EPIC_RUN_STATE_PATH,
+    DEFAULT_SPRINT_RUN_STATE_PATH,
     EpicCurrentState,
     EpicRunState,
     EpicRunStateAdvanceResult,
@@ -100,7 +101,10 @@ from loud_fail_harness.epic_run_state import (
     PerStoryStatus,
     SprintCurrentState,
     SprintRunState,
+    SprintRunStateAdvanceResult,
     advance_epic_run_state,
+    advance_sprint_run_state,
+    epic_run_state_path_for,
     filter_transient_markers,
     load_epic_run_state,
     worktree_run_state_path,
@@ -263,6 +267,29 @@ def test_valid_sprint_run_state_fixture_accepted(
     sprint_schema: dict[str, Any],
 ) -> None:
     payload = _load_fixture("sprint-run-state", "valid-sprint-run-state.yaml")
+    assert list(Draft202012Validator(sprint_schema).iter_errors(payload)) == []
+
+
+def test_valid_sprint_paused_on_budget_fixture_accepted(
+    sprint_schema: dict[str, Any],
+) -> None:
+    """Story 16.1 AC-4 lifecycle-state fixture: a sprint paused because a
+    contained epic returned epic-paused-on-budget."""
+    payload = _load_fixture(
+        "sprint-run-state", "valid-sprint-paused-on-budget.yaml"
+    )
+    assert payload["current_state"] == "sprint-paused-on-budget"
+    assert payload["per_epic_status"]["epic-16"] == "epic-paused-on-budget"
+    assert list(Draft202012Validator(sprint_schema).iter_errors(payload)) == []
+
+
+def test_valid_sprint_complete_fixture_accepted(
+    sprint_schema: dict[str, Any],
+) -> None:
+    """Story 16.1 AC-4 lifecycle-state fixture: a sprint whose contained epics
+    are all epic-complete and unassigned stories all terminal."""
+    payload = _load_fixture("sprint-run-state", "valid-sprint-complete.yaml")
+    assert payload["current_state"] == "sprint-complete"
     assert list(Draft202012Validator(sprint_schema).iter_errors(payload)) == []
 
 
@@ -476,6 +503,7 @@ def test_find_repo_root_not_called_at_import() -> None:
 def test_module_all_exports() -> None:
     expected = [
         "DEFAULT_EPIC_RUN_STATE_PATH",
+        "DEFAULT_SPRINT_RUN_STATE_PATH",
         "EpicCurrentState",
         "EpicRunState",
         "EpicRunStateAdvanceResult",
@@ -487,8 +515,11 @@ def test_module_all_exports() -> None:
         "PerStoryStatus",
         "SprintCurrentState",
         "SprintRunState",
+        "SprintRunStateAdvanceResult",
         "advance_epic_run_state",
+        "advance_sprint_run_state",
         "advance_worktree_run_state",
+        "epic_run_state_path_for",
         "filter_transient_markers",
         "load_epic_run_state",
         "worktree_run_state_path",
@@ -651,6 +682,199 @@ def test_epic_run_state_rejects_duplicate_story_ids() -> None:
     kwargs["story_ids"] = ("15-1-foo", "15-1-foo")
     with pytest.raises(PydanticValidationError):
         EpicRunState(**kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Story 16.1 — advance_sprint_run_state + epic_run_state_path_for + hardening
+# (AC-3, AC-7, AC-8)
+# ---------------------------------------------------------------------------
+
+
+def _valid_sprint_kwargs() -> dict[str, Any]:
+    return dict(
+        schema_version="1.0",
+        sprint_id="sprint-phase-2",
+        run_id="run-sprint-phase-2-001",
+        current_state="sprint-in-progress",
+        epic_ids=("epic-15", "epic-16"),
+        per_epic_status={"epic-15": "epic-in-progress", "epic-16": "epic-complete"},
+        unassigned_story_ids=("14-6-ref",),
+        per_sprint_retry_budget=PerSprintRetryBudget(
+            multiplier=2, epic_count=2, effective_budget=4, consumed=0
+        ),
+        active_markers=(),
+    )
+
+
+def test_default_sprint_run_state_path_is_relative() -> None:
+    assert not DEFAULT_SPRINT_RUN_STATE_PATH.is_absolute()
+    assert DEFAULT_SPRINT_RUN_STATE_PATH == pathlib.Path(
+        "_bmad/automation/sprint-run-state.yaml"
+    )
+
+
+def test_advance_sprint_run_state_writes_data_outcome(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "sprint-run-state.yaml"
+    result = advance_sprint_run_state(
+        path, _sprint_run_state(), transient_marker_classes=frozenset()
+    )
+    assert isinstance(result, SprintRunStateAdvanceResult)
+    assert result.wrote_path == path
+    on_disk = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert on_disk["sprint_id"] == "sprint-phase-2"
+    assert on_disk["current_state"] == "sprint-in-progress"
+    assert on_disk["epic_ids"] == ["epic-15", "epic-16"]
+    assert on_disk["unassigned_story_ids"] == ["14-6-ref"]
+
+
+def test_advance_sprint_run_state_no_temp_residue(
+    tmp_path: pathlib.Path,
+) -> None:
+    advance_sprint_run_state(
+        tmp_path / "sprint-run-state.yaml",
+        _sprint_run_state(),
+        transient_marker_classes=frozenset(),
+    )
+    assert list(tmp_path.glob("*.tmp.*")) == []
+
+
+def test_advance_sprint_run_state_prior_file_unchanged_on_failure(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Pattern 4 atomic-write trio (failure arm): a simulated ``os.replace``
+    failure leaves the prior file intact and no temp residue (NFR-R1 — never a
+    partial-state file)."""
+    path = tmp_path / "sprint-run-state.yaml"
+    path.write_text("PRIOR-CONTENTS", encoding="utf-8")
+
+    def _boom(*_a: object, **_k: object) -> None:
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(run_state_module.os, "replace", _boom)
+    with pytest.raises(OSError, match="simulated rename failure"):
+        advance_sprint_run_state(
+            path, _sprint_run_state(), transient_marker_classes=frozenset()
+        )
+    assert path.read_text(encoding="utf-8") == "PRIOR-CONTENTS"
+    assert list(tmp_path.glob("*.tmp.*")) == []
+
+
+def test_advance_sprint_run_state_strips_transient_from_taxonomy(
+    tmp_path: pathlib.Path,
+) -> None:
+    """With NO injected transient set, the sprint-scope helper sources the
+    transient/durable axis from the on-disk taxonomy — reusing the SAME
+    filter_transient_markers machinery as the epic scope (AC-7); no hardcoded
+    class list."""
+    state = _sprint_run_state().model_copy(
+        update={"active_markers": ("worktree-stale-lock", "retry-budget-exhausted")}
+    )
+    path = tmp_path / "sprint-run-state.yaml"
+    result = advance_sprint_run_state(path, state)
+    assert "worktree-stale-lock" not in result.next_state.active_markers
+    assert "retry-budget-exhausted" in result.next_state.active_markers
+    assert result.filtered_markers == ("worktree-stale-lock",)
+    on_disk = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert "worktree-stale-lock" not in on_disk["active_markers"]
+    assert "retry-budget-exhausted" in on_disk["active_markers"]
+
+
+def test_advance_sprint_run_state_result_shape(tmp_path: pathlib.Path) -> None:
+    state = _sprint_run_state().model_copy(
+        update={"active_markers": ("retry-budget-exhausted",)}
+    )
+    result = advance_sprint_run_state(
+        tmp_path / "s.yaml", state, transient_marker_classes=frozenset()
+    )
+    # Nothing stripped → persisted state IS the input (identity), filtered empty.
+    assert result.next_state.active_markers == ("retry-budget-exhausted",)
+    assert result.filtered_markers == ()
+
+
+def test_epic_run_state_path_for_derivation(tmp_path: pathlib.Path) -> None:
+    assert epic_run_state_path_for("epic-16", repo_root=tmp_path) == (
+        tmp_path / "_bmad" / "automation" / "epic-run-state-epic-16.yaml"
+    )
+
+
+def test_epic_run_state_path_for_distinct_per_epic(tmp_path: pathlib.Path) -> None:
+    """AC-3: sequential epics in one sprint each get a DISTINCT addressed path,
+    so a completed epic's cache is not clobbered."""
+    p15 = epic_run_state_path_for("epic-15", repo_root=tmp_path)
+    p16 = epic_run_state_path_for("epic-16", repo_root=tmp_path)
+    assert p15 != p16
+    # Neither is the single per-story-scope default.
+    assert p15.name != DEFAULT_EPIC_RUN_STATE_PATH.name
+    assert p16.name != DEFAULT_EPIC_RUN_STATE_PATH.name
+
+
+def test_epic_run_state_path_for_repo_root_none_resolves_lazily(
+    tmp_path: pathlib.Path,
+) -> None:
+    with mock.patch(
+        "loud_fail_harness.epic_run_state._default_repo_root",
+        return_value=tmp_path,
+    ):
+        result = epic_run_state_path_for("epic-16")
+    assert result == (
+        tmp_path / "_bmad" / "automation" / "epic-run-state-epic-16.yaml"
+    )
+
+
+def test_epic_run_state_path_for_rejects_whitespace_only() -> None:
+    with pytest.raises(ValueError, match="whitespace-only"):
+        epic_run_state_path_for("   ", repo_root=pathlib.Path("/tmp"))
+
+
+def test_epic_run_state_path_for_rejects_embedded_newline() -> None:
+    with pytest.raises(ValueError, match="embedded newlines"):
+        epic_run_state_path_for("epic-16\n", repo_root=pathlib.Path("/tmp"))
+
+
+def test_epic_run_state_path_for_rejects_path_separator() -> None:
+    with pytest.raises(ValueError, match="path separator"):
+        epic_run_state_path_for("epic-16/../etc", repo_root=pathlib.Path("/tmp"))
+
+
+def test_epic_run_state_path_for_rejects_traversal() -> None:
+    with pytest.raises(ValueError, match="traversal"):
+        epic_run_state_path_for("..", repo_root=pathlib.Path("/tmp"))
+
+
+def test_epic_run_state_path_for_rejects_null_byte() -> None:
+    with pytest.raises(ValueError, match="null byte"):
+        epic_run_state_path_for("epic-16\x00etc", repo_root=pathlib.Path("/tmp"))
+
+
+def test_sprint_run_state_rejects_whitespace_only_sprint_id() -> None:
+    kwargs = _valid_sprint_kwargs()
+    kwargs["sprint_id"] = "   "
+    with pytest.raises(PydanticValidationError):
+        SprintRunState(**kwargs)
+
+
+def test_sprint_run_state_rejects_embedded_newline_run_id() -> None:
+    kwargs = _valid_sprint_kwargs()
+    kwargs["run_id"] = "run\n2"
+    with pytest.raises(PydanticValidationError):
+        SprintRunState(**kwargs)
+
+
+def test_sprint_run_state_rejects_duplicate_epic_ids() -> None:
+    kwargs = _valid_sprint_kwargs()
+    kwargs["epic_ids"] = ("epic-15", "epic-15")
+    kwargs["per_epic_status"] = {"epic-15": "epic-in-progress"}
+    with pytest.raises(PydanticValidationError):
+        SprintRunState(**kwargs)
+
+
+def test_sprint_run_state_rejects_duplicate_unassigned_story_ids() -> None:
+    kwargs = _valid_sprint_kwargs()
+    kwargs["unassigned_story_ids"] = ("14-6-ref", "14-6-ref")
+    with pytest.raises(PydanticValidationError):
+        SprintRunState(**kwargs)
 
 
 # ---------------------------------------------------------------------------

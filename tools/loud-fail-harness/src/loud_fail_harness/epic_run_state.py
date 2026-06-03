@@ -179,6 +179,17 @@ DEFAULT_EPIC_RUN_STATE_PATH: pathlib.Path = pathlib.Path(
     "_bmad/automation/epic-run-state.yaml"
 )
 
+#: User-installation runtime path for sprint-run-state per ADR-009 Consequence
+#: 6's ``_bmad/automation/`` umbrella — co-located with the epic-run-state and
+#: per-story run-state caches (Story 16.1 AC-3). Relative ``pathlib.Path``;
+#: callers anchor it against their own root. The sprint-run-state document is an
+#: AGGREGATE CACHE (ADR-005 / NFR-R8) over the per-epic epic-run-state documents
+#: (+ the per-story run-state documents for unassigned stories), NOT a fifth
+#: canonical store; this path names where that cache lives on disk.
+DEFAULT_SPRINT_RUN_STATE_PATH: pathlib.Path = pathlib.Path(
+    "_bmad/automation/sprint-run-state.yaml"
+)
+
 
 def _reject_unclean_text(value: str, field_label: str) -> str:
     """Reject whitespace-only and embedded-newline string inputs (Epic 14
@@ -382,6 +393,34 @@ class SprintRunState(BaseModel):
     per_sprint_retry_budget: PerSprintRetryBudget
     active_markers: tuple[str, ...]
 
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> SprintRunState:
+        """Input-hardening (Epic 14 retro Action #2; mirrors
+        :meth:`EpicRunState._harden_identifier_inputs` one scope up — Story 16.1
+        Dev Notes "Input-hardening"). The ``min_length=1`` field constraints
+        reject the empty string but not whitespace-only or embedded-newline
+        values, and neither ``epic_ids`` nor ``unassigned_story_ids`` carries
+        duplicate-rejection; this validator closes both at the model boundary so
+        every ``advance_sprint_run_state`` input is structurally clean.
+        """
+        _reject_unclean_text(self.sprint_id, "SprintRunState.sprint_id")
+        _reject_unclean_text(self.run_id, "SprintRunState.run_id")
+        for epic_id in self.epic_ids:
+            _reject_unclean_text(epic_id, "SprintRunState.epic_ids[]")
+        for story_id in self.unassigned_story_ids:
+            _reject_unclean_text(story_id, "SprintRunState.unassigned_story_ids[]")
+        if len(self.epic_ids) != len(set(self.epic_ids)):
+            raise ValueError(
+                "SprintRunState.epic_ids must not contain duplicates; got "
+                f"{self.epic_ids!r}"
+            )
+        if len(self.unassigned_story_ids) != len(set(self.unassigned_story_ids)):
+            raise ValueError(
+                "SprintRunState.unassigned_story_ids must not contain "
+                f"duplicates; got {self.unassigned_story_ids!r}"
+            )
+        return self
+
 
 def _default_repo_root() -> pathlib.Path:
     """Resolve the canonical repo root via :func:`loud_fail_harness._shared.
@@ -429,6 +468,56 @@ def worktree_run_state_path(
     return worktrees_root / story_id / "run-state.yaml"
 
 
+def epic_run_state_path_for(
+    epic_id: str,
+    *,
+    repo_root: pathlib.Path | None = None,
+) -> pathlib.Path:
+    """Derive the per-epic-addressed epic-run-state path for ``epic_id``
+    (Story 16.1 AC-3).
+
+    Returns ``<repo_root>/_bmad/automation/epic-run-state-<epic-id>.yaml`` —
+    a per-epic-addressed sibling of :data:`DEFAULT_EPIC_RUN_STATE_PATH` under
+    ADR-009's ``_bmad/automation/`` umbrella. The sprint loop dispatches N epics
+    sequentially against one repo; the single ``DEFAULT_EPIC_RUN_STATE_PATH``
+    would be overwritten on each, losing every completed epic's cache that
+    ``status --epic`` / ``status --sprint`` (Story 16.4) reads — so each epic
+    unit gets its own addressed path. The addressing precedent is
+    :func:`worktree_run_state_path` (Story 14.4 / ADR-009 Consequence 6 —
+    FR45 "per-worktree run-state addressing"). The standalone ``run --epic``
+    invocation keeps using :data:`DEFAULT_EPIC_RUN_STATE_PATH`; only the sprint
+    loop reaches for the addressed path. The epic-run-state stays a
+    reconstructable cache (NFR-R8) — this is a convenience/observability choice,
+    not a new canonical store.
+
+    Resolution: ``repo_root`` supplied → use it verbatim; else
+    :func:`_default_repo_root` at call time (no ``find_repo_root()`` at import
+    time per Epic 1 retro Action #1).
+
+    Input-hardening (Epic 14 retro Action #2): ``epic_id`` is rejected if it is
+    empty / whitespace-only / carries an embedded newline (:func:`_reject_unclean_text`)
+    or contains a path separator (``/``, ``\\``) or a ``..`` traversal segment —
+    so a malformed identifier can never compose a path outside the
+    ``_bmad/automation/`` umbrella. Pure function; no filesystem access, no
+    marker emission (sensor-not-advisor).
+    """
+    _reject_unclean_text(epic_id, "epic_run_state_path_for.epic_id")
+    if "/" in epic_id or "\\" in epic_id or ".." in epic_id:
+        raise ValueError(
+            f"epic_run_state_path_for.epic_id must not contain a path "
+            f"separator or '..' traversal; got {epic_id!r}"
+        )
+    if "\x00" in epic_id:
+        raise ValueError(
+            f"epic_run_state_path_for.epic_id must not contain a null byte; "
+            f"got {epic_id!r}"
+        )
+    root = repo_root if repo_root is not None else _default_repo_root()
+    return (
+        root / "_bmad" / "automation" / f"epic-run-state-{epic_id}.yaml"
+    )
+
+
 def _serialize_epic_run_state(state: EpicRunState) -> str:
     """Render an :class:`EpicRunState` as the canonical on-disk YAML body.
 
@@ -437,6 +526,20 @@ def _serialize_epic_run_state(state: EpicRunState) -> str:
     canonicalizes Python types into JSON-Schema-compatible primitives and
     Pydantic's field-declaration order is preserved (load-bearing for
     byte-stable output + ``schemas/epic-run-state.yaml`` structural agreement).
+    """
+    json_str = state.model_dump_json(by_alias=False, exclude_none=False)
+    payload: dict[str, Any] = json.loads(json_str)
+    return yaml.safe_dump(payload, sort_keys=False, default_flow_style=False)
+
+
+def _serialize_sprint_run_state(state: SprintRunState) -> str:
+    """Render a :class:`SprintRunState` as the canonical on-disk YAML body.
+
+    Mirrors :func:`_serialize_epic_run_state` 1:1 (``model_dump_json`` →
+    ``json.loads`` → ``yaml.safe_dump(sort_keys=False)``) so the JSON roundtrip
+    canonicalizes Python types into JSON-Schema-compatible primitives and
+    Pydantic's field-declaration order is preserved (byte-stable output +
+    ``schemas/sprint-run-state.yaml`` structural agreement).
     """
     json_str = state.model_dump_json(by_alias=False, exclude_none=False)
     payload: dict[str, Any] = json.loads(json_str)
@@ -632,6 +735,86 @@ def advance_worktree_run_state(
     )
 
 
+class SprintRunStateAdvanceResult(BaseModel):
+    """Return shape of a successful :func:`advance_sprint_run_state` call.
+
+    The sprint-scope sibling of :class:`EpicRunStateAdvanceResult`. Carries the
+    PERSISTED state (post-filter, so callers thread the on-disk truth forward
+    without re-reading), the on-disk path written, and the transient markers
+    that were stripped before the write (loud-visibility — the caller can
+    surface "these transient markers were not persisted" rather than the strip
+    being silent).
+
+    Field declaration order is load-bearing for byte-stable ``model_dump_json()``
+    output.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    next_state: SprintRunState
+    wrote_path: pathlib.Path
+    filtered_markers: tuple[str, ...]
+
+
+def advance_sprint_run_state(
+    sprint_run_state_path: pathlib.Path,
+    next_state: SprintRunState,
+    *,
+    transient_marker_classes: frozenset[str] | None = None,
+    taxonomy_path: pathlib.Path | None = None,
+) -> SprintRunStateAdvanceResult:
+    """Advance sprint-run-state to ``next_state``, atomically, after stripping
+    every transient-lifetime marker from ``active_markers`` (Story 16.1 AC-3 +
+    AC-7).
+
+    The sprint-scope sibling of :func:`advance_epic_run_state`. Like the
+    epic-scope helper — and UNLIKE the per-story ``run_state.advance_run_state``
+    — this takes NO story-doc callback: the sprint-run-state document is an
+    AGGREGATE CACHE (NFR-R8 / ADR-005) over the per-epic epic-run-state
+    documents (+ the per-story run-state documents for unassigned stories), not
+    a canonical store. The canonical writes happen TWO scopes down, inside each
+    per-story loop; there is no sprint-scope canonical artifact to write-first.
+
+    Execution order mirrors :func:`advance_epic_run_state` exactly:
+
+        1. Resolve the transient-class set (injected, or sourced from the
+           taxonomy at call time — taxonomy-sourced, never hardcoded).
+        2. Strip transient markers from ``next_state.active_markers`` via
+           :func:`filter_transient_markers`; persist the input unchanged when
+           nothing was stripped, else a ``model_copy`` with the filtered tuple
+           (the input instance is never mutated — frozen-model discipline).
+        3. Serialize + write via ``run_state.atomic_write_text`` (the
+           single-sourced temp-file-plus-atomic-rename primitive — NFR-R1). On
+           any OS-layer failure the temp file is unlinked and the prior file is
+           left intact (never a partial-state file).
+
+    Raises:
+        OSError: The temp-write or atomic-rename failed at the OS layer; the
+            temp file is unlinked before re-raise and the prior cache is
+            unchanged.
+    """
+    resolved = _resolve_transient_marker_classes(
+        transient_marker_classes, taxonomy_path
+    )
+    kept = filter_transient_markers(next_state.active_markers, resolved)
+    filtered = tuple(
+        marker for marker in next_state.active_markers if marker not in kept
+    )
+    persisted_state = (
+        next_state
+        if kept == next_state.active_markers
+        else next_state.model_copy(update={"active_markers": kept})
+    )
+    atomic_write_text(
+        sprint_run_state_path, _serialize_sprint_run_state(persisted_state)
+    )
+    return SprintRunStateAdvanceResult(
+        next_state=persisted_state,
+        wrote_path=sprint_run_state_path,
+        filtered_markers=filtered,
+    )
+
+
 class EpicRunStateNotFound(Exception):
     """Pre-condition: no epic-run-state cache file at the resolved path.
 
@@ -712,6 +895,7 @@ def load_epic_run_state(epic_run_state_path: pathlib.Path) -> EpicRunState:
 
 __all__ = [
     "DEFAULT_EPIC_RUN_STATE_PATH",
+    "DEFAULT_SPRINT_RUN_STATE_PATH",
     "EpicCurrentState",
     "EpicRunState",
     "EpicRunStateAdvanceResult",
@@ -723,8 +907,11 @@ __all__ = [
     "PerStoryStatus",
     "SprintCurrentState",
     "SprintRunState",
+    "SprintRunStateAdvanceResult",
     "advance_epic_run_state",
+    "advance_sprint_run_state",
     "advance_worktree_run_state",
+    "epic_run_state_path_for",
     "filter_transient_markers",
     "load_epic_run_state",
     "worktree_run_state_path",

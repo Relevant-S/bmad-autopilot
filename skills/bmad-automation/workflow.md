@@ -12,11 +12,18 @@ The skill dispatches to one of four sub-step files based on the slash command th
 | ----------------------------------- | -------------------- | --------------------------------------------------- | ------------------------------- |
 | `/bmad-automation run <story-id>`   | `steps/run.md`       | Thickened — six-step entry sequence per AC-2        | This story (Story 2.5)          |
 | `/bmad-automation run --epic <id>`  | `steps/run-epic.md`  | Thickened — sequential epic loop per Story 15.1     | This story (Story 15.1); Stories 15.2-15.5 thicken |
+| `/bmad-automation run --sprint <id>`| `steps/run-sprint.md`| Thickened — sequential sprint loop per Story 16.1   | This story (Story 16.1); Stories 16.2-16.4 thicken |
 | `/bmad-automation status [<id>]`    | `steps/status.md`    | Thickened — single-story inspection per Story 8.4   | This story (Story 8.4) + Story 8.5 (no-args listing) |
 | `/bmad-automation resume [<id>]`    | `steps/resume.md`    | Thickened — resume protocol per Story 8.3           | This story (Story 8.3)          |
 | `/bmad-automation init`             | `steps/init.md`      | Literal stub — emits not-yet-implemented diagnostic | Stories 7.1-7.9                 |
 
-**`run` invocation-form routing (Story 15.1).** The `run` subcommand has two invocation forms distinguished by the `--epic` flag. `/bmad-automation run <story-id>` (no flag) routes to `steps/run.md`'s per-story six-step entry sequence — UNCHANGED from Phase 1; the `--epic` flag is purely additive (the per-story path is bit-identical with or without epic support present, per Story 15.1 AC-2 / the Story 10.4 AC-5 bit-identity precedent). `/bmad-automation run --epic <epic-id>` routes to `steps/run-epic.md`'s sequential epic loop, which drives each contained `ready-for-dev` story through the SAME unchanged per-story sequence. Parse the presence of `--epic` first; dispatch to the matching sub-step file.
+**`run` invocation-form routing (Story 15.1 + 16.1).** The `run` subcommand has three invocation forms distinguished by a leading flag. Parse the flag FIRST, then dispatch to the matching sub-step file:
+
+- `/bmad-automation run --sprint <sprint-id>` routes to `steps/run-sprint.md`'s sequential **sprint** loop (Story 16.1), which dispatches each contained epic unit through the SAME unchanged epic loop (`steps/run-epic.md`) and each unassigned story unit through the SAME unchanged per-story sequence (`steps/run.md`).
+- `/bmad-automation run --epic <epic-id>` routes to `steps/run-epic.md`'s sequential **epic** loop (Story 15.1), which drives each contained `ready-for-dev` story through the SAME unchanged per-story sequence.
+- `/bmad-automation run <story-id>` (no flag) routes to `steps/run.md`'s per-story six-step entry sequence — UNCHANGED from Phase 1.
+
+Both the `--epic` and `--sprint` flags are purely additive: the per-story path is bit-identical with or without them present, and the `--epic` path is bit-identical with or without `--sprint` support present (Story 16.1 AC-2 / Story 15.1 AC-2 / the Story 10.4 AC-5 bit-identity precedent).
 
 When dispatching, read the matching sub-step file in full BEFORE executing any of its instructions. The stub files explicitly forbid functional logic — do not infer behavior from the heading alone.
 
