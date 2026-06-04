@@ -893,6 +893,87 @@ def load_epic_run_state(epic_run_state_path: pathlib.Path) -> EpicRunState:
         raise EpicRunStateParseError(epic_run_state_path, cause=str(exc)) from exc
 
 
+class SprintRunStateNotFound(Exception):
+    """Pre-condition: no sprint-run-state cache file at the resolved path.
+
+    The read-only status path (Story 16.4 ``sprint_status_command`` no-args
+    sprint grouping) and ``inspect_sprint``'s no-cache branch map this to a
+    named-invariant exit-1 halt, NOT a marker. Clearly namespaced under
+    ``epic_run_state`` to coexist with the assembler-tuned
+    :class:`loud_fail_harness.sprint_status_artifact.SprintRunStateNotFound`
+    (Story 16.3, left unchurned per Story 16.4 Task 1's naming-reconciliation
+    note); THIS public loader is the status / no-args path's clean home.
+    """
+
+    def __init__(self, path: pathlib.Path) -> None:
+        self.path = path
+        super().__init__(f"sprint-run-state cache not found at {path}")
+
+
+class SprintRunStateParseError(Exception):
+    """A present-but-malformed sprint-run-state cache.
+
+    Raised on a YAML error, a non-mapping top level, or a shape that fails
+    :class:`SprintRunState` validation. The status caller maps this to exit 2
+    (Pattern 5 harness-level error); the chained cause is preserved via
+    ``from exc``.
+    """
+
+    def __init__(self, path: pathlib.Path, *, cause: str) -> None:
+        self.path = path
+        self.cause = cause
+        super().__init__(
+            f"sprint-run-state cache at {path} failed to parse/validate: {cause}"
+        )
+
+
+def load_sprint_run_state(sprint_run_state_path: pathlib.Path) -> SprintRunState:
+    """Read + Pydantic-validate the sprint-run-state cache YAML (read-only).
+
+    The single-sourced public loader for the read-only status / no-args path
+    (Story 16.4 AC-1 / AC-5), the sprint-scope sibling of
+    :func:`load_epic_run_state`. Returns the validated :class:`SprintRunState`;
+    NEVER writes (no :func:`advance_sprint_run_state`, no mutation). Distinct
+    from :func:`loud_fail_harness.sprint_status_artifact._load_sprint_run_state`
+    (the assembler-tuned loader, Story 16.3 — left unchurned so 16.3 behaviour
+    is unchanged).
+
+    Raises:
+        SprintRunStateNotFound: no file at ``sprint_run_state_path``
+            (pre-condition; the caller maps to exit 1).
+        SprintRunStateParseError: present-but-malformed (unreadable, YAML
+            error, non-mapping top level, or :class:`SprintRunState` validation
+            failure; the caller maps to exit 2).
+    """
+    if not sprint_run_state_path.is_file():
+        raise SprintRunStateNotFound(sprint_run_state_path)
+    try:
+        text = sprint_run_state_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise SprintRunStateNotFound(sprint_run_state_path) from exc
+    except OSError as exc:
+        raise SprintRunStateParseError(
+            sprint_run_state_path, cause=f"unreadable: {exc}"
+        ) from exc
+    try:
+        raw = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise SprintRunStateParseError(
+            sprint_run_state_path, cause=f"YAML error: {exc}"
+        ) from exc
+    if not isinstance(raw, Mapping):
+        raise SprintRunStateParseError(
+            sprint_run_state_path,
+            cause="did not parse to a YAML mapping at top level",
+        )
+    try:
+        return SprintRunState.model_validate(dict(raw))
+    except ValidationError as exc:
+        raise SprintRunStateParseError(
+            sprint_run_state_path, cause=str(exc)
+        ) from exc
+
+
 __all__ = [
     "DEFAULT_EPIC_RUN_STATE_PATH",
     "DEFAULT_SPRINT_RUN_STATE_PATH",
@@ -908,11 +989,14 @@ __all__ = [
     "SprintCurrentState",
     "SprintRunState",
     "SprintRunStateAdvanceResult",
+    "SprintRunStateNotFound",
+    "SprintRunStateParseError",
     "advance_epic_run_state",
     "advance_sprint_run_state",
     "advance_worktree_run_state",
     "epic_run_state_path_for",
     "filter_transient_markers",
     "load_epic_run_state",
+    "load_sprint_run_state",
     "worktree_run_state_path",
 ]

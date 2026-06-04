@@ -134,6 +134,15 @@ bmad-automation-status-list = "loud_fail_harness.multi_story_status:main"
 # Halts on no-epic-run-state / epic-id-mismatch with a named-invariant diagnostic (NOT a marker).
 # See src/loud_fail_harness/epic_status_command.py for the substrate.
 bmad-automation-status-epic = "loud_fail_harness.epic_status_command:main"
+# bmad-automation-status-sprint (Story 16.4) — invoked by /bmad-automation status --sprint <sprint-id>'s
+# orchestrator-skill step. Read-only SPRINT-scope inspection per FR48 + NFR-O4 (zero write surface).
+# REUSES Story 16.3's sprint_status_artifact.build_sprint_status_artifact aggregate read (the sprint-state-tree
+# rollup over the sprint-run-state cache + each per-epic EpicRunState cache) and renders the returned model to
+# stdout — it does NOT re-walk the caches and does NOT write the .md artifact (that is 16.3's assemble_* at sprint
+# close). Per-story marker drill-down is POINTED TO (status --epic / status <story-id>), not re-projected at sprint
+# scale (NFR-R8). Halts on no-sprint-run-state / sprint-id-mismatch with a named-invariant diagnostic (NOT a marker).
+# See src/loud_fail_harness/sprint_status_command.py for the substrate.
+bmad-automation-status-sprint = "loud_fail_harness.sprint_status_command:main"
 # no-destructive-resume-guard (Story 8.6) — library-as-CLI-aid for ad-hoc
 # Verdict inspection. Mirrors marker-coverage-audit's posture per pyproject.toml
 # lines 70-74 (NOT a CI gate — invoked manually by practitioners debugging

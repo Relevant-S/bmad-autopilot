@@ -67,6 +67,14 @@ Story 15.4 — load_epic_run_state public loader (Task 1; AC-1 / AC-6):
     [x] schema mismatch (e.g. a per-story run-state) raises ParseError      → test_load_epic_run_state_schema_mismatch_raises_parse_error
     [x] malformed YAML raises typed EpicRunStateParseError                  → test_load_epic_run_state_malformed_yaml_raises_parse_error
     [x] loader is read-only (mtime + sha256 unchanged)                     → test_load_epic_run_state_does_not_mutate_file
+
+Story 16.4 — load_sprint_run_state public loader (Task 1; AC-1 / AC-5 / AC-6):
+    [x] happy path returns validated SprintRunState                        → test_load_sprint_run_state_happy_path_returns_validated_model
+    [x] missing file raises typed SprintRunStateNotFound (pre-condition)    → test_load_sprint_run_state_missing_file_raises_not_found
+    [x] non-mapping top level raises typed SprintRunStateParseError         → test_load_sprint_run_state_non_mapping_raises_parse_error
+    [x] schema mismatch (e.g. a per-epic run-state) raises ParseError       → test_load_sprint_run_state_schema_mismatch_raises_parse_error
+    [x] malformed YAML raises typed SprintRunStateParseError                → test_load_sprint_run_state_malformed_yaml_raises_parse_error
+    [x] loader is read-only (mtime + sha256 unchanged)                     → test_load_sprint_run_state_does_not_mutate_file
 """
 
 from __future__ import annotations
@@ -102,11 +110,14 @@ from loud_fail_harness.epic_run_state import (
     SprintCurrentState,
     SprintRunState,
     SprintRunStateAdvanceResult,
+    SprintRunStateNotFound,
+    SprintRunStateParseError,
     advance_epic_run_state,
     advance_sprint_run_state,
     epic_run_state_path_for,
     filter_transient_markers,
     load_epic_run_state,
+    load_sprint_run_state,
     worktree_run_state_path,
 )
 
@@ -516,12 +527,15 @@ def test_module_all_exports() -> None:
         "SprintCurrentState",
         "SprintRunState",
         "SprintRunStateAdvanceResult",
+        "SprintRunStateNotFound",
+        "SprintRunStateParseError",
         "advance_epic_run_state",
         "advance_sprint_run_state",
         "advance_worktree_run_state",
         "epic_run_state_path_for",
         "filter_transient_markers",
         "load_epic_run_state",
+        "load_sprint_run_state",
         "worktree_run_state_path",
     ]
     assert epic_run_state_module.__all__ == expected
@@ -944,5 +958,74 @@ def test_load_epic_run_state_does_not_mutate_file(tmp_path: pathlib.Path) -> Non
     path.write_text(_epic_run_state().model_dump_json(), encoding="utf-8")
     before = (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
     load_epic_run_state(path)
+    after = (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    assert after == before
+
+
+# ---------------------------------------------------------------------------
+# load_sprint_run_state public loader (Story 16.4 Task 1; AC-1 / AC-5 / AC-6)
+# ---------------------------------------------------------------------------
+
+
+def test_load_sprint_run_state_happy_path_returns_validated_model(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "sprint-run-state.yaml"
+    path.write_text(_sprint_run_state().model_dump_json(), encoding="utf-8")
+    loaded = load_sprint_run_state(path)
+    assert isinstance(loaded, SprintRunState)
+    assert loaded.sprint_id == "sprint-phase-2"
+    assert loaded.current_state == "sprint-in-progress"
+
+
+def test_load_sprint_run_state_missing_file_raises_not_found(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "does-not-exist.yaml"
+    with pytest.raises(SprintRunStateNotFound) as excinfo:
+        load_sprint_run_state(path)
+    assert excinfo.value.path == path
+
+
+def test_load_sprint_run_state_non_mapping_raises_parse_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "sprint-run-state.yaml"
+    path.write_text("- just\n- a\n- list\n", encoding="utf-8")
+    with pytest.raises(SprintRunStateParseError):
+        load_sprint_run_state(path)
+
+
+def test_load_sprint_run_state_schema_mismatch_raises_parse_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "sprint-run-state.yaml"
+    # A valid YAML mapping that is NOT a valid SprintRunState (e.g. a per-epic
+    # epic-run-state.yaml) → SprintRunStateParseError (caller maps to exit 2).
+    path.write_text(
+        "schema_version: '1.0'\nepic_id: epic-16\ncurrent_state: epic-in-progress\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SprintRunStateParseError) as excinfo:
+        load_sprint_run_state(path)
+    assert excinfo.value.path == path
+
+
+def test_load_sprint_run_state_malformed_yaml_raises_parse_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "sprint-run-state.yaml"
+    path.write_text("sprint_id: [unterminated\n", encoding="utf-8")
+    with pytest.raises(SprintRunStateParseError):
+        load_sprint_run_state(path)
+
+
+def test_load_sprint_run_state_does_not_mutate_file(tmp_path: pathlib.Path) -> None:
+    import hashlib
+
+    path = tmp_path / "sprint-run-state.yaml"
+    path.write_text(_sprint_run_state().model_dump_json(), encoding="utf-8")
+    before = (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    load_sprint_run_state(path)
     after = (path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
     assert after == before

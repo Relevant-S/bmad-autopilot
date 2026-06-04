@@ -102,7 +102,7 @@ Sprint-scope reattachment reuses the existing SessionStart hook + `evaluate_reat
 
 - **Per-sprint budget enforcement + escalation-rate marker → Story 16.2 (landed here).** The cumulative budget folds `consumed` and pauses on `sprint-paused-on-budget`; the escalation-rate threshold emits the informational `sprint-escalation-rate-exceeded` marker (non-blocking).
 - **`sprint-status-artifact-*.md` → Story 16.3 (landed; written at sprint close by phase 5 above)** — a SEPARATE assembler, NOT inside `run_sprint_loop`; structured objective state, explicitly NOT a retrospective.
-- **`status --sprint <sprint-id>` → Story 16.4** (no read-only sprint-status query command here).
+- **`status --sprint <sprint-id>` → Story 16.4 (landed; a SEPARATE read-only query, NOT inside `run_sprint_loop`).** The `sprint_status_command.inspect_sprint` query REUSES Story 16.3's `build_sprint_status_artifact` aggregate read (the sprint → epics → stories tree rollup over the sprint-run-state cache + each per-epic cache) and renders it to stdout — zero write surface (FR48 / NFR-O4): it never advances state, never assembles the `.md` artifact. The no-args `/bmad-automation status` listing additionally groups by sprint (the additive `## Sprints` section). See `steps/status.md` § Sprint-scope inspection protocol.
 - **Sprint-level PR bundle → not in Epic 16's breakdown** (do NOT extend the Stop hook in 16.1; a sprint-PR-bundle need would be a correct-course addition, not silent scope creep).
 - **Parallel dispatch → Epic 18** (sequential only).
 - **No new specialist, no 4th hook, substrate stays at FIVE components.**

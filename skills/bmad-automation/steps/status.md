@@ -30,11 +30,12 @@ Exit-code semantics per Story 8.4 AC-1 / AC-12:
 
 ## Branch on argument presence
 
-The slash command `/bmad-automation status [<id>] [--epic <epic-id>]` accepts an OPTIONAL story-id argument OR an `--epic <epic-id>` flag. The runtime branches on argument presence:
+The slash command `/bmad-automation status [<id>] [--epic <epic-id>] [--sprint <sprint-id>]` accepts an OPTIONAL story-id argument OR an `--epic <epic-id>` flag OR a `--sprint <sprint-id>` flag. The runtime branches on argument presence:
 
+- **With `--sprint <sprint-id>`** (sprint-scope inspection per Story 16.4) — invoke `bmad-automation-status-sprint --sprint <sprint-id>` per the `## Sprint-scope inspection protocol` section near the end of this file. The single-story + epic + no-args protocols are bypassed entirely on this branch.
 - **With `--epic <epic-id>`** (epic-scope inspection per Story 15.4) — invoke `bmad-automation-status-epic --epic <epic-id>` per the `## Epic-scope inspection protocol` section near the end of this file. The single-story + no-args protocols are bypassed entirely on this branch.
 - **With `<story-id>`** (single-story inspection per Story 8.4) — invoke `bmad-automation-status <story-id>` per the `## Substrate invocation` section above AND follow the `## Branch on outcome` protocol below.
-- **Without any argument** (no-args multi-story listing per Story 8.5, with per-epic grouping per Story 15.4) — invoke `bmad-automation-status-list` per the `## No-args multi-story listing protocol` section near the end of this file. The single-story protocol is bypassed entirely on this branch.
+- **Without any argument** (no-args multi-story listing per Story 8.5, with per-epic grouping per Story 15.4 and per-sprint grouping per Story 16.4) — invoke `bmad-automation-status-list` per the `## No-args multi-story listing protocol` section near the end of this file. The single-story protocol is bypassed entirely on this branch.
 
 ## Branch on outcome
 
@@ -121,6 +122,10 @@ Branch on the parsed `outcome.action`:
 
 The no-args listing additionally discovers the epic-run-state cache(s) under `_bmad/automation/` (at Epic 15 scope, the single `epic-run-state.yaml`) and GROUPS the per-story rows whose `story_id ∈ EpicRunState.story_ids` under a per-epic header surfacing the epic's `epic_id` + non-terminal `current_state` (a `## Epics` section with `### <epic-id> [<state>]` sub-headers). Per-story rows that are NOT a member of any discovered epic render UNGROUPED in the `## Stories` section exactly as before. Terminal `epic-complete` epics are omitted from the grouping headers (mirroring the per-story non-terminal filter). This is PURELY ADDITIVE: a project that never ran `run --epic` has byte-identical no-args human + JSON output (no `## Epics` section; no `epic_groups` key) — the bit-identity guard. The `orphan-run-state-detected` emission, the empty-listing steady state, and the read-only run-state invariant are UNCHANGED.
 
+### Sprint grouping (Story 16.4 — additive)
+
+The no-args listing ALSO discovers the sprint-run-state cache under `_bmad/automation/` (at Epic 16 scope, the single `sprint-run-state.yaml`, loaded via `epic_run_state.load_sprint_run_state`) and surfaces a per-sprint grouping ON TOP of the per-epic grouping: a `## Sprints` section with `### <sprint-id> [<state>]` sub-headers naming the member epics (which already group their own stories via the `## Epics` section). Terminal `sprint-complete` sprints are omitted (mirroring the per-epic non-terminal filter). Like the per-epic grouping, this is PURELY ADDITIVE: a project that never ran `run --sprint` has byte-identical no-args human + JSON output (no `## Sprints` section; no `sprint_groups` key) — the same bit-identity guard. The sprint-run-state file is read-only here too (the mtime + sha256 no-mutation witness is `tests/test_multi_story_status.py::test_enumerate_stories_does_not_mutate_sprint_run_state_file`).
+
 ### Loud-fail discipline
 
 - Substrate-level errors (exit code 2) propagate to the orchestrator skill which surfaces them to the practitioner. The multi-story listing does NOT auto-retry on substrate-level errors. Pattern 5 chained-exception discipline is observed inside the substrate (`MultiStoryStatusError` analogous in shape to `StatusCommandError`).
@@ -167,11 +172,48 @@ Exit-code semantics per Story 15.4 AC-1 / AC-6 (mirroring Story 8.4's 0/1/2 spli
 
 The `--epic` path has ZERO write surface — even less than the no-args listing (which emits `orphan-run-state-detected`). It NEVER writes the epic-run-state (no `advance_epic_run_state`), NEVER invokes `cross_state_recovery`, NEVER dispatches specialists, NEVER mutates story-docs / sprint-status / per-specialist logs / `events.jsonl` / `deferred-work.md`, NEVER touches the git working tree, and emits NO marker class. The per-story marker projection reuses Story 8.4's read-only `inspect_story` UNCHANGED. The structural witness asserts the epic-run-state file's mtime + sha256 are byte-identical before/after (`tests/test_epic_status_command.py::test_inspect_epic_does_not_mutate_cache`).
 
+## Sprint-scope inspection protocol
+
+When the practitioner invokes `/bmad-automation status --sprint <sprint-id>`, dispatch to the Story 16.4 sprint-status substrate. THIS is structurally distinct from the single-story, epic, and no-args protocols above — all four share the `/bmad-automation status` slash command and dispatch on argument presence per the `## Branch on argument presence` section near the top.
+
+### Goal
+
+Surface — read-only, with NO state mutation (FR48 + NFR-O4 at sprint scope; zero write surface) — the sprint-state-tree (sprint → epics → stories) with rolled-up aggregate cost, per-sprint retry-budget consumption (used / total), re-derived escalation rate, and the scoped active-markers union (sprint ∪ per-epic). The query REUSES Story 16.3's `sprint_status_artifact.build_sprint_status_artifact` aggregate read (the rollup over the sprint-run-state cache + each per-epic `EpicRunState` cache) and renders the returned model — it does NOT re-walk the caches and does NOT write the sprint-status `.md` artifact (that is 16.3's `assemble_*` at sprint close). Per-story marker drill-down is POINTED TO (`status --epic` / `status <story-id>`), not re-projected at sprint scale (NFR-R8). The canonical Python composition is `sprint_status_command.inspect_sprint`; this prose IS the LLM-runtime protocol naming what each step is for.
+
+### Substrate invocation
+
+```bash
+uv --directory bmad-autopilot/tools/loud-fail-harness/ run bmad-automation-status-sprint --sprint <sprint-id> --project-root <absolute-path>
+```
+
+Optional flags:
+
+- `--json` — emit the canonical `SprintStatusArtifact` model serialization (`model_dump_json(indent=2)`; field declaration order is load-bearing for byte-stable output) instead of the human-readable render.
+- `--sprint-run-state-path <path>` — override the default (`<project_root>/_bmad/automation/sprint-run-state.yaml`). Production runs leave this unset.
+- `--repo-root <path>` — override the default (`<project_root>`), threaded to `build_sprint_status_artifact` for per-epic cache addressing + the sprint-status-artifact pointer.
+
+Exit-code semantics per Story 16.4 AC-1 / AC-6 (mirroring Story 15.4's 0/1/2 split):
+
+- **`0`** — `sprint-status-found` (silent success; the rendered inspection is printed to stdout).
+- **`1`** — `sprint-status-no-run-state` (no cache at the resolved path) OR `sprint-id-mismatch` (the cache is for a different sprint). Both are named-invariant diagnostics to stderr (`no-in-flight-sprint-run-found-for-sprint-id` / `sprint-id-mismatch`), NOT markers.
+- **`2`** — harness-level error inside the substrate per Pattern 5 (malformed cache parse, Pydantic validation failure, naive-`generated_at`, unexpected exception).
+
+### Branch on outcome
+
+- **`sprint-status-found`** (exit 0) — the rendered output (human or JSON) is on stdout; surface it verbatim. The human render carries: `## Sprint lifecycle state` (state + `sprint_id` + `run_id` + `generated_at`); `## Sprint state tree` (each per-epic row — `epic_id → status`, cost, retries — with its per-story rows nested beneath, plus an `(unassigned)` group for stories with no epic); `## Aggregate cost`; `## Per-sprint retry budget` (`Used <n> of <budget>`); `## Escalation rate` (`Escalated <x> of <y> completed = <r>%`); `## Active loud-fail markers` (the scoped union inline WITH each marker's `scope` — `sprint` or `epic:<epic-id>` — `(no active markers)` placeholder when empty); `## Pointers` (the sprint-run-state file path + the sprint-status-artifact path + the AC-3 drill-down command pointers). For per-epic marker detail drill into `status --epic <epic-id>`; for per-story marker + retry-history detail drill into `status <story-id>` — the multi-scope observability chain (`status --sprint` → `status --epic` → `status <story-id>`).
+- **`sprint-status-no-run-state`** / **`sprint-id-mismatch`** (exit 1) — surface the named-invariant diagnostic verbatim (it already includes the remediation pointers: start a fresh sprint run via `/bmad-automation run --sprint <sprint-id>`; list all in-flight stories/epics/sprints via no-args `/bmad-automation status`). Do NOT proceed to dispatch. Do NOT auto-start a fresh sprint run — that is `/bmad-automation run --sprint`'s job (`steps/run-sprint.md`).
+
+### Mutation surface
+
+The `--sprint` path has ZERO write surface — like the `--epic` path. It NEVER assembles the sprint-status `.md` artifact (no `assemble_sprint_status_artifact`), NEVER writes the sprint-run-state (no `advance_sprint_run_state`), NEVER invokes `cross_state_recovery`, NEVER dispatches the epic/story loops, NEVER mutates story-docs / sprint-status / per-epic caches / per-specialist logs / `events.jsonl` / `deferred-work.md`, NEVER touches the git working tree, and emits NO marker class. `build_sprint_status_artifact` is the pure rollup (write-free). The structural witness asserts the sprint-run-state file's AND every per-epic cache file's mtime + sha256 are byte-identical before/after (`tests/test_sprint_status_command.py::test_inspect_sprint_does_not_mutate_caches`).
+
 ## Cross-references
 
-- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py` — the no-args multi-story enumeration substrate (Story 8.5; extended with additive per-epic grouping in Story 15.4).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/multi_story_status.py` — the no-args multi-story enumeration substrate (Story 8.5; extended with additive per-epic grouping in Story 15.4 and per-sprint grouping in Story 16.4).
 - `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/epic_status_command.py` — the read-only `status --epic` epic-status substrate (Story 15.4; `inspect_epic` + renderers + `bmad-automation-status-epic` CLI).
-- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/epic_run_state.py` — `EpicRunState` cache model + the read-only `load_epic_run_state` public loader (Story 15.4 Task 1).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/sprint_status_command.py` — the read-only `status --sprint` sprint-status substrate (Story 16.4; `inspect_sprint` + renderers + `bmad-automation-status-sprint` CLI; REUSES `build_sprint_status_artifact`).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/sprint_status_artifact.py` — `build_sprint_status_artifact` (the pure rollup `status --sprint` reuses; Story 16.3) + `compute_sprint_status_artifact_path` (the `## Pointers` target).
+- `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/epic_run_state.py` — `EpicRunState` / `SprintRunState` cache models + the read-only `load_epic_run_state` (Story 15.4) and `load_sprint_run_state` (Story 16.4) public loaders.
 - `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_epic.py` — `compute_epic_bundle_path` (the epic-PR-bundle pointer surfaced by `status --epic`).
 - `bmad-autopilot/schemas/marker-taxonomy.yaml:382` — the `orphan-run-state-detected` marker class registration (Story 1.4 v1 27-class taxonomy).
 - `_bmad-output/planning-artifacts/epics.md:3331-3363` — Story 8.5 epic AC.

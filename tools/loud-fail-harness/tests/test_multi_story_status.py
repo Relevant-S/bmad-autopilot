@@ -74,6 +74,7 @@ from loud_fail_harness.multi_story_status import (
     ListingOutcome,
     ListingRequest,
     MultiStoryStatusError,
+    SprintGroupSummary,
     StoryListing,
     StoryRowSummary,
     enumerate_stories,
@@ -272,6 +273,7 @@ def test_module_exports_documented_public_api() -> None:
         "ListingOutcome",
         "ListingRequest",
         "MultiStoryStatusError",
+        "SprintGroupSummary",
         "StoryListing",
         "StoryRowSummary",
         "enumerate_stories",
@@ -1124,5 +1126,175 @@ def test_enumerate_stories_does_not_mutate_epic_run_state_file(
     after = (
         epic_path.stat().st_mtime_ns,
         hashlib.sha256(epic_path.read_bytes()).hexdigest(),
+    )
+    assert after == before
+
+
+# --------------------------------------------------------------------------- #
+# Story 16.4 AC-5 — additive per-sprint grouping (ON TOP of per-epic)         #
+# --------------------------------------------------------------------------- #
+
+
+def _write_sprint_run_state_file(
+    project_root: pathlib.Path,
+    *,
+    sprint_id: str = "sprint-1",
+    run_id: str = "run-sprint-1",
+    current_state: str = "sprint-in-progress",
+    epic_ids: tuple[str, ...] = ("epic-16", "epic-17"),
+    filename: str = "sprint-run-state.yaml",
+) -> pathlib.Path:
+    path = project_root / "_bmad" / "automation" / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    epic_ids_yaml = "\n".join(f"  - {eid}" for eid in epic_ids)
+    per_status = "\n".join(f"  {eid}: epic-in-progress" for eid in epic_ids)
+    path.write_text(
+        "schema_version: '1.0'\n"
+        f"sprint_id: {sprint_id}\n"
+        f"run_id: {run_id}\n"
+        f"current_state: {current_state}\n"
+        f"epic_ids:\n{epic_ids_yaml}\n"
+        f"per_epic_status:\n{per_status}\n"
+        "unassigned_story_ids: []\n"
+        "per_sprint_retry_budget:\n"
+        "  multiplier: 2\n"
+        f"  epic_count: {len(epic_ids)}\n"
+        "  effective_budget: 4\n"
+        "  consumed: 0\n"
+        "active_markers: []\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_no_sprint_run_state_json_omits_sprint_groups(
+    tmp_project: pathlib.Path,
+) -> None:
+    """AC-5 bit-identity guard: with NO sprint-run-state cache, the JSON output
+    carries no ``sprint_groups`` key (byte-identical to Story 15.4's)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert outcome.listing.sprint_groups == ()
+    assert "sprint_groups" not in render_story_listing_json(outcome.listing)
+
+
+def test_no_sprint_run_state_human_omits_sprints_section(
+    tmp_project: pathlib.Path,
+) -> None:
+    """AC-5 bit-identity guard: with NO sprint-run-state cache, the human output
+    carries no ``## Sprints`` section even when a per-epic grouping exists
+    (byte-identical to Story 15.4's)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    _write_epic_run_state_file(tmp_project, story_ids=("15-1-foo",))
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    human = render_story_listing_human(outcome.listing)
+    assert "## Sprints" not in human
+    assert "## Epics" in human
+
+
+def test_sprint_grouping_present_when_cache_exists(
+    tmp_project: pathlib.Path,
+) -> None:
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    _write_sprint_run_state_file(tmp_project, epic_ids=("epic-16", "epic-17"))
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    listing = outcome.listing
+    assert len(listing.sprint_groups) == 1
+    grp = listing.sprint_groups[0]
+    assert isinstance(grp, SprintGroupSummary)
+    assert grp.sprint_id == "sprint-1"
+    assert grp.current_state == "sprint-in-progress"
+    assert grp.epic_ids == ("epic-16", "epic-17")
+
+    human = render_story_listing_human(listing)
+    assert "## Sprints" in human
+    assert "### sprint-1 [sprint-in-progress]" in human
+    # member epics named under the sprint header.
+    sprints_idx = human.index("## Sprints")
+    assert human.index("- epic-16", sprints_idx) > sprints_idx
+    assert "- epic-17" in human
+
+    json_out = render_story_listing_json(listing)
+    assert "sprint_groups" in json_out
+
+
+def test_sprint_complete_omitted_from_grouping(tmp_project: pathlib.Path) -> None:
+    """AC-5: terminal ``sprint-complete`` sprints are omitted from grouping
+    headers (mirroring the per-epic non-terminal filter)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    _write_sprint_run_state_file(tmp_project, current_state="sprint-complete")
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert outcome.listing.sprint_groups == ()
+    assert "## Sprints" not in render_story_listing_human(outcome.listing)
+
+
+def test_epic_run_state_not_treated_as_sprint_cache(
+    tmp_project: pathlib.Path,
+) -> None:
+    """A per-epic ``epic-run-state.yaml`` sharing the automation dir is NOT a
+    valid sprint-run-state cache and must not appear as a sprint grouping
+    (and vice versa: the sprint cache is not an epic grouping)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    _write_epic_run_state_file(tmp_project, story_ids=("15-1-foo",))
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert outcome.listing.sprint_groups == ()
+    assert len(outcome.listing.epic_groups) == 1
+
+
+def test_sprint_and_epic_groupings_coexist(tmp_project: pathlib.Path) -> None:
+    """Both additive groupings render when both caches exist — the cross-scope
+    picture (## Sprints names epics; ## Epics groups their stories)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    _write_epic_run_state_file(
+        tmp_project, epic_id="epic-15", story_ids=("15-1-foo",)
+    )
+    _write_sprint_run_state_file(tmp_project, epic_ids=("epic-15",))
+    request = ListingRequest(
+        project_root=tmp_project, inspect_story_fn=_stub_inspect_fn({})
+    )
+    outcome = enumerate_stories(request)
+    assert len(outcome.listing.sprint_groups) == 1
+    assert len(outcome.listing.epic_groups) == 1
+    human = render_story_listing_human(outcome.listing)
+    # Sprints section precedes Epics (highest scope first).
+    assert human.index("## Sprints") < human.index("## Epics")
+
+
+def test_enumerate_stories_does_not_mutate_sprint_run_state_file(
+    tmp_project: pathlib.Path,
+) -> None:
+    """AC-5 structural witness (Story 15.4 P8 parity): the sprint-run-state
+    file's mtime + sha256 are byte-identical before/after enumerate_stories
+    (the read-only invariant extends to the additive _discover_sprint_groups
+    path)."""
+    _write_sprint_status(tmp_project, {"15-1-foo": "in-progress"})
+    sprint_path = _write_sprint_run_state_file(tmp_project)
+    before = (
+        sprint_path.stat().st_mtime_ns,
+        hashlib.sha256(sprint_path.read_bytes()).hexdigest(),
+    )
+    request = ListingRequest(
+        project_root=tmp_project,
+        inspect_story_fn=_stub_inspect_fn({}),
+    )
+    enumerate_stories(request)
+    after = (
+        sprint_path.stat().st_mtime_ns,
+        hashlib.sha256(sprint_path.read_bytes()).hexdigest(),
     )
     assert after == before
