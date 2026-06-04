@@ -59,7 +59,10 @@ import yaml
 
 from loud_fail_harness import sprint_lifecycle as sprint_lifecycle_module
 from loud_fail_harness.epic_lifecycle import StoryLoopOutcome
-from loud_fail_harness.epic_run_state import SprintRunState
+from loud_fail_harness.epic_run_state import (
+    ResumeBudgetReconstructionConflict,
+    SprintRunState,
+)
 from loud_fail_harness.sprint_lifecycle import (
     DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
     DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
@@ -1464,3 +1467,131 @@ def test_run_sprint_loop_budget_pause_and_rate_marker_coexist(
     )
     assert result.final_state.current_state == "sprint-paused-on-budget"
     assert SPRINT_ESCALATION_RATE_EXCEEDED_MARKER in result.final_state.active_markers
+
+
+# ---------------------------------------------------------------------------
+# Resume budget reconstruction (Story 16.5 AC-6/7/8/9/10)
+# ---------------------------------------------------------------------------
+
+
+def test_run_sprint_loop_resume_exhausted_dispatches_zero(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-6/AC-10 + review admission invariant: a re-invocation against a
+    persisted sprint cache (same run_id) carries the cumulative per-sprint
+    ``consumed`` forward (NOT reset to 0), and because the reconstructed budget
+    is already exhausted at entry the pre-dispatch admission gate pauses WITHOUT
+    dispatching any further unit — the guard holds strictly across resume."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "sprint-run-state.yaml"
+    budget = DEFAULT_PER_SPRINT_RETRY_MULTIPLIER * 2  # 2 epics, no unassigned.
+
+    # First run: epic-15 alone consumes the full per-sprint budget →
+    # sprint-paused-on-budget after the first unit, epic-16 undispatched.
+    def first_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        consumed = budget if epic_id == "epic-15" else 0
+        return EpicLoopOutcome(
+            terminal_state="epic-complete",  # type: ignore[arg-type]
+            retries_consumed=consumed,
+            stories_completed=1,
+        )
+
+    first = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=first_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert first.final_state.current_state == "sprint-paused-on-budget"
+    assert first.final_state.per_sprint_retry_budget.consumed == budget
+    assert first.dispatched_unit_ids == ("epic-15",)
+
+    # Re-invoke with the SAME run_id. The budget was already exhausted at entry,
+    # so the admission gate pauses BEFORE dispatching — the runner must never be
+    # called (zero re-dispatch).
+    def _must_not_dispatch(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        raise AssertionError(
+            f"no unit may be dispatched on an exhausted resume; got {epic_id!r}"
+        )
+
+    resumed = run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=_must_not_dispatch,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert resumed.final_state.per_sprint_retry_budget.consumed == budget
+    assert resumed.final_state.per_sprint_retry_budget.effective_budget == budget
+    assert resumed.final_state.current_state == "sprint-paused-on-budget"
+    assert resumed.dispatched_unit_ids == ()
+    assert resumed.paused_on_unit_id is None
+
+
+def test_run_sprint_loop_resume_run_id_mismatch_raises(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-8: a persisted sprint cache whose run_id differs from the loop's is a
+    stale cache from a different run at the same address — the loop fails loudly
+    with ``ResumeBudgetReconstructionConflict`` (recovery-state-conflict)."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "epic-15": "in-progress",
+            "15-1-a": "ready-for-dev",
+            "epic-16": "in-progress",
+            "16-1-b": "ready-for-dev",
+        },
+    )
+    srs = tmp_path / "sprint-run-state.yaml"
+
+    def epic_runner(
+        *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
+    ) -> EpicLoopOutcome:
+        return _epic_outcome("epic-complete")
+
+    run_sprint_loop(
+        "s1",
+        run_id="r1",
+        sprint_status_path=sprint,
+        sprint_run_state_path=srs,
+        epic_loop_runner=epic_runner,
+        story_loop_runner=_unused_story_runner,
+        repo_root=tmp_path,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    with pytest.raises(ResumeBudgetReconstructionConflict) as excinfo:
+        run_sprint_loop(
+            "s1",
+            run_id="r2",
+            sprint_status_path=sprint,
+            sprint_run_state_path=srs,
+            epic_loop_runner=epic_runner,
+            story_loop_runner=_unused_story_runner,
+            repo_root=tmp_path,
+            transient_marker_classes=_NO_TRANSIENT,
+        )
+    err = excinfo.value
+    assert err.marker_class == "recovery-state-conflict"
+    assert err.cache_run_id == "r1"
+    assert err.loop_run_id == "r2"
+    assert str(srs) in str(err)

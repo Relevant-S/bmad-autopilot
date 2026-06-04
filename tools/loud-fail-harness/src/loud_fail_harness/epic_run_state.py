@@ -145,7 +145,7 @@ from __future__ import annotations
 import json
 import pathlib
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Any, ClassVar, Final, Literal, TypeVar
 
 import yaml
 from pydantic import (
@@ -974,6 +974,107 @@ def load_sprint_run_state(sprint_run_state_path: pathlib.Path) -> SprintRunState
         ) from exc
 
 
+#: ``recovery-state-conflict`` marker class identifier, sourced VERBATIM from
+#: ``schemas/marker-taxonomy.yaml``. Defined locally (single-literal-from-taxonomy
+#: posture, parallel to
+#: :data:`session_start_reattach.RECOVERY_STATE_CONFLICT_MARKER_CLASS` /
+#: :data:`cross_state_recovery.RECOVERY_STATE_CONFLICT_MARKER_CLASS`) so this
+#: low-level run-state module carries no import dependency on the recovery
+#: modules that sit above it. Story 16.5 reuses this EXISTING class for the
+#: resume-budget run_id-mismatch surface — no new top-level marker class (AC-11).
+RECOVERY_STATE_CONFLICT_MARKER_CLASS: Final[
+    Literal["recovery-state-conflict"]
+] = "recovery-state-conflict"
+
+
+class ResumeBudgetReconstructionConflict(Exception):
+    """Raised when resume budget reconstruction reads a persisted run-state
+    cache whose ``run_id`` does NOT match the ``run_id`` supplied to the loop
+    (a stale cache from a DIFFERENT run occupying the same per-unit address).
+
+    A genuine NFR-R8 cross-state disagreement — the budget cache is the
+    canonical store for the cumulative ``consumed`` count (ADR-005) — so it
+    carries the EXISTING ``recovery-state-conflict`` marker class (Story 16.5
+    AC-8 / AC-11; NO new top-level marker class). The orchestrator runtime maps
+    this typed substrate error to that marker; a true resume (matching
+    ``run_id``) reconstructs silently. The message names BOTH conflicting
+    ``run_id``s and the cache path so human triage has the disagreement fully
+    localized.
+    """
+
+    marker_class: ClassVar[Literal["recovery-state-conflict"]] = (
+        RECOVERY_STATE_CONFLICT_MARKER_CLASS
+    )
+
+    def __init__(
+        self, *, cache_path: pathlib.Path, cache_run_id: str, loop_run_id: str
+    ) -> None:
+        self.cache_path = cache_path
+        self.cache_run_id = cache_run_id
+        self.loop_run_id = loop_run_id
+        super().__init__(
+            f"resume budget reconstruction conflict at {cache_path}: persisted "
+            f"cache run_id {cache_run_id!r} != loop run_id {loop_run_id!r} "
+            "(a stale cache from a different run at the same per-unit address)"
+        )
+
+
+_RunStateT = TypeVar("_RunStateT", EpicRunState, SprintRunState)
+
+
+def reconstruct_budget_on_resume(
+    fresh_state: _RunStateT,
+    *,
+    persisted: _RunStateT,
+    run_id: str,
+    cache_path: pathlib.Path,
+    budget_field: Literal["per_epic_retry_budget", "per_sprint_retry_budget"],
+    transient_marker_classes: frozenset[str],
+) -> _RunStateT:
+    """Carry the cumulative retry budget + durable markers forward from a
+    persisted run-state cache onto a freshly-``init_*``-seeded state (Story
+    16.5 AC-5..AC-8).
+
+    The shared reconstruction primitive both scope loops compose: on resume the
+    ``init_*`` seed reset ``consumed`` to 0 and recomputed ``effective_budget``
+    over the (narrowed) remaining stories/epics — defeating the cumulative
+    budget guard. This overwrites ONLY the budget sub-model (``budget_field``)
+    and the durable ``active_markers`` with the persisted values, so the
+    original unit-sized budget AND the already-consumed count survive the
+    resume, and a degradation marker emitted before the pause (e.g.
+    ``epic-budget-exhausted``) is not silently lost (loud-fail doctrine). Every
+    other field of ``fresh_state`` (per-story/per-epic status, cost partition,
+    ids) is left as freshly enumerated — per-story-status re-derivation and
+    cost-partition reconstruction are explicitly OUT of scope (re-derived via
+    enumerate-narrowing + the canonical stores; Story 16.5 reconstruction-scope
+    boundary).
+
+    Durable markers are filtered through ``transient_marker_classes`` (the same
+    filter ``advance_*_run_state`` applies) so a recovery-recomputed transient
+    marker never re-enters the aggregate.
+
+    Raises:
+        ResumeBudgetReconstructionConflict: ``persisted.run_id`` does not match
+            ``run_id`` (a stale cache from a different run at the same per-unit
+            address — AC-8). NOT raised on a true resume (matching ``run_id``).
+    """
+    if persisted.run_id != run_id:
+        raise ResumeBudgetReconstructionConflict(
+            cache_path=cache_path,
+            cache_run_id=persisted.run_id,
+            loop_run_id=run_id,
+        )
+    carried_markers = filter_transient_markers(
+        persisted.active_markers, transient_marker_classes
+    )
+    return fresh_state.model_copy(
+        update={
+            budget_field: getattr(persisted, budget_field),
+            "active_markers": carried_markers,
+        }
+    )
+
+
 __all__ = [
     "DEFAULT_EPIC_RUN_STATE_PATH",
     "DEFAULT_SPRINT_RUN_STATE_PATH",
@@ -986,6 +1087,8 @@ __all__ = [
     "PerEpicRetryBudget",
     "PerSprintRetryBudget",
     "PerStoryStatus",
+    "RECOVERY_STATE_CONFLICT_MARKER_CLASS",
+    "ResumeBudgetReconstructionConflict",
     "SprintCurrentState",
     "SprintRunState",
     "SprintRunStateAdvanceResult",
@@ -998,5 +1101,6 @@ __all__ = [
     "filter_transient_markers",
     "load_epic_run_state",
     "load_sprint_run_state",
+    "reconstruct_budget_on_resume",
     "worktree_run_state_path",
 ]

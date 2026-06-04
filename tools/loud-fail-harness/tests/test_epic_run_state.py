@@ -524,6 +524,8 @@ def test_module_all_exports() -> None:
         "PerEpicRetryBudget",
         "PerSprintRetryBudget",
         "PerStoryStatus",
+        "RECOVERY_STATE_CONFLICT_MARKER_CLASS",
+        "ResumeBudgetReconstructionConflict",
         "SprintCurrentState",
         "SprintRunState",
         "SprintRunStateAdvanceResult",
@@ -536,6 +538,7 @@ def test_module_all_exports() -> None:
         "filter_transient_markers",
         "load_epic_run_state",
         "load_sprint_run_state",
+        "reconstruct_budget_on_resume",
         "worktree_run_state_path",
     ]
     assert epic_run_state_module.__all__ == expected

@@ -92,11 +92,13 @@ from __future__ import annotations
 import pathlib
 import re
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import ClassVar, Final, Literal, Protocol, get_args
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness import epic_lifecycle
 from loud_fail_harness.epic_lifecycle import (
     StoryLoopRunner,
     TERMINAL_PER_STORY_STATUSES,
@@ -109,9 +111,12 @@ from loud_fail_harness.epic_run_state import (
     SprintRunState,
     advance_sprint_run_state,
     epic_run_state_path_for,
+    load_sprint_run_state,
+    reconstruct_budget_on_resume,
 )
 from loud_fail_harness.reconciler import load_marker_lifetimes
 from loud_fail_harness.retry_budget import (
+    DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
     DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
     DEFAULT_RETRY_BUDGET,
     DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD,
@@ -255,6 +260,80 @@ class EpicLoopRunner(Protocol):
         total: int,
         epic_run_state_path: pathlib.Path,
     ) -> EpicLoopOutcome: ...
+
+
+@dataclass(frozen=True)
+class EpicLoopRunnerAdapter:
+    """Production realization of the :class:`EpicLoopRunner` seam (Story 16.5
+    AC-1..AC-4 — resolves ``deferred-work.md`` line 24 / D1).
+
+    The concrete, typed runner the sprint loop injects in production. It binds
+    the sprint-level shared context the Protocol signature does NOT carry —
+    ``run_id``, ``sprint_status_path``, the UNCHANGED Phase-1 per-story
+    ``story_loop_runner`` (injected), the config-resolved per-epic
+    ``multiplier``, and the pre-resolved ``transient_marker_classes`` — at
+    construction time, so each per-epic ``__call__`` receives only the four
+    Protocol arguments (AC-2).
+
+    On each ``__call__`` it drives the UNCHANGED
+    ``epic_lifecycle.run_epic_loop`` (it does NOT reimplement the epic loop) and
+    maps the returned
+    :class:`~loud_fail_harness.epic_lifecycle.RunEpicLoopResult` to an
+    :class:`EpicLoopOutcome` per the AC-3 field map (the mapping
+    :class:`EpicLoopOutcome`'s docstring already specifies):
+
+    * ``terminal_state`` ← ``result.final_state.current_state``
+    * ``retries_consumed`` ← ``result.final_state.per_epic_retry_budget.consumed``
+    * ``stories_completed`` ← ``len(result.dispatched_story_ids)``
+    * ``escalated_count`` ← ``1`` when ``terminal_state ==
+      "epic-paused-on-escalation"`` else ``0``
+
+    Sensor-not-advisor (AC-4): it returns the schema-validated envelope
+    describing what the epic loop did and recommends no next action — the
+    pause/advance decision stays in :func:`run_sprint_loop`.
+
+    Frozen (the module's immutability convention); a dataclass rather than a
+    Pydantic model because it binds a callable (``story_loop_runner``) and a
+    frozenset, not validated data. ``run_epic_loop`` is reached module-qualified
+    (``epic_lifecycle.run_epic_loop``) — the sprint flag stays additive and the
+    dispatch path still composes the epic loop ONLY through the injected
+    Protocol (the bit-identity witness forbids a ``from ... import
+    run_epic_loop`` line). Protocol-conformance is checked structurally at the
+    ``epic_loop_runner=`` call site (no explicit ``isinstance``).
+    """
+
+    run_id: str
+    sprint_status_path: pathlib.Path
+    story_loop_runner: StoryLoopRunner
+    transient_marker_classes: frozenset[str]
+    multiplier: int = DEFAULT_PER_EPIC_RETRY_MULTIPLIER
+
+    def __call__(
+        self,
+        *,
+        epic_id: str,
+        index: int,
+        total: int,
+        epic_run_state_path: pathlib.Path,
+    ) -> EpicLoopOutcome:
+        result = epic_lifecycle.run_epic_loop(
+            epic_id,
+            run_id=self.run_id,
+            sprint_status_path=self.sprint_status_path,
+            epic_run_state_path=epic_run_state_path,
+            story_loop_runner=self.story_loop_runner,
+            multiplier=self.multiplier,
+            transient_marker_classes=self.transient_marker_classes,
+        )
+        terminal_state = result.final_state.current_state
+        return EpicLoopOutcome(
+            terminal_state=terminal_state,
+            retries_consumed=result.final_state.per_epic_retry_budget.consumed,
+            stories_completed=len(result.dispatched_story_ids),
+            escalated_count=(
+                1 if terminal_state == "epic-paused-on-escalation" else 0
+            ),
+        )
 
 
 #: The sprint-progress framing sink (AC-5 / NFR-O1). Receives a formatted
@@ -803,13 +882,62 @@ def run_sprint_loop(
         per_story_budget=per_story_budget,
         effective_budget_override=effective_budget_override,
     )
+
+    # Resume budget reconstruction (Story 16.5 AC-6/7/8/9) — the sprint-scope
+    # mirror of run_epic_loop's. A pre-existing cache at sprint_run_state_path
+    # means this is a re-invocation after a pause: carry the cumulative per-
+    # sprint budget (original epic-sized effective_budget AND already-consumed)
+    # + durable markers forward instead of letting init_sprint_run_state re-seed
+    # consumed=0. Gated SOLELY on cache presence + run_id match, so a first
+    # invocation (no file) keeps the clean path byte-for-byte unchanged (AC-9).
+    # effective_budget is read AFTER reconstruction so the budget guard re-fires
+    # at the reconstructed cumulative total (AC-10).
+    if sprint_run_state_path.is_file():
+        sprint_state = reconstruct_budget_on_resume(
+            sprint_state,
+            persisted=load_sprint_run_state(sprint_run_state_path),
+            run_id=run_id,
+            cache_path=sprint_run_state_path,
+            budget_field="per_sprint_retry_budget",
+            transient_marker_classes=transient_marker_classes,
+        )
+
     effective_budget = sprint_state.per_sprint_retry_budget.effective_budget
+
+    # Pre-dispatch budget admission (Story 16.5 review) — the sprint-scope mirror
+    # of run_epic_loop's. A quota guard is an ADMISSION invariant checked BEFORE
+    # the guarded action: on a resume that reconstructed an already-exhausted
+    # per-sprint budget with units still to dispatch, pause IMMEDIATELY without
+    # dispatching a further unit, so the guard holds strictly across resume
+    # boundaries. No-op on a fresh run (consumed starts at 0). Epic 18's parallel
+    # dispatcher MUST apply this same admission gate per concurrent unit.
+    admission_state = apply_sprint_budget(
+        sprint_state.current_state,
+        sprint_state.per_sprint_retry_budget.consumed,
+        effective_budget,
+        has_undispatched=bool(ordered_units),
+    )
+    if admission_state == "sprint-paused-on-budget":
+        sprint_state = sprint_state.model_copy(
+            update={"current_state": admission_state}
+        )
+
     advance = advance_sprint_run_state(
         sprint_run_state_path,
         sprint_state,
         transient_marker_classes=transient_marker_classes,
     )
     sprint_state = advance.next_state
+
+    if sprint_state.current_state == "sprint-paused-on-budget":
+        return RunSprintLoopResult(
+            sprint_id=sprint_id,
+            run_id=run_id,
+            final_state=sprint_state,
+            dispatched_unit_ids=(),
+            paused_on_unit_id=None,
+            wrote_path=sprint_run_state_path,
+        )
 
     # Unassigned-story statuses are tracked transiently here (not a persisted
     # SprintRunState field — re-derivable from the per-story story-docs per
@@ -954,6 +1082,7 @@ __all__ = [
     "DEFAULT_SPRINT_ESCALATION_RATE_THRESHOLD",
     "EpicLoopOutcome",
     "EpicLoopRunner",
+    "EpicLoopRunnerAdapter",
     "ProgressSink",
     "RunSprintLoopResult",
     "SPRINT_ESCALATION_RATE_EXCEEDED_MARKER",

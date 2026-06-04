@@ -88,6 +88,8 @@ from loud_fail_harness.epic_run_state import (
     PerEpicRetryBudget,
     PerStoryStatus,
     advance_epic_run_state,
+    load_epic_run_state,
+    reconstruct_budget_on_resume,
 )
 from loud_fail_harness.reconciler import load_marker_lifetimes
 from loud_fail_harness.retry_budget import DEFAULT_PER_EPIC_RETRY_MULTIPLIER
@@ -611,12 +613,75 @@ def run_epic_loop(
     epic_state = init_epic_run_state(
         epic_id, run_id, story_ids, multiplier=multiplier
     )
+
+    # Resume budget reconstruction (Story 16.5 AC-5/7/8/9). A pre-existing cache
+    # at epic_run_state_path means this is a re-invocation after a pause: carry
+    # the cumulative per-epic budget (the ORIGINAL epic-sized effective_budget
+    # AND the already-consumed count) + durable markers forward, instead of
+    # letting init_epic_run_state's consumed=0 / re-narrowed effective_budget
+    # silently hand a runaway retry sequence a fresh budget. Gated SOLELY on
+    # cache presence + run_id match: a first invocation finds no file (the first
+    # advance_epic_run_state below creates it), so the clean path is byte-for-
+    # byte unchanged (AC-9). Only the budget sub-model + durable markers are
+    # carried; per-story-status / cost-partition re-derivation is OUT of scope
+    # (re-derived via enumerate-narrowing + canonical stores — AC-5 boundary).
+    if epic_run_state_path.is_file():
+        epic_state = reconstruct_budget_on_resume(
+            epic_state,
+            persisted=load_epic_run_state(epic_run_state_path),
+            run_id=run_id,
+            cache_path=epic_run_state_path,
+            budget_field="per_epic_retry_budget",
+            transient_marker_classes=transient_marker_classes,
+        )
+
+    # Pre-dispatch budget admission (Story 16.5 review). A quota guard is an
+    # ADMISSION invariant checked BEFORE the guarded action, not only after it.
+    # On a resume that reconstructed an already-exhausted budget
+    # (``consumed >= effective_budget``) with stories still to dispatch, pause
+    # IMMEDIATELY without dispatching a further story — so the guard holds
+    # strictly across resume boundaries (a runaway sequence cannot buy one extra
+    # story per re-invocation). No-op on a fresh run: ``consumed`` starts at 0,
+    # so this never fires before the post-dispatch fold has accrued past the
+    # ceiling (by which point the loop has already broken). Epic 18's parallel
+    # dispatcher MUST apply this same admission gate per concurrent unit.
+    budget = epic_state.per_epic_retry_budget
+    admission_state, admission_marker = apply_epic_budget(
+        epic_state.current_state,
+        budget.consumed,
+        budget.effective_budget,
+        has_undispatched=bool(story_ids),
+    )
+    if admission_state == "epic-paused-on-budget":
+        admission_markers = epic_state.active_markers
+        if (
+            admission_marker
+            and EPIC_BUDGET_EXHAUSTED_MARKER not in admission_markers
+        ):
+            admission_markers = (*admission_markers, EPIC_BUDGET_EXHAUSTED_MARKER)
+        epic_state = epic_state.model_copy(
+            update={
+                "current_state": admission_state,
+                "active_markers": admission_markers,
+            }
+        )
+
     advance = advance_epic_run_state(
         epic_run_state_path,
         epic_state,
         transient_marker_classes=transient_marker_classes,
     )
     epic_state = advance.next_state
+
+    if epic_state.current_state == "epic-paused-on-budget":
+        return RunEpicLoopResult(
+            epic_id=epic_id,
+            run_id=run_id,
+            final_state=epic_state,
+            dispatched_story_ids=(),
+            paused_on_story_id=None,
+            wrote_path=epic_run_state_path,
+        )
 
     total = len(story_ids)
     dispatched: list[str] = []

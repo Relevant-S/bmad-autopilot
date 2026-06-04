@@ -83,6 +83,7 @@ from loud_fail_harness.epic_lifecycle import StoryLoopOutcome, run_epic_loop
 from loud_fail_harness.sprint_lifecycle import (
     SPRINT_ESCALATION_RATE_EXCEEDED_MARKER,
     EpicLoopOutcome,
+    EpicLoopRunnerAdapter,
     RunSprintLoopResult,
     run_sprint_loop,
 )
@@ -165,29 +166,37 @@ def _epic_outcome(
     )
 
 
+def _canned_story_runner(
+    *, story_id: str, index: int, total: int
+) -> StoryLoopOutcome:
+    """The per-story runner the clean run injects: canned non-zero per-story
+    retries + costs so the per-epic budget consumption and cost partition are
+    POSITIVE witnesses. Keyed by ``story_id`` so it serves either epic."""
+    return StoryLoopOutcome(
+        terminal_status="merge-ready",  # type: ignore[arg-type]
+        retries_consumed=_RETRIES[story_id],
+        cost=_COSTS[story_id],
+    )
+
+
 def _real_epic_runner(repo_root: pathlib.Path, sprint_status_path: pathlib.Path):
-    """An ``EpicLoopRunner`` that drives the REAL nested ``run_epic_loop`` for
-    each epic unit, writing a genuine per-epic cache at the sprint-loop-supplied
-    ``epic_run_state_path`` (AC-7 ≥-1-real-lifecycle witness — here BOTH epics)."""
+    """The PRIOR test-local ``EpicLoopRunner`` that hand-rolled the REAL nested
+    ``run_epic_loop`` drive + ``RunEpicLoopResult`` → ``EpicLoopOutcome`` mapping.
+
+    Retained as the reference the production :class:`EpicLoopRunnerAdapter` is
+    proven byte-identical to (Story 16.5 AC-10
+    ``test_clean_run_adapter_matches_prior_mapping``); the clean run itself now
+    drives the production adapter (see :func:`_drive_clean_run`)."""
 
     def runner(
         *, epic_id: str, index: int, total: int, epic_run_state_path: pathlib.Path
     ) -> EpicLoopOutcome:
-        def story_runner(
-            *, story_id: str, index: int, total: int
-        ) -> StoryLoopOutcome:
-            return StoryLoopOutcome(
-                terminal_status="merge-ready",  # type: ignore[arg-type]
-                retries_consumed=_RETRIES[story_id],
-                cost=_COSTS[story_id],
-            )
-
         result = run_epic_loop(
             epic_id,
             run_id=_RUN_ID,
             sprint_status_path=sprint_status_path,
             epic_run_state_path=epic_run_state_path,
-            story_loop_runner=story_runner,
+            story_loop_runner=_canned_story_runner,
             transient_marker_classes=_NO_TRANSIENT,
         )
         terminal = result.final_state.current_state
@@ -230,12 +239,21 @@ def _drive_clean_run(repo_root: pathlib.Path) -> _CleanRunArtifacts:
     automation = repo_root / "_bmad" / "automation"
     sprint_run_state_path = automation / "sprint-run-state.yaml"
 
+    # AC-10: the clean-run path now drives the PRODUCTION EpicLoopRunnerAdapter
+    # (the same RunEpicLoopResult → EpicLoopOutcome mapping the test-local
+    # _real_epic_runner previously hand-rolled), so the ≥-1-real-nested-loop
+    # witness flows through production code.
     result = run_sprint_loop(
         _SPRINT_ID,
         run_id=_RUN_ID,
         sprint_status_path=sprint_status_path,
         sprint_run_state_path=sprint_run_state_path,
-        epic_loop_runner=_real_epic_runner(repo_root, sprint_status_path),
+        epic_loop_runner=EpicLoopRunnerAdapter(
+            run_id=_RUN_ID,
+            sprint_status_path=sprint_status_path,
+            story_loop_runner=_canned_story_runner,
+            transient_marker_classes=_NO_TRANSIENT,
+        ),
         story_loop_runner=_unused_story_runner,
         repo_root=repo_root,
         transient_marker_classes=_NO_TRANSIENT,
@@ -520,4 +538,40 @@ def test_ref_run_composes_full_sprint_16_lifecycle(ref_run: _RefRunResult) -> No
     assert (
         SPRINT_ESCALATION_RATE_EXCEEDED_MARKER
         in ref_run.rate.final_state.active_markers
+    )
+
+
+def test_clean_run_adapter_matches_prior_mapping(tmp_path: pathlib.Path) -> None:
+    """AC-10 — the production ``EpicLoopRunnerAdapter`` produces an
+    ``EpicLoopOutcome`` identical to the prior test-local ``_real_epic_runner``
+    mapping for the same epic unit, proving the adapter IS the mapping the
+    fixture previously hand-rolled (both drive the SAME nested run_epic_loop into
+    distinct per-epic caches)."""
+    sprint_status_path = _write_sprint_status(tmp_path)
+
+    adapter = EpicLoopRunnerAdapter(
+        run_id=_RUN_ID,
+        sprint_status_path=sprint_status_path,
+        story_loop_runner=_canned_story_runner,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    adapter_outcome = adapter(
+        epic_id=_EPIC_A,
+        index=1,
+        total=2,
+        epic_run_state_path=tmp_path / "adapter-epic-916.yaml",
+    )
+
+    prior_outcome = _real_epic_runner(tmp_path, sprint_status_path)(
+        epic_id=_EPIC_A,
+        index=1,
+        total=2,
+        epic_run_state_path=tmp_path / "prior-epic-916.yaml",
+    )
+
+    assert adapter_outcome == prior_outcome
+    assert adapter_outcome.terminal_state == "epic-complete"
+    assert adapter_outcome.stories_completed == 2
+    assert adapter_outcome.retries_consumed == (
+        _RETRIES[_STORY_A1] + _RETRIES[_STORY_A2]
     )

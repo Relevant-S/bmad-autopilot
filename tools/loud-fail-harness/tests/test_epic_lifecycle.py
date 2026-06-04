@@ -62,7 +62,11 @@ from loud_fail_harness.epic_lifecycle import (
     init_epic_run_state,
     run_epic_loop,
 )
-from loud_fail_harness.epic_run_state import EpicRunState, PerEpicCostPartition
+from loud_fail_harness.epic_run_state import (
+    EpicRunState,
+    PerEpicCostPartition,
+    ResumeBudgetReconstructionConflict,
+)
 
 _NO_TRANSIENT: frozenset[str] = frozenset()
 
@@ -854,3 +858,171 @@ def test_run_epic_loop_zero_retries_completes_unchanged(
         result.final_state.per_epic_retry_budget.multiplier
         == DEFAULT_PER_EPIC_RETRY_MULTIPLIER
     )
+
+
+# ---------------------------------------------------------------------------
+# Resume budget reconstruction (Story 16.5 AC-5/7/8/9/10)
+# ---------------------------------------------------------------------------
+
+
+def test_run_epic_loop_resume_exhausted_dispatches_zero(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-5/AC-10 + review admission invariant: a re-invocation against a
+    persisted cache (same run_id) carries the cumulative ``consumed`` forward
+    (NOT reset to 0), and because the reconstructed budget is already exhausted
+    at entry the pre-dispatch admission gate pauses WITHOUT dispatching any
+    further story — the guard holds strictly across the resume boundary (a
+    runaway sequence cannot buy one extra story per re-invocation)."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {
+            "15-1-a": "ready-for-dev",
+            "15-2-b": "ready-for-dev",
+            "15-3-c": "ready-for-dev",
+        },
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+
+    # First run: 15-1-a alone consumes the full epic budget (2 × 3 = 6) →
+    # epic-paused-on-budget after the first story, 15-2-b / 15-3-c undispatched.
+    first = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=_retry_runner({"15-1-a": 6}),
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert first.final_state.current_state == "epic-paused-on-budget"
+    assert first.final_state.per_epic_retry_budget.consumed == 6
+    assert first.dispatched_story_ids == ("15-1-a",)
+    assert EPIC_BUDGET_EXHAUSTED_MARKER in first.final_state.active_markers
+
+    # Re-invoke against the persisted cache with the SAME run_id. The budget was
+    # already exhausted at entry, so the admission gate pauses BEFORE dispatching
+    # — the runner must never be called (zero re-dispatch).
+    def _must_not_dispatch(
+        *, story_id: str, index: int, total: int
+    ) -> StoryLoopOutcome:
+        raise AssertionError(
+            f"no story may be dispatched on an exhausted resume; got {story_id!r}"
+        )
+
+    resumed = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=_must_not_dispatch,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert resumed.final_state.per_epic_retry_budget.consumed == 6
+    assert resumed.final_state.per_epic_retry_budget.effective_budget == 6
+    assert resumed.final_state.current_state == "epic-paused-on-budget"
+    assert resumed.dispatched_story_ids == ()
+    assert resumed.paused_on_story_id is None
+    # The pre-pause durable marker survived the resume boundary (AC-7).
+    assert EPIC_BUDGET_EXHAUSTED_MARKER in resumed.final_state.active_markers
+
+
+def test_run_epic_loop_resume_under_budget_still_dispatches(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Admission gate is a no-op when the reconstructed budget is NOT exhausted:
+    a resumed run whose carried ``consumed`` is below ``effective_budget`` keeps
+    dispatching (the gate must not over-pause an under-budget resume)."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+
+    # First run completes cleanly consuming 1 of 4 (2 × 2) → cache persisted.
+    first = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=_retry_runner({"15-1-a": 1}),
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert first.final_state.current_state == "epic-complete"
+    assert first.final_state.per_epic_retry_budget.consumed == 1
+
+    # Resume (same run_id): consumed=1 < effective=4, so the admission gate is a
+    # no-op and the loop dispatches the still-ready stories.
+    dispatched: list[str] = []
+    resumed = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=_retry_runner({}, dispatched=dispatched),
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert dispatched == ["15-1-a", "15-2-b"]
+    assert resumed.final_state.current_state == "epic-complete"
+    # consumed carried forward (1), no new retries this run.
+    assert resumed.final_state.per_epic_retry_budget.consumed == 1
+
+
+def test_run_epic_loop_resume_run_id_mismatch_raises(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-8: a persisted cache whose run_id differs from the loop's run_id is a
+    stale cache from a different run at the same per-unit address — the loop
+    fails loudly with ``ResumeBudgetReconstructionConflict`` (recovery-state-
+    conflict), naming both run_ids and the cache path."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=_retry_runner({}),
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    with pytest.raises(ResumeBudgetReconstructionConflict) as excinfo:
+        run_epic_loop(
+            "epic-15",
+            run_id="run-2",
+            sprint_status_path=sprint,
+            epic_run_state_path=erp,
+            story_loop_runner=_retry_runner({}),
+            transient_marker_classes=_NO_TRANSIENT,
+        )
+    err = excinfo.value
+    assert err.marker_class == "recovery-state-conflict"
+    assert err.cache_run_id == "run-1"
+    assert err.loop_run_id == "run-2"
+    assert str(erp) in str(err)
+
+
+def test_run_epic_loop_first_invocation_no_reconstruction(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-9: on a first invocation no cache exists at loop entry, so the init
+    seeding path runs unchanged (consumed starts at 0, effective_budget from the
+    formula) — reconstruction is additive and gated solely on cache presence."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev"},
+    )
+    erp = tmp_path / "epic-run-state.yaml"
+    assert not erp.exists()
+    result = run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp,
+        story_loop_runner=_retry_runner({"15-1-a": 1}),
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    assert result.final_state.current_state == "epic-complete"
+    assert result.final_state.per_epic_retry_budget.consumed == 1
+    assert result.final_state.per_epic_retry_budget.effective_budget == 4
