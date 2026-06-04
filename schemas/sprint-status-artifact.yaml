@@ -1,0 +1,282 @@
+# Sprint-status-artifact schema (Epic 16 Story 16.3 / FR-P2-2).
+#
+# Contract anchors:
+#   - FR-P2-2 (PRD lines 944-947) — sprint-level orchestration with aggregate
+#     observability. This schema defines the STRUCTURED, OBJECTIVE-ONLY artifact
+#     emitted at sprint close: per-epic + per-story outcomes, aggregate cost,
+#     retry-budget consumption, escalation rate, and active loud-fail markers.
+#   - Story 16.3 (epics-phase-2.md lines 498-511) — "sprint-status artifact
+#     (generated at sprint close, NOT a retrospective)". The closed shape IS the
+#     "no subjective fields" enforcement: `additionalProperties: false` at EVERY
+#     object level makes a subjective field (`what_went_well`, `recommendation`,
+#     `lessons_learned`, `sentiment`, …) structurally REJECTED. This is the
+#     schema-layer guarantee of the three-layer defense (closed Pydantic model +
+#     this closed schema + the rendered-markdown denylist scan).
+#   - PRD-locked retrospective boundary (Phase 2 Journey Pointer 2) — "the
+#     retrospective itself is NOT automated; reflection on what went well and
+#     badly is a human responsibility". This artifact is the OBJECTIVE input the
+#     user-managed `/retrospective` consumes; the Automator never authors
+#     reflection (sensor-not-advisor at sprint scope).
+#   - NFR-R8 (PRD line 987) — this artifact is a READ-ONLY aggregate over the
+#     durable per-epic epic-run-state caches + the sprint-run-state cache +
+#     (best-effort) the per-story run-state caches; it adds NO canonical store.
+#   - NFR-O2 (PRD) — the on-disk artifact is plain-markdown + structurally
+#     inspectable; this schema validates the structured DATA the markdown is
+#     rendered from (and that `assemble_sprint_status_artifact` re-validates
+#     before the atomic write — defense in depth).
+#   - Pattern 1 (architecture.md File-naming section) — `<kebab-name>.yaml`
+#     file-naming; snake_case structural keys; kebab-case identifier values
+#     (current_state / per_epic status / per_story status enums).
+#
+# This file encodes a contract validated by CI (the test suite); modify with
+# care. The Pydantic mirror lives in the substrate-LIBRARY
+# `sprint_status_artifact.py` (sibling of `bundle_assembly_epic.py`), NOT a sixth
+# substrate component (ADR-003 Consequence 1 — substrate stays at FIVE).
+#
+# Versioning discipline (mirrors sprint-run-state.yaml):
+#
+#   - Adding a new optional field (additive)             → MINOR version bump
+#   - Adding a new required field                        → MAJOR version bump
+#   - Renaming / removing a required field               → MAJOR version bump
+#   - Tightening a constraint (enum reduction, …)        → MAJOR version bump
+#   - Loosening a constraint (enum extension, …)         → MINOR version bump
+#   - Documentation-only changes                         → PATCH version bump
+#
+# Co-versioning notes:
+#
+#   - Co-versioned-on-bump with `sprint-run-state.yaml` + `epic-run-state.yaml`:
+#     `current_state` mirrors `sprint-run-state.yaml`'s `current_state` enum
+#     (`SprintCurrentState`); `per_epic` `status` extends `epic-run-state.yaml`'s
+#     `current_state` enum (`EpicCurrentState`) with `not-dispatched` (the
+#     explicit loud-fail surface for a per-epic cache that never materialized —
+#     never a silent omission); `per_story` `status` extends the `PerStoryStatus`
+#     enum with `not-dispatched` (an unassigned story whose per-story cache is
+#     not locatable — the best-effort lower-bound caveat).
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/sprint-status-artifact.yaml"
+schema_version: "1.0"
+title: "Sprint-Status-Artifact"
+description: >-
+  Structured, OBJECTIVE-ONLY sprint-close artifact (Epic 16 Story 16.3 /
+  FR-P2-2). A read-only aggregate (NFR-R8) over the durable per-epic + sprint
+  run-state caches rendered to plain markdown (NFR-O2). It is NOT a
+  retrospective: the closed shape (additionalProperties:false at every object
+  level) makes subjective content structurally impossible. The user-managed
+  /retrospective workflow consumes this as its objective input.
+
+type: object
+required:
+  - sprint_id
+  - run_id
+  - current_state
+  - generated_at
+  - per_epic
+  - per_story
+  - aggregate_cost_total
+  - retry_budget
+  - escalation
+  - active_markers
+additionalProperties: false
+
+properties:
+  sprint_id:
+    type: string
+    minLength: 1
+    description: >-
+      BMAD-domain per-sprint identifier (the sprint-run-state cache's sprint_id).
+
+  run_id:
+    type: string
+    minLength: 1
+    description: >-
+      Orchestrator-domain run identifier correlating the sprint dispatch with
+      the sprint-run-state.yaml record.
+
+  current_state:
+    type: string
+    enum:
+      - sprint-in-progress
+      - sprint-paused-on-escalation
+      - sprint-paused-on-budget
+      - sprint-complete
+    description: >-
+      The sprint terminal/paused state the artifact was assembled at (verbatim
+      from the sprint-run-state cache). The assembler is current_state-agnostic
+      (it renders whatever the cache holds); a paused sprint is at a close
+      boundary too, and its active-markers section is where the artifact is most
+      useful. Kebab-case per Pattern 1.
+
+  generated_at:
+    type: string
+    minLength: 1
+    description: >-
+      Timezone-aware UTC ISO-8601 timestamp injected at assembly (the byte-stable
+      idempotency injection point — re-rendering from an unchanged cache produces
+      byte-identical output).
+
+  per_epic:
+    type: array
+    description: >-
+      Per-epic outcome rows in epic_ids (sprint-defined) order. A per-epic cache
+      that is absent (an epic that never dispatched before a pause) surfaces as a
+      row with status `not-dispatched` + zero cost/retries — never a silent
+      omission (the loud-fail surface for a missing-cache anomaly).
+    items:
+      $ref: "#/$defs/sprint_epic_row"
+
+  per_story:
+    type: array
+    description: >-
+      Per-story outcome rows: each contained epic's stories (epic_id set) plus
+      unassigned stories (epic_id null). Status/cost from the owning epic cache;
+      unassigned stories surface best-effort (status `not-dispatched`, cost 0.0)
+      pending a pinned per-story addressing convention (see deferred-work.md).
+    items:
+      $ref: "#/$defs/sprint_story_row"
+
+  aggregate_cost_total:
+    type: number
+    minimum: 0
+    description: >-
+      Sum of per-epic epic_cost_total (+ per-unassigned-story cost when locatable,
+      else 0.0 — a LOWER BOUND, mirroring the epic-bundle zero-cost caveat).
+
+  retry_budget:
+    $ref: "#/$defs/sprint_retry_budget_summary"
+    description: >-
+      The per-sprint retry-budget consumption (consumed of effective_budget) from
+      the sprint-run-state cache's per_sprint_retry_budget.
+
+  escalation:
+    $ref: "#/$defs/sprint_escalation_summary"
+    description: >-
+      The sprint escalation rate re-derived from the durable caches (the same
+      aggregate Story 16.2 tallied transiently).
+
+  active_markers:
+    type: array
+    description: >-
+      The de-duplicated union of the sprint cache's active markers (scope
+      `sprint`) and each per-epic cache's active markers (scope `epic:<epic-id>`).
+      This is the artifact's OWN loud-fail surface — the markers it RENDERS, not a
+      marker the assembler/validator raises.
+    items:
+      $ref: "#/$defs/sprint_active_marker"
+
+$defs:
+  sprint_epic_row:
+    type: object
+    additionalProperties: false
+    required:
+      - epic_id
+      - status
+      - cost_total
+      - retries_consumed
+      - retries_budget
+    properties:
+      epic_id:
+        type: string
+        minLength: 1
+      status:
+        type: string
+        enum:
+          - epic-in-progress
+          - epic-paused-on-escalation
+          - epic-paused-on-budget
+          - epic-complete
+          - not-dispatched
+        description: >-
+          The epic's loaded current_state, OR `not-dispatched` when the per-epic
+          cache is absent (loud, never silent).
+      cost_total:
+        type: number
+        minimum: 0
+      retries_consumed:
+        type: integer
+        minimum: 0
+      retries_budget:
+        type: integer
+        minimum: 0
+
+  sprint_story_row:
+    type: object
+    additionalProperties: false
+    required:
+      - story_id
+      - epic_id
+      - status
+      - cost
+    properties:
+      story_id:
+        type: string
+        minLength: 1
+      epic_id:
+        type: ["string", "null"]
+        description: >-
+          The owning epic_id, or null for an unassigned story.
+      status:
+        type: string
+        enum:
+          - ready-for-dev
+          - in-progress
+          - review
+          - qa
+          - done
+          - escalated
+          - merge-ready
+          - not-dispatched
+      cost:
+        type: number
+        minimum: 0
+
+  sprint_retry_budget_summary:
+    type: object
+    additionalProperties: false
+    required:
+      - consumed
+      - effective_budget
+    properties:
+      consumed:
+        type: integer
+        minimum: 0
+      effective_budget:
+        type: integer
+        minimum: 0
+
+  sprint_escalation_summary:
+    type: object
+    additionalProperties: false
+    required:
+      - escalated_stories
+      - stories_completed
+      - rate
+    properties:
+      escalated_stories:
+        type: integer
+        minimum: 0
+      stories_completed:
+        type: integer
+        minimum: 0
+      rate:
+        type: number
+        minimum: 0
+        description: >-
+          escalated_stories / stories_completed (0.0 when stories_completed is 0).
+
+  sprint_active_marker:
+    type: object
+    additionalProperties: false
+    required:
+      - marker_class
+      - scope
+    properties:
+      marker_class:
+        type: string
+        minLength: 1
+      scope:
+        type: string
+        minLength: 1
+        description: >-
+          `sprint` for a sprint-cache marker, or `epic:<epic-id>` for a per-epic
+          cache marker.

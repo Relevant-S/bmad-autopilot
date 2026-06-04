@@ -60,12 +60,33 @@ Escalation keeps **precedence** over budget when both are present at the same bo
 
 On a clean run (every contained epic `epic-complete` AND every unassigned story `merge-ready` / `done`) the sprint transitions to `sprint-complete`.
 
-## AC-6 boundary — NO retrospective, NO sprint-status artifact (PRD-locked)
+### (5) Assemble the sprint-status artifact at sprint close (Story 16.3)
 
-The sprint loop's ONLY persisted output is the `sprint-run-state.yaml` cache + the per-unit epic/per-story canonical artifacts the contained loops already write. It MUST NOT emit:
+When `run_sprint_loop` returns — for ANY terminal sprint state (`sprint-complete` **OR** `sprint-paused-on-escalation` / `sprint-paused-on-budget`; a paused sprint is at a close boundary too, and its active-markers section is where the artifact earns its keep) — assemble the structured sprint-status artifact via the established `python3 -m` substrate-invocation boundary (NO sprint hook — Epic 16 has no sprint-PR-bundle story; the Orchestrator-LLM is the sprint-close trigger):
 
-- a **retrospective artifact** of any kind — reflection on what went well/badly is a human responsibility (Phase 2 Journey Pointer 2 "retrospective stays user-managed"; automating it would violate sensor-not-advisor at sprint scope). BMAD's `/retrospective` is a separate, explicitly human-run workflow.
-- a **`sprint-status-artifact-<sprint-id>.md`** — that structured (non-retrospective) sprint-close artifact is Story 16.3's deliverable, not 16.1's. (Even 16.3's artifact is explicitly NOT a retrospective — this boundary holds across the whole epic.)
+```
+python3 -m loud_fail_harness.sprint_status_artifact \
+  --sprint-id <sprint-id> --run-id <run-id> \
+  --repo-root <repo-root>
+```
+
+This invokes `assemble_sprint_status_artifact`, a SEPARATE downstream read-only aggregate (it does NOT touch `run_sprint_loop` / `sprint_lifecycle.py` — see the AC-6 boundary below). It re-derives the per-epic + per-story outcomes, aggregate cost, retry-budget consumption, escalation rate, and the scoped active-loud-fail-marker union from the durable caches (the sprint-run-state cache + each per-epic `epic-run-state-<epic-id>.yaml` cache; NFR-R8 aggregate read), renders plain markdown (NFR-O2), and atomic-writes (Pattern 4 / NFR-R1) to:
+
+```
+_bmad-output/sprints/sprint-status-artifact-<sprint-id>.md
+```
+
+The `_bmad-output/sprints/` directory is created on write. A pre-condition failure (missing sprint-run-state cache / `sprint_id`-`run_id` mismatch / bad path component) surfaces on stderr + exit 1 with NO marker; an assembler-logic failure routes through the EXISTING `bundle-assembly-failed` channel (no new marker class). The artifact path is the structured OBJECTIVE input the user runs `/retrospective` against — it is NOT itself a retrospective (see below).
+
+## AC-6 boundary — the artifact IS written at sprint close, but it is NOT a retrospective (PRD-locked)
+
+`run_sprint_loop` / `sprint_lifecycle.py` are **UNCHANGED** by Story 16.3: the sprint loop's ONLY run-state-family write remains the `sprint-run-state.yaml` cache (Story 16.1's `test_run_sprint_loop_writes_no_retrospective_or_artifact` witness stays verbatim-green). The sprint-status artifact is written by the SEPARATE `assemble_sprint_status_artifact` substrate library (phase 5 above), invoked at sprint close by THIS protocol — the epic-bundle/`run_epic_loop` separation-of-concerns one scope up.
+
+What is still NEVER emitted:
+
+- a **retrospective artifact** of any kind — reflection on what went well/badly is a human responsibility (Phase 2 Journey Pointer 2 "retrospective stays user-managed"; automating it would violate sensor-not-advisor at sprint scope). BMAD's `/retrospective` is a separate, explicitly human-run workflow that consumes the sprint-status artifact as its objective input.
+
+The `sprint-status-artifact-<sprint-id>.md` is structured OBJECTIVE state ONLY — the Automator never crosses from sensor to advisor at sprint scope. "No subjective fields" is enforced at THREE structural layers: (1) the closed `SprintStatusArtifact` Pydantic model (`extra="forbid"`) makes a subjective field unconstructable; (2) `assemble_sprint_status_artifact` validates the serialized model against the closed `schemas/sprint-status-artifact.yaml` (`additionalProperties: false` everywhere) BEFORE the atomic write; (3) the rendered markdown carries only the objective sections, and `sprint_status_artifact_validator.scan_rendered_markdown` rejects any subjective heading.
 
 ## Transient-marker re-derivation model (AC-7 — reused, no taxonomy change)
 
@@ -80,7 +101,7 @@ Sprint-scope reattachment reuses the existing SessionStart hook + `evaluate_reat
 ## Scope boundaries
 
 - **Per-sprint budget enforcement + escalation-rate marker → Story 16.2 (landed here).** The cumulative budget folds `consumed` and pauses on `sprint-paused-on-budget`; the escalation-rate threshold emits the informational `sprint-escalation-rate-exceeded` marker (non-blocking).
-- **`sprint-status-artifact-*.md` → Story 16.3** (not a retrospective; not written here).
+- **`sprint-status-artifact-*.md` → Story 16.3 (landed; written at sprint close by phase 5 above)** — a SEPARATE assembler, NOT inside `run_sprint_loop`; structured objective state, explicitly NOT a retrospective.
 - **`status --sprint <sprint-id>` → Story 16.4** (no read-only sprint-status query command here).
 - **Sprint-level PR bundle → not in Epic 16's breakdown** (do NOT extend the Stop hook in 16.1; a sprint-PR-bundle need would be a correct-course addition, not silent scope creep).
 - **Parallel dispatch → Epic 18** (sequential only).
