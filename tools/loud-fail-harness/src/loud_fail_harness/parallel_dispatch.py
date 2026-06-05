@@ -92,6 +92,7 @@ from __future__ import annotations
 import collections
 import concurrent.futures as cf
 import pathlib
+from collections.abc import Callable
 from typing import Protocol
 
 from loud_fail_harness import parallel_pollution
@@ -171,6 +172,7 @@ def dispatch_stories_parallel(
     repo_root: pathlib.Path | None = None,
     progress_sink: ProgressSink | None = None,
     claim_provider: parallel_pollution.StoryClaimProvider | None = None,
+    claim_release: Callable[[int], None] | None = None,
 ) -> RunEpicLoopResult:
     """Fan out the enumerated stories concurrently, each worktree-isolated, and
     fold their terminals into the epic aggregate on the dispatching thread.
@@ -230,6 +232,17 @@ def dispatch_stories_parallel(
     in-flight units drain without interruption. When ``claim_provider`` is
     ``None`` detection is inert and the parallel path behaves exactly as Story
     18.1 shipped it.
+
+    Concurrent env-provisioning discipline (Story 18.3): the production
+    ``claim_provider`` (``env_provisioning.ParallelEnvClaimProvider``) hands each
+    admitted story a DISJOINT pre-flight port (so the live registry never holds
+    two equal ports — the prevention half of the parallel-env contract this
+    detector is the sensor for). The paired ``claim_release`` callback (the
+    allocator's ``release``) is invoked at the per-story terminal-cleanup point —
+    the SAME place the story is dropped from ``live_claims`` — so a freed port
+    returns to the pool for a later wave (Story 18.2 AC-2: a sequential re-use of
+    a freed port is NOT a collision). ``claim_release`` is inert without
+    ``claim_provider``.
 
     Returns a :class:`~loud_fail_harness.epic_lifecycle.RunEpicLoopResult` with
     the terminal epic state, the dispatched stories (submission order, filtered
@@ -390,8 +403,16 @@ def dispatch_stories_parallel(
                 story_id = in_flight.pop(future)
                 # Terminal cleanup of the live-claim registry: a finished story
                 # is no longer live, so a later wave reusing its freed
-                # port/subpath is NOT a collision.
-                live_claims.pop(story_id, None)
+                # port/subpath is NOT a collision. The disjoint-port allocator's
+                # release fires at this SAME terminal point (Story 18.3 AC-3) so
+                # the freed port returns to the pool for a later wave.
+                released_claim = live_claims.pop(story_id, None)
+                if (
+                    claim_release is not None
+                    and released_claim is not None
+                    and released_claim.allocated_port is not None
+                ):
+                    claim_release(released_claim.allocated_port)
                 try:
                     outcome = future.result()
                 except BaseException as exc:

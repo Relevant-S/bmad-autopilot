@@ -713,23 +713,69 @@ def run_epic_loop(
                 "ParallelStoryLoopRunner (the worktree-aware per-story driver) "
                 "— see loud_fail_harness.parallel_dispatch"
             )
+        from loud_fail_harness.env_provisioning import (
+            DisjointPortAllocator,
+            DisjointPortExhausted,
+            ParallelEnvClaimProvider,
+        )
         from loud_fail_harness.parallel_dispatch import dispatch_stories_parallel
 
-        return dispatch_stories_parallel(
-            epic_id,
+        # Supplying the production claim provider is what BOTH enforces the FR7
+        # concurrent-provisioning discipline (each story is handed a disjoint
+        # pre-flight port + a distinct env namespace) AND activates Story 18.2's
+        # pollution detector at runtime — Story 18.1 left ``claim_provider``
+        # injectable but unfilled, so detection was inert in production until
+        # now (Story 18.3). Constructed ONLY on this parallel branch; the
+        # sequential path below never touches them (AC-6 bit-identity).
+        port_allocator = DisjointPortAllocator()
+        claim_provider = ParallelEnvClaimProvider(
             run_id=run_id,
-            story_ids=story_ids,
-            max_parallel_stories=max_parallel_stories,
-            runner=parallel_story_loop_runner,
-            epic_state=epic_state,
-            epic_run_state_path=epic_run_state_path,
-            transient_marker_classes=transient_marker_classes,
-            base_ref=base_ref,
-            trunk_allowlist=trunk_allowlist,
+            allocator=port_allocator,
             worktrees_root=worktrees_root,
             repo_root=repo_root,
-            progress_sink=progress_sink,
         )
+
+        try:
+            return dispatch_stories_parallel(
+                epic_id,
+                run_id=run_id,
+                story_ids=story_ids,
+                max_parallel_stories=max_parallel_stories,
+                runner=parallel_story_loop_runner,
+                epic_state=epic_state,
+                epic_run_state_path=epic_run_state_path,
+                transient_marker_classes=transient_marker_classes,
+                base_ref=base_ref,
+                trunk_allowlist=trunk_allowlist,
+                worktrees_root=worktrees_root,
+                repo_root=repo_root,
+                progress_sink=progress_sink,
+                claim_provider=claim_provider,
+                claim_release=port_allocator.release,
+            )
+        except DisjointPortExhausted:
+            # Impossibility-class signal (Story 18.3 AC-1): the OS ephemeral
+            # range dwarfs any realistic max_parallel_stories, so exhaustion
+            # means allocate_ephemeral_port is stuck or mis-stubbed — never
+            # genuine pressure. Transition to the existing escalation state so
+            # the epic run-state is persisted and inspectable via status --epic
+            # rather than crashing with no structured signal (loud-fail doctrine).
+            paused = epic_state.model_copy(
+                update={"current_state": "epic-paused-on-escalation"}
+            )
+            adv = advance_epic_run_state(
+                epic_run_state_path,
+                paused,
+                transient_marker_classes=transient_marker_classes,
+            )
+            return RunEpicLoopResult(
+                epic_id=epic_id,
+                run_id=run_id,
+                final_state=adv.next_state,
+                dispatched_story_ids=(),
+                paused_on_story_id=None,
+                wrote_path=epic_run_state_path,
+            )
 
     total = len(story_ids)
     dispatched: list[str] = []

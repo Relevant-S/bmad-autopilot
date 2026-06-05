@@ -225,17 +225,22 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import re
 import secrets
 import socket
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
-from typing import Any, Literal, Protocol, cast, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, cast, runtime_checkable
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from loud_fail_harness._shared import find_repo_root, load_schema
+from loud_fail_harness.epic_run_state import worktree_run_state_path
 from loud_fail_harness.event_validator import validate_event
+
+if TYPE_CHECKING:
+    from loud_fail_harness import parallel_pollution
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
@@ -1363,6 +1368,203 @@ def cleanup_orphan_processes(
     return tuple(emissions)
 
 
+# --------------------------------------------------------------------------- #
+# Concurrent-provisioning discipline (Story 18.3 — FR7 extension)             #
+# --------------------------------------------------------------------------- #
+
+_MAX_DISJOINT_PORT_REROLLS = 50
+_ALLOCATED_PORT_FIELD: str = "allocated_port"
+_ENV_NAMESPACE_FIELD: str = "env_namespace"
+_STORY_ENV_PREFIX = "BMAD_AUTOMATION_STORY_"
+
+
+class DisjointPortExhausted(RuntimeError):
+    """Raised when the disjoint allocator cannot find a port not already held
+    by a live claim within the bounded re-roll budget (Story 18.3 AC-1;
+    Pattern 5 loud-fail).
+
+    The OS ephemeral range (~28k ports on every supported platform) dwarfs any
+    realistic ``max_parallel_stories``, so exhaustion is an impossibility-class
+    signal — a stuck or mis-stubbed ``allocate_ephemeral_port``, never genuine
+    pressure. A typed exception rather than returning a colliding port or
+    looping forever.
+    """
+
+
+class DisjointPortAllocator:
+    """Userspace coordination over :func:`allocate_ephemeral_port` guaranteeing
+    no two concurrently-LIVE stories are handed the same port (Story 18.3 AC-1 —
+    the parallel-mode collision-prevention mechanism).
+
+    ``allocate_ephemeral_port`` is concurrency-unsafe by itself: the kernel
+    allocates ephemeral ports pseudo-sequentially and the bind-0-then-close
+    pattern does not coordinate across calls, so two calls in close succession
+    can return the same port. Under ``parallel_stories: true`` that is exactly
+    the ``shared-port-collision`` surface Story 18.2 detects. This allocator
+    PREVENTS it: :meth:`allocate` re-rolls the underlying primitive while the
+    returned port is already held, then registers the chosen port;
+    :meth:`release` frees it so a later wave may reuse it (matching Story 18.2
+    AC-2's "a sequential re-use of a freed port by a later wave is NOT a
+    collision"). ``SO_REUSEADDR`` is deliberately NOT used — it shares tuples,
+    the opposite of the isolation (and of loud-fail) this story wants.
+
+    Single-writer invariant: mutated ONLY on the dispatching (main) thread — the
+    provider that drives it is called single-writer per Story 18.2 AC-2 / Story
+    18.1 design decision (c). NO lock is taken and none is needed; do not
+    introduce a second worker-shared write surface.
+    """
+
+    def __init__(
+        self,
+        *,
+        allocate: Callable[[], int] = allocate_ephemeral_port,
+        max_rerolls: int = _MAX_DISJOINT_PORT_REROLLS,
+    ) -> None:
+        if max_rerolls < 1:
+            raise ValueError(f"max_rerolls must be >= 1, got {max_rerolls!r}")
+        self._allocate = allocate
+        self._max_rerolls = max_rerolls
+        self._live: set[int] = set()
+
+    def allocate(self) -> int:
+        for _ in range(self._max_rerolls):
+            port = self._allocate()
+            if port not in self._live:
+                self._live.add(port)
+                return port
+        raise DisjointPortExhausted(
+            f"could not allocate a disjoint ephemeral port within "
+            f"{self._max_rerolls} re-rolls ({len(self._live)} ports held); "
+            f"impossibility-class — inspect allocate_ephemeral_port"
+        )
+
+    def release(self, port: int) -> None:
+        self._live.discard(port)
+
+
+def story_env_namespace(story_id: str) -> str:
+    """Map a BMAD story-id to a deterministic, collision-free environment-
+    variable prefix valid under the POSIX env-name grammar
+    ``[A-Za-z_][A-Za-z0-9_]*`` (Story 18.3 AC-2).
+
+    Every maximal run of non-alphanumeric characters collapses to a single
+    ``_``; the slug is upper-cased and wrapped in the project marker prefix
+    ``BMAD_AUTOMATION_STORY_`` plus a trailing ``_`` separator
+    (``18-3-concurrent-...`` -> ``BMAD_AUTOMATION_STORY_18_3_CONCURRENT_..._``).
+    Deterministic (no timestamp, no randomness) and injective over the BMAD
+    kebab story-id grammar (``[a-z0-9]`` segments joined by single ``-``), so
+    distinct story-ids never share a prefix and a story-id always maps to the
+    same prefix. Pure — no I/O, no import-time side effect; the project-type
+    provisioners (Stories 4.4/4.5/9.3) are UNMODIFIED: the namespace is merely
+    AVAILABLE for a provisioner to apply to the env vars it exports.
+    """
+    if not story_id:
+        raise ValueError("story_id must be non-empty")
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", story_id).strip("_").upper()
+    if not slug:
+        raise ValueError(f"story_id {story_id!r} yields an empty slug after sanitization")
+    return f"{_STORY_ENV_PREFIX}{slug}_"
+
+
+def pre_seed_parallel_env(
+    run_state_path: pathlib.Path,
+    *,
+    allocated_port: int,
+    env_namespace: str,
+) -> None:
+    """Pre-seed the parallel-mode disjoint port + env namespace into a story's
+    per-worktree run-state (Story 18.3 AC-3 carrier).
+
+    Writes the additive top-level ``allocated_port`` (the load-bearing carrier)
+    and ``env_namespace`` (AC-2 availability) fields, creating the file and
+    parents when absent — the per-worktree run-state path is under the main repo
+    root (Story 14.4), so the dispatching thread can seed it before the worker
+    provisions. Operates at the YAML-dict layer (the SAME precedent as
+    :func:`_set_provisioned_env`; the ``RunState`` model is untouched and
+    ignores the extra keys on load), so the sequential path — which never calls
+    this — stays byte-identical (AC-6). Under ``parallel_stories: true`` the
+    env-provisioning runtime step consumes the seeded port instead of calling
+    :func:`allocate_ephemeral_port` independently, so the port the detector
+    registered is the port the dev server binds (no allocate-twice drift).
+    """
+    run_state_path.parent.mkdir(parents=True, exist_ok=True)
+    if run_state_path.is_file():
+        _loaded = yaml.safe_load(run_state_path.read_text(encoding="utf-8"))
+        current_dict: dict[str, Any] = _loaded if isinstance(_loaded, dict) else {}
+    else:
+        current_dict = {}
+    current_dict[_ALLOCATED_PORT_FIELD] = allocated_port
+    current_dict[_ENV_NAMESPACE_FIELD] = env_namespace
+    _atomic_write_run_state_dict(run_state_path, current_dict)
+
+
+class ParallelEnvClaimProvider:
+    """The first production
+    :class:`~loud_fail_harness.parallel_pollution.StoryClaimProvider`
+    (Story 18.3 AC-3) — the FR7-extension PREVENTION discipline that, by being
+    supplied, also ACTIVATES Story 18.2's pollution detector at runtime
+    (``run_epic_loop`` previously called the dispatcher with no provider, so the
+    detector was inert in production).
+
+    Per admitted story it: allocates a DISJOINT ephemeral port via the shared
+    :class:`DisjointPortAllocator` (AC-1); derives the per-story env namespace
+    via :func:`story_env_namespace` (AC-2); resolves the story's
+    ``evidence_subpath`` (the ``qa-evidence/<story-id>/<run-id>/`` shape Story
+    18.2 AC-2 named — a relative string label used for equality-based collision
+    detection in the live-claim registry; not materialized or resolved against
+    the filesystem inside this provider); sets
+    ``aggregate_claim_story_id = story_id``; pre-seeds the port + namespace into
+    the per-worktree run-state (:func:`pre_seed_parallel_env`, the AC-3
+    carrier); and returns the populated ``StoryClaim`` for the dispatcher's
+    live registry.
+
+    Called ONLY on the dispatching (main) thread (single-writer per Story 18.2
+    AC-2), so the shared :class:`DisjointPortAllocator` needs no lock. The
+    allocator's :meth:`~DisjointPortAllocator.release` is invoked by the
+    dispatcher at the SAME terminal-cleanup point it drops the story from the
+    live registry, so a freed port is reusable by a later wave.
+    ``run_epic_loop`` constructs this provider ONLY when ``parallel_stories`` is
+    resolved true (the sequential path never constructs it — AC-6 bit-identity).
+    """
+
+    def __init__(
+        self,
+        *,
+        run_id: str,
+        allocator: DisjointPortAllocator,
+        worktrees_root: pathlib.Path | None = None,
+        repo_root: pathlib.Path | None = None,
+    ) -> None:
+        self._run_id = run_id
+        self._allocator = allocator
+        self._worktrees_root = worktrees_root
+        self._repo_root = repo_root
+
+    def __call__(self, *, story_id: str) -> parallel_pollution.StoryClaim:
+        from loud_fail_harness import parallel_pollution
+
+        port = self._allocator.allocate()
+        try:
+            namespace = story_env_namespace(story_id)
+            run_state_path = worktree_run_state_path(
+                story_id,
+                worktrees_root=self._worktrees_root,
+                repo_root=self._repo_root,
+            )
+            pre_seed_parallel_env(
+                run_state_path, allocated_port=port, env_namespace=namespace
+            )
+        except Exception:
+            self._allocator.release(port)
+            raise
+        return parallel_pollution.StoryClaim(
+            story_id=story_id,
+            allocated_port=port,
+            evidence_subpath=f"qa-evidence/{story_id}/{self._run_id}/",
+            aggregate_claim_story_id=story_id,
+        )
+
+
 __all__ = [
     "ENV_SETUP_FAILED_MARKER",
     "ORPHAN_PROCESS_CLEANUP_MARKER",
@@ -1379,6 +1581,11 @@ __all__ = [
     "OrphanTerminator",
     "NoOpProvisioner",
     "EnvProvisioningFailed",
+    "DisjointPortExhausted",
+    "DisjointPortAllocator",
+    "ParallelEnvClaimProvider",
+    "story_env_namespace",
+    "pre_seed_parallel_env",
     "allocate_ephemeral_port",
     "surface_env_setup_failure",
     "make_env_provisioned_event",

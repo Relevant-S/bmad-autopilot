@@ -560,6 +560,9 @@ def test_run_epic_loop_parallel_branch_delegates(
         parallel_stories=True,
         max_parallel_stories=2,
         parallel_story_loop_runner=_make_runner(spy),
+        # repo_root sandboxes the production ParallelEnvClaimProvider's pre-seed
+        # (Story 18.3) into tmp instead of the real repo's worktrees dir.
+        repo_root=tmp_path,
     )
     assert result.final_state.current_state == "epic-complete"
     assert sorted(spy.created) == ["18-1-a", "18-2-b"]
