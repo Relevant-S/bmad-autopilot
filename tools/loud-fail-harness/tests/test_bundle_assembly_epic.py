@@ -86,6 +86,36 @@ active_markers:
 """
 
 
+_POLLUTION_PAUSED_EPIC_RUN_STATE = """schema_version: "1.0"
+epic_id: "epic-18"
+run_id: "run-1"
+current_state: "epic-paused-on-escalation"
+story_ids:
+  - "15-2-b"
+  - "18-3-c"
+per_story_status:
+  "15-2-b": "merge-ready"
+  "18-3-c": "ready-for-dev"
+per_epic_retry_budget:
+  multiplier: 2
+  story_count: 2
+  effective_budget: 4
+  consumed: 0
+per_epic_cost_partition:
+  per_story_cost:
+    "15-2-b": 0.0
+    "18-3-c": 0.0
+  epic_cost_total: 0.0
+active_markers:
+  - "parallel-story-state-pollution: shared-port-collision"
+marker_contexts:
+  "parallel-story-state-pollution":
+    story_id: "15-2-b"
+    conflicting_story_id: "18-3-c"
+    shared_surface: "shared-port"
+"""
+
+
 def _write_ers(tmp_path: pathlib.Path, body: str) -> pathlib.Path:
     path = tmp_path / "epic-run-state.yaml"
     path.write_text(body, encoding="utf-8")
@@ -200,6 +230,31 @@ def test_renders_epic_budget_exhausted_marker(tmp_path: pathlib.Path) -> None:
     # The synthesized context interpolates into the actionable pointer.
     assert "consumed `4` of `4`" in body
     assert "epic `epic-15` (run `run-1`)" in body
+
+
+def test_renders_pollution_marker_with_resolved_context(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Story 18.2 AC-5: the persisted `EpicRunState.marker_contexts` resolves
+    `parallel-story-state-pollution`'s {story_id}/{conflicting_story_id}/
+    {shared_surface} placeholders in the bundle loud-fail block — not a bare
+    marker string with unresolved {placeholders}."""
+    body = _assemble(
+        tmp_path, _POLLUTION_PAUSED_EPIC_RUN_STATE, epic_id="epic-18"
+    )
+    assert "## ⚠️ Loud-Fail Markers" in body
+    assert "### parallel-story-state-pollution" in body
+    # The actionable "How to enable" line interpolates the conflict context — the
+    # two colliding story-ids + the named surface resolve (NOT a bare template).
+    # (The separate verbatim "Diagnostic pointer" bullet intentionally shows the
+    # un-interpolated template; resolution is witnessed on the actionable line.)
+    how_to_enable = next(
+        line for line in body.splitlines() if line.startswith("- How to enable:")
+    )
+    assert "`15-2-b`" in how_to_enable
+    assert "`18-3-c`" in how_to_enable
+    assert "`shared-port`" in how_to_enable
+    assert "{story_id}" not in how_to_enable
 
 
 def test_section_order_is_deterministic(tmp_path: pathlib.Path) -> None:

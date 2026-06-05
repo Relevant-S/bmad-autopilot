@@ -23,12 +23,13 @@ module depends on ``bundle_assembly``; ``bundle_assembly`` does NOT depend on
 this module (no circular drift; modifications to ``assemble_bundle`` cannot
 couple to epic-scope logic — AC-5 bit-identity for the per-story bundle).
 
-The ``EpicRunState`` cache does NOT persist ``marker_contexts`` (unlike the
-per-story ``RunState``). The sole per-epic durable marker — ``epic-budget-
-exhausted`` — declares ``pointer_context_fields: [epic_id, run_id, consumed,
-effective_budget]`` in ``marker-taxonomy.yaml``, so this module SYNTHESIZES the
-render-time context for it from the loaded ``EpicRunState`` fields (see
-:func:`_build_marker_contexts`). The per-story markers are NOT re-aggregated
+The ``epic-budget-exhausted`` durable marker declares ``pointer_context_fields:
+[epic_id, run_id, consumed, effective_budget]`` in ``marker-taxonomy.yaml``, all
+derivable from the loaded ``EpicRunState``, so this module SYNTHESIZES the
+render-time context for it. Markers whose context is captured at emission time
+and is NOT cache-derivable — ``parallel-story-state-pollution`` (Story 18.2) —
+are read from the persisted ``EpicRunState.marker_contexts`` map and merged in
+(see :func:`_build_marker_contexts`). The per-story markers are NOT re-aggregated
 inline; each per-story status row carries a POINTER to that story's own
 canonical artifact (per-story merge-ready bundle / escalation bundle / live
 event-stream), where that story's markers are canonically rendered (Story 15.3
@@ -307,15 +308,18 @@ def _render_retry_budget(state: EpicRunState) -> str:
 
 
 def _build_marker_contexts(state: EpicRunState) -> dict[str, dict[str, object]]:
-    """Synthesize the render-time marker context the loud-fail-block renderer
-    needs (the epic-run-state cache does not persist ``marker_contexts``).
+    """Build the render-time marker context the loud-fail-block renderer needs.
 
     ``epic-budget-exhausted`` declares ``pointer_context_fields: [epic_id,
     run_id, consumed, effective_budget]``; all four are derivable from the loaded
-    ``EpicRunState``. The renderer only interpolates contexts for ACTIVE markers,
-    so the entry is harmless when the marker is not present.
+    ``EpicRunState``, so it is synthesized here. Markers whose context is NOT
+    cache-derivable — e.g. ``parallel-story-state-pollution``'s ``story_id`` /
+    ``conflicting_story_id`` / ``shared_surface`` (captured at emission time by
+    Story 18.2) — are read from the persisted ``EpicRunState.marker_contexts``
+    and take precedence (the cache cannot re-derive them). The renderer only
+    interpolates contexts for ACTIVE markers, so unused entries are harmless.
     """
-    return {
+    contexts: dict[str, dict[str, object]] = {
         EPIC_BUDGET_EXHAUSTED_MARKER: {
             "epic_id": state.epic_id,
             "run_id": state.run_id,
@@ -323,6 +327,9 @@ def _build_marker_contexts(state: EpicRunState) -> dict[str, dict[str, object]]:
             "effective_budget": state.per_epic_retry_budget.effective_budget,
         }
     }
+    for marker_class, ctx in state.marker_contexts.items():
+        contexts[marker_class] = dict(ctx)
+    return contexts
 
 
 def assemble_epic_bundle(

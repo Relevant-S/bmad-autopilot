@@ -3238,17 +3238,16 @@ verdicts:
     audit_date: "2026-05-30"
   - marker_class: parallel-story-state-pollution
     surface_name: orchestrator-dispatch-wrapper
-    verdict: scheduled-by-story
-    discharging_story: "18.2"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/parallel_pollution.py:234
+    audit_date: "2026-06-05"
     rationale: |-
-      The orchestrator parallel-dispatch substrate is where concurrent
-      per-story worktrees collide on a shared-state surface (port pool /
-      evidence root / aggregate run-state). The marker IS expected at this
-      surface, but the detection emission lands in Epic 18 Story 18.2
-      (cross-story-state-pollution-detection-marker-emission). Story 14.5
-      pre-provisions the marker + invariant + fixtures only — flip-the-
-      switch property; no runtime emitter ships here.
-    audit_date: "2026-05-30"
+      Story 18.2 wired the `detect_state_pollution` predicate and live-claim
+      registry into `dispatch_stories_parallel`; emits on any shared-surface
+      collision (port / evidence-root / aggregate-run-state) at the two frozen
+      cadence points (pre-admission + completion-fold boundary). Detector lives
+      in `parallel_pollution.py`; dispatcher delegates by module reference only
+      (taxonomy-neutral per 18.1 AC-7).
   - marker_class: parallel-story-state-pollution
     surface_name: orchestrator-lifecycle-transitions
     verdict: not-applicable

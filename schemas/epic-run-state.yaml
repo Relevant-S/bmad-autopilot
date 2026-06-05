@@ -230,6 +230,23 @@ properties:
       type: string
       minLength: 1
 
+  marker_contexts:
+    type: object
+    description: >-
+      Per-marker-class run-specific context populated at marker emission time
+      and consumed by the loud-fail-block render path to interpolate each
+      marker's `diagnostic_pointer` template into an actionable pointer (Story
+      18.2 AC-5 — the epic-scope mirror of run-state.yaml's `marker_contexts`).
+      Keys are marker-class string identifiers (parallel to `active_markers`
+      items); values are mappings of `pointer_context_fields` field name →
+      value (e.g. `parallel-story-state-pollution` carries `story_id` /
+      `conflicting_story_id` / `shared_surface`). OPTIONAL + default empty:
+      a 1.0 document without it remains valid (additive, no schema_version
+      bump — the field has a model-side default).
+    additionalProperties:
+      type: object
+      additionalProperties: true
+
 $defs:
   per_epic_retry_budget:
     type: object

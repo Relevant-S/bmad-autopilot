@@ -341,6 +341,14 @@ class EpicRunState(BaseModel):
     per_epic_retry_budget: PerEpicRetryBudget
     per_epic_cost_partition: PerEpicCostPartition
     active_markers: tuple[str, ...]
+    marker_contexts: Mapping[str, Mapping[str, object]] = Field(default_factory=dict)
+    # Mirrors RunState.marker_contexts 1:1 (Story 18.2 AC-5) — the epic-scope
+    # home for a durable marker's pointer_context_fields so the loud-fail block
+    # resolves {placeholders} (e.g. parallel-story-state-pollution's
+    # story_id/conflicting_story_id/shared_surface). Optional + default {} so
+    # 1.0 documents without it still load; declared last to keep model_dump_json
+    # byte-stable. Mapping (not MappingProxyType) — Pydantic v2's Rust JSON
+    # serializer rejects MappingProxyType; frozen=True blocks reassignment.
 
     @model_validator(mode="after")
     def _harden_identifier_inputs(self) -> EpicRunState:

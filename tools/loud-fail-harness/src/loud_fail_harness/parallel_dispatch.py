@@ -59,13 +59,15 @@ Concurrency model:
     complete — single-writer to ``epic-run-state.yaml``; workers only do the
     isolated per-worktree work.
 
+Cross-story state-pollution detection (Story 18.2):
+    The detector + emitter + marker literal live in the sibling substrate
+    library :mod:`~loud_fail_harness.parallel_pollution`; this module wires the
+    detection seam (the optional ``claim_provider`` + the main-thread live-claim
+    registry) and DELEGATES detect/emit/pause to that library. The marker class
+    string is NOT referenced here (it has exactly one home — the detection
+    library), so this module stays taxonomy-neutral at the source level.
+
 What this library does NOT do:
-    * **No cross-story state-pollution detection** — Story 18.2 owns the
-      cross-story state-pollution detector + emitter against the OTHER shared
-      surfaces (port pool, evidence root, lost-update predicate). This library
-      emits no cross-story state-pollution marker (the taxonomy class
-      pre-provisioned by Story 14.5 stays scheduled-by-18.2; this module is
-      taxonomy-neutral — AC-7).
     * **No concurrent-env-provisioning discipline** — Story 18.3 owns the FR7
       extension (ephemeral per-story ports, distinct namespaces).
     * **No new reference fixture** — Story 18.4 owns the end-to-end parallel-mode
@@ -92,6 +94,7 @@ import concurrent.futures as cf
 import pathlib
 from typing import Protocol
 
+from loud_fail_harness import parallel_pollution
 from loud_fail_harness import story_file_lock as story_file_lock_module
 from loud_fail_harness import worktree_lifecycle
 from loud_fail_harness.epic_lifecycle import (
@@ -167,6 +170,7 @@ def dispatch_stories_parallel(
     worktrees_root: pathlib.Path | None = None,
     repo_root: pathlib.Path | None = None,
     progress_sink: ProgressSink | None = None,
+    claim_provider: parallel_pollution.StoryClaimProvider | None = None,
 ) -> RunEpicLoopResult:
     """Fan out the enumerated stories concurrently, each worktree-isolated, and
     fold their terminals into the epic aggregate on the dispatching thread.
@@ -210,6 +214,23 @@ def dispatch_stories_parallel(
     likewise stops further admission (``epic-paused-on-escalation``; downstream
     stories do NOT auto-advance — Story 15.1 AC-4).
 
+    Cross-story state-pollution detection (Story 18.2): when ``claim_provider``
+    is supplied, each admitted unit's shared-surface claim (port / evidence
+    subpath / aggregate-claim story-id) is registered in a main-thread-only live
+    registry and :func:`~loud_fail_harness.parallel_pollution.detect_state_pollution`
+    runs at the two frozen cadence points — (1) pre-admission (the incoming
+    claim is checked against the live registry before the unit is admitted) and
+    (2) the completion-fold boundary (``cf.wait(FIRST_COMPLETED)``, plus the
+    aggregate lost-update pre-image guard). On any conflict the durable
+    cross-story state-pollution marker (owned by
+    :mod:`~loud_fail_harness.parallel_pollution`, this module references it by
+    delegation only) is emitted (sub-classified, carrying the colliding
+    story-ids), the epic pauses on ``epic-paused-on-escalation`` (sensor-not-
+    advisor — NO auto-resolution), no further unit is admitted, and the
+    in-flight units drain without interruption. When ``claim_provider`` is
+    ``None`` detection is inert and the parallel path behaves exactly as Story
+    18.1 shipped it.
+
     Returns a :class:`~loud_fail_harness.epic_lifecycle.RunEpicLoopResult` with
     the terminal epic state, the dispatched stories (submission order, filtered
     to those that completed), and the pausing story (if any).
@@ -220,6 +241,8 @@ def dispatch_stories_parallel(
     admitted_order: list[str] = []
     completed: set[str] = set()
     paused_on: str | None = None
+    live_claims: dict[str, parallel_pollution.StoryClaim] = {}
+    pollution_detected = False
 
     def _admit_ok() -> bool:
         # Reuse apply_epic_budget as the admission decision (the budget decision
@@ -235,6 +258,31 @@ def dispatch_stories_parallel(
             has_undispatched=bool(pending),
         )
         return admission_state != "epic-paused-on-budget"
+
+    def _emit_pollution(
+        conflicts: tuple[parallel_pollution.PollutionConflict, ...],
+    ) -> None:
+        # Sensor-not-advisor: append the durable sub-classified marker(s) +
+        # first-emission context, pause on the existing epic-paused-on-escalation
+        # state (no enum widening), and persist via the same atomic write the
+        # budget/escalation paths use. ``pollution_detected`` makes the pause
+        # sticky so a draining story's fold (which recomputes current_state from
+        # per_story_status — unaware of pollution) cannot silently downgrade it.
+        nonlocal epic_state, paused_on, pollution_detected
+        if not conflicts:
+            return
+        epic_state = parallel_pollution.emit_and_pause_on_conflicts(
+            epic_state, conflicts
+        )
+        advance = advance_epic_run_state(
+            epic_run_state_path,
+            epic_state,
+            transient_marker_classes=transient_marker_classes,
+        )
+        epic_state = advance.next_state
+        pollution_detected = True
+        if paused_on is None:
+            paused_on = conflicts[0].story_id
 
     def _run_unit(
         *, story_id: str, index: int, total: int
@@ -292,7 +340,21 @@ def dispatch_stories_parallel(
                 and len(in_flight) < max_parallel_stories
                 and _admit_ok()
             ):
-                story_id = pending.popleft()
+                story_id = pending[0]
+                if claim_provider is not None:
+                    # Pre-admission claim check (cadence point 1): the incoming
+                    # claim is detected against the LIVE registry before the unit
+                    # acts on the shared surface. A conflict pauses admission and
+                    # leaves the colliding story undispatched (never admitted).
+                    claim = claim_provider(story_id=story_id)
+                    conflicts = parallel_pollution.detect_state_pollution(
+                        (*live_claims.values(), claim)
+                    )
+                    if conflicts:
+                        _emit_pollution(conflicts)
+                        break
+                    live_claims[story_id] = claim
+                pending.popleft()
                 future = executor.submit(
                     _run_unit,
                     story_id=story_id,
@@ -308,9 +370,28 @@ def dispatch_stories_parallel(
             done, _ = cf.wait(
                 set(in_flight), return_when=cf.FIRST_COMPLETED
             )
+            # Lost-update pre-image guard at the completion-fold boundary, BEFORE
+            # this batch's writes land: on-disk must still equal what we last
+            # persisted (18.1 is single-writer, so this fires only on an
+            # out-of-band aggregate write). Captured against a representative
+            # draining story so the conflict can name a story-id.
+            preimage_conflict: parallel_pollution.PollutionConflict | None = None
+            if claim_provider is not None and not pollution_detected:
+                representative = in_flight[next(iter(done))]
+                preimage_conflict = (
+                    parallel_pollution.detect_aggregate_preimage_conflict(
+                        epic_run_state_path,
+                        epic_state,
+                        story_id=representative,
+                    )
+                )
             worker_errors: list[tuple[str, BaseException]] = []
             for future in done:
                 story_id = in_flight.pop(future)
+                # Terminal cleanup of the live-claim registry: a finished story
+                # is no longer live, so a later wave reusing its freed
+                # port/subpath is NOT a collision.
+                live_claims.pop(story_id, None)
                 try:
                     outcome = future.result()
                 except BaseException as exc:
@@ -340,6 +421,11 @@ def dispatch_stories_parallel(
                     # stories were admitted simultaneously (pending is empty).
                     has_undispatched=bool(pending) or bool(in_flight),
                 )
+                # A pollution pause already emitted in an earlier batch must
+                # survive this fold (fold_story_terminal recomputes current_state
+                # from per_story_status, which carries no pollution signal).
+                if pollution_detected:
+                    resolved_state = "epic-paused-on-escalation"
                 active_markers = epic_state.active_markers
                 if (
                     emit_marker
@@ -384,6 +470,21 @@ def dispatch_stories_parallel(
                     and epic_state.current_state in _PAUSED_EPIC_STATES
                 ):
                     paused_on = story_id
+
+            # Completion-fold re-check (cadence point 2): re-detect over the
+            # remaining live registry + fold in the lost-update pre-image guard.
+            # Runs BEFORE re-raising worker errors so a co-occurring out-of-band
+            # aggregate write (preimage_conflict) is not silently discarded when
+            # a runner exception appears in the same batch.
+            if claim_provider is not None and not pollution_detected:
+                fold_conflicts = list(
+                    parallel_pollution.detect_state_pollution(
+                        tuple(live_claims.values())
+                    )
+                )
+                if preimage_conflict is not None:
+                    fold_conflicts.append(preimage_conflict)
+                _emit_pollution(tuple(fold_conflicts))
 
             if worker_errors:
                 raise worker_errors[0][1]

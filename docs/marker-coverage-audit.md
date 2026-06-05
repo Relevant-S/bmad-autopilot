@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 462
-- Emitted: 43
+- Emitted: 44
 - Not-applicable: 418
-- Scheduled-by-story: 1
+- Scheduled-by-story: 0
 - Gaps: 0
 
 ## Coverage matrix
@@ -278,7 +278,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | parallel-story-state-pollution | hook-session-start | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) fires at parallel-dispatch RUNTIME (Epic 18 altitude), explicitly NOT at SessionStart; the SessionStart hook has no shared-state-collision code path. |
 | parallel-story-state-pollution | hook-stop | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the Stop hook has no shared-state-collision code path. |
 | parallel-story-state-pollution | hook-subagent-stop | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the SubagentStop hook has no shared-state-collision code path. |
-| parallel-story-state-pollution | orchestrator-dispatch-wrapper | scheduled-by-story | `n/a` | 2026-05-30 | discharging-story: 18.2 — The orchestrator parallel-dispatch substrate is where concurrent per-story worktrees collide on a shared-state surface (port pool / evidence root / aggregate run-state). The marker IS expected at this surface, but the detection emission lands in Epic 18 Story 18.2 (cross-story-state-pollution-detection-marker-emission). Story 14.5 pre-provisions the marker + invariant + fixtures only — flip-the- switch property; no runtime emitter ships here. |
+| parallel-story-state-pollution | orchestrator-dispatch-wrapper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/parallel_pollution.py:234` | 2026-06-05 | Story 18.2 wired the `detect_state_pollution` predicate and live-claim registry into `dispatch_stories_parallel`; emits on any shared-surface collision (port / evidence-root / aggregate-run-state) at the two frozen cadence points (pre-admission + completion-fold boundary). Detector lives in `parallel_pollution.py`; dispatcher delegates by module reference only (taxonomy-neutral per 18.1 AC-7). |
 | parallel-story-state-pollution | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; lifecycle-state transitions have no shared-state- collision code path. |
 | parallel-story-state-pollution | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the parallel-dispatch altitude; the per-worktree run-state helper writes byte-isolated per-worktree run-state (Story 14.4 — explicitly NOT a shared surface) and has no shared-state-collision code path. |
 | parallel-story-state-pollution | orchestrator-state-machine | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; the state machine has no shared-state-collision code path. |
