@@ -45,7 +45,7 @@ For each unit in enumerated (document) order, the loop:
 5. Persists the advance via `advance_sprint_run_state` (durable markers — both `sprint-escalation-rate-exceeded` and any contained-scope durable markers — survive the transient write-back filter).
 6. Surfaces the AC-5 per-sprint framing line (see streaming below) via the `progress_sink`.
 
-Units run **strictly sequentially** in sprint-defined order — at most one unit (epic or story) in flight. Parallel dispatch is Epic 18 (`parallel_stories: true`) — there is no concurrent dispatch here. (Git worktrees share `.git/`; concurrent `git add`/`commit` race on `.git/index.lock` — sequential dispatch holds at most one in-flight unit and sidesteps that contention class entirely.)
+Units (epics + unassigned stories) run **strictly sequentially** in sprint-defined order — at most one unit in flight at the sprint scope. **Parallel-story dispatch (Story 18.1 / `parallel_stories: true`) is inherited THROUGH the epic loop, NOT re-implemented here:** the sprint loop dispatches its epics sequentially, and the stories WITHIN each epic fan out concurrently when `parallel_stories` is true (because `EpicLoopRunnerAdapter` → `run_epic_loop` is the single integration point — see `steps/run-epic.md` § "The four-phase epic loop" → phase 3). Cross-EPIC parallelism is out of scope. Under that within-epic fan-out each story is worktree-isolated, so concurrent commits do NOT race on a shared `.git/index.lock` — each worktree owns its own index at `.git/worktrees/<id>/index` (ADR-009 line 802, "`$GIT_DIR` is per-worktree"); worktree isolation is precisely the escape from that contention class.
 
 ### (4) Pause on a contained-unit pause/escalation (sensor-not-advisor)
 
@@ -104,7 +104,7 @@ Sprint-scope reattachment reuses the existing SessionStart hook + `evaluate_reat
 - **`sprint-status-artifact-*.md` → Story 16.3 (landed; written at sprint close by phase 5 above)** — a SEPARATE assembler, NOT inside `run_sprint_loop`; structured objective state, explicitly NOT a retrospective.
 - **`status --sprint <sprint-id>` → Story 16.4 (landed; a SEPARATE read-only query, NOT inside `run_sprint_loop`).** The `sprint_status_command.inspect_sprint` query REUSES Story 16.3's `build_sprint_status_artifact` aggregate read (the sprint → epics → stories tree rollup over the sprint-run-state cache + each per-epic cache) and renders it to stdout — zero write surface (FR48 / NFR-O4): it never advances state, never assembles the `.md` artifact. The no-args `/bmad-automation status` listing additionally groups by sprint (the additive `## Sprints` section). See `steps/status.md` § Sprint-scope inspection protocol.
 - **Sprint-level PR bundle → not in Epic 16's breakdown** (do NOT extend the Stop hook in 16.1; a sprint-PR-bundle need would be a correct-course addition, not silent scope creep).
-- **Parallel dispatch → Epic 18** (sequential only).
+- **Parallel-story dispatch → Story 18.1 (landed; inherited through the epic loop).** The sprint loop dispatches epics sequentially; stories within each epic fan out concurrently when `parallel_stories: true` (via `EpicLoopRunnerAdapter` → `run_epic_loop` → `parallel_dispatch.dispatch_stories_parallel`). No separate sprint-scope parallel wiring; cross-EPIC parallelism is out of scope. Default-off → bit-identical sequential.
 - **No new specialist, no 4th hook, substrate stays at FIVE components.**
 
 ## Loud-fail discipline

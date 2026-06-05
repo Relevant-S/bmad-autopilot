@@ -187,3 +187,33 @@ review_lad:
   # override here if the OpenRouter API key is exported under a
   # different variable name in their shell.
   api_key_env_var: "OPENROUTER_API_KEY"
+
+# Parallel-story execution opt-in gate (Phase 2 / Story 18.1). When
+# `parallel_stories: true`, an epic or sprint run fans out its contained
+# `ready-for-dev` stories CONCURRENTLY — each story isolated in its own git
+# worktree (Epic 14 substrate) with its own story-file lock and per-worktree
+# run-state — instead of dispatching them one at a time. Concurrency is at the
+# per-STORY level only: each story still drives the UNCHANGED per-story loop
+# (Dev → Review-BMAD → QA → Review-LAD serially within that story; no 5th
+# specialist). Epics still sequence (stories fan out WITHIN an epic; cross-epic
+# parallelism is out of scope). When `false` (the default), dispatch is
+# bit-identical to the Phase-1/Epic-15 sequential posture — no worktrees, no
+# locks, one in-flight story at a time.
+# Source: FR-P2-4 (see _bmad-output/planning-artifacts/prd.md line 947)
+# Default rationale: `false` per the opt-in posture — concurrent dispatch is an
+# explicit operator choice (it relies on worktree isolation + per-story locking),
+# not the default, so the simpler sequential path runs unless deliberately enabled.
+parallel_stories: false
+
+# Maximum number of stories dispatched concurrently when `parallel_stories` is
+# true. The epic loop caps simultaneous in-flight stories at this value (a
+# bounded thread pool); the per-epic retry-budget admission gate is still
+# evaluated per concurrent unit, so a runaway retry sequence cannot admit units
+# past the per-epic ceiling. Must be an integer >= 1 (set `parallel_stories:
+# false` to disable concurrency rather than setting this below 1).
+# Source: FR-P2-4 (see _bmad-output/planning-artifacts/prd.md line 947)
+# Default rationale: 2 concurrent stories bounds aggregate in-flight cost and
+# filesystem/worktree pressure while still halving wall-clock for an epic of
+# independent stories; raise it when the host has spare capacity and the stories
+# are known-independent.
+max_parallel_stories: 2

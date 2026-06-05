@@ -28,6 +28,7 @@ import pytest
 import yaml
 
 from loud_fail_harness.retry_budget import (
+    DEFAULT_MAX_PARALLEL_STORIES,
     DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
     DEFAULT_PER_SPRINT_RETRY_MULTIPLIER,
     DEFAULT_RETRY_BUDGET,
@@ -35,10 +36,14 @@ from loud_fail_harness.retry_budget import (
     RetryBudgetConfigError,
     RetryDecision,
     evaluate_retry_decision,
+    read_max_parallel_stories_from_config_file,
+    read_parallel_stories_from_config_file,
     read_per_epic_retry_budget_multiplier_from_config_file,
     read_per_sprint_retry_budget_from_config_file,
     read_retry_budget_from_config_file,
     read_sprint_escalation_rate_threshold_from_config_file,
+    resolve_max_parallel_stories,
+    resolve_parallel_stories,
     resolve_per_epic_retry_budget_multiplier,
     resolve_per_sprint_retry_budget_override,
     resolve_retry_budget,
@@ -995,3 +1000,220 @@ def test_read_threshold_resolver_error_propagates(tmp_path: pathlib.Path) -> Non
     config.write_text("sprint_escalation_rate_threshold: true\n", encoding="utf-8")
     with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
         read_sprint_escalation_rate_threshold_from_config_file(config)
+
+
+# ---------------------------------------------------------------------------
+# Story 18.1 AC-1 — resolve_parallel_stories (bool resolver; INVERSE of the int
+# resolvers — accept type(value) is bool, reject everything else)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_parallel_stories_none_config_returns_default() -> None:
+    assert resolve_parallel_stories(None) is False
+
+
+def test_resolve_parallel_stories_field_absent_returns_default() -> None:
+    assert resolve_parallel_stories({"retry_budget": 2}) is False
+
+
+def test_resolve_parallel_stories_value_none_returns_default() -> None:
+    assert resolve_parallel_stories({"parallel_stories": None}) is False
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_resolve_parallel_stories_accepts_bool(value: bool) -> None:
+    assert resolve_parallel_stories({"parallel_stories": value}) is value
+
+
+def test_resolve_parallel_stories_honors_default_keyword() -> None:
+    assert resolve_parallel_stories(None, default=True) is True
+
+
+@pytest.mark.parametrize("value", [0, 1, 2])
+def test_resolve_parallel_stories_rejects_int(value: int) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_parallel_stories({"parallel_stories": value})
+
+
+@pytest.mark.parametrize("value", ["true", "false", "yes", ""])
+def test_resolve_parallel_stories_rejects_string(value: str) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_parallel_stories({"parallel_stories": value})
+
+
+def test_resolve_parallel_stories_rejects_float() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_parallel_stories({"parallel_stories": 1.0})
+
+
+@pytest.mark.parametrize("value", [[], {}, [True]])
+def test_resolve_parallel_stories_rejects_container(value: object) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_parallel_stories({"parallel_stories": value})
+
+
+def test_resolve_parallel_stories_error_names_field() -> None:
+    with pytest.raises(RetryBudgetConfigError) as exc_info:
+        resolve_parallel_stories({"parallel_stories": 1})
+    assert "parallel_stories" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Story 18.1 AC-1 — read_parallel_stories_from_config_file (file contract)
+# ---------------------------------------------------------------------------
+
+
+def test_read_parallel_stories_missing_file_returns_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    assert read_parallel_stories_from_config_file(tmp_path / "nope.yaml") is False
+
+
+def test_read_parallel_stories_empty_file_returns_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("", encoding="utf-8")
+    assert read_parallel_stories_from_config_file(config) is False
+
+
+def test_read_parallel_stories_reads_value(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("parallel_stories: true\n", encoding="utf-8")
+    assert read_parallel_stories_from_config_file(config) is True
+
+
+def test_read_parallel_stories_malformed_yaml_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("parallel_stories: [\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="not valid YAML"):
+        read_parallel_stories_from_config_file(config)
+
+
+def test_read_parallel_stories_non_mapping_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("- a\n- b\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML mapping"):
+        read_parallel_stories_from_config_file(config)
+
+
+def test_read_parallel_stories_propagates_resolver_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("parallel_stories: 1\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        read_parallel_stories_from_config_file(config)
+
+
+# ---------------------------------------------------------------------------
+# Story 18.1 AC-1 — resolve_max_parallel_stories (int resolver, floor 1, dflt 2)
+# ---------------------------------------------------------------------------
+
+
+def test_default_max_parallel_stories_is_two() -> None:
+    assert DEFAULT_MAX_PARALLEL_STORIES == 2
+
+
+def test_resolve_max_parallel_none_config_returns_default() -> None:
+    assert resolve_max_parallel_stories(None) == 2
+
+
+def test_resolve_max_parallel_field_absent_returns_default() -> None:
+    assert resolve_max_parallel_stories({"parallel_stories": True}) == 2
+
+
+def test_resolve_max_parallel_value_none_returns_default() -> None:
+    assert resolve_max_parallel_stories({"max_parallel_stories": None}) == 2
+
+
+@pytest.mark.parametrize("value", [1, 2, 8])
+def test_resolve_max_parallel_accepts_int_at_or_above_floor(value: int) -> None:
+    assert resolve_max_parallel_stories({"max_parallel_stories": value}) == value
+
+
+def test_resolve_max_parallel_honors_default_keyword() -> None:
+    assert resolve_max_parallel_stories(None, default=4) == 4
+
+
+def test_resolve_max_parallel_rejects_zero() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be an integer >= 1"):
+        resolve_max_parallel_stories({"max_parallel_stories": 0})
+
+
+def test_resolve_max_parallel_rejects_negative() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be an integer >= 1"):
+        resolve_max_parallel_stories({"max_parallel_stories": -1})
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_resolve_max_parallel_rejects_bool(value: bool) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="booleans are rejected"):
+        resolve_max_parallel_stories({"max_parallel_stories": value})
+
+
+def test_resolve_max_parallel_rejects_string_int() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML int"):
+        resolve_max_parallel_stories({"max_parallel_stories": "2"})
+
+
+def test_resolve_max_parallel_rejects_float() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML int"):
+        resolve_max_parallel_stories({"max_parallel_stories": 2.0})
+
+
+def test_resolve_max_parallel_error_names_field() -> None:
+    with pytest.raises(RetryBudgetConfigError) as exc_info:
+        resolve_max_parallel_stories({"max_parallel_stories": 0})
+    assert "max_parallel_stories" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Story 18.1 AC-1 — read_max_parallel_stories_from_config_file (file contract)
+# ---------------------------------------------------------------------------
+
+
+def test_read_max_parallel_missing_file_returns_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    assert read_max_parallel_stories_from_config_file(tmp_path / "nope.yaml") == 2
+
+
+def test_read_max_parallel_empty_file_returns_default(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("", encoding="utf-8")
+    assert read_max_parallel_stories_from_config_file(config) == 2
+
+
+def test_read_max_parallel_reads_value(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("max_parallel_stories: 3\n", encoding="utf-8")
+    assert read_max_parallel_stories_from_config_file(config) == 3
+
+
+def test_read_max_parallel_malformed_yaml_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("max_parallel_stories: [\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="not valid YAML"):
+        read_max_parallel_stories_from_config_file(config)
+
+
+def test_read_max_parallel_non_mapping_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("42\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML mapping"):
+        read_max_parallel_stories_from_config_file(config)
+
+
+def test_read_max_parallel_propagates_resolver_error(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("max_parallel_stories: 0\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be an integer >= 1"):
+        read_max_parallel_stories_from_config_file(config)
+
+
+def test_read_max_parallel_non_utf8_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_bytes(b"\xff\xfe max_parallel_stories: 2")
+    with pytest.raises(RetryBudgetConfigError, match="failed to read"):
+        read_max_parallel_stories_from_config_file(config)

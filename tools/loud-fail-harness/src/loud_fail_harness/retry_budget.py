@@ -168,6 +168,20 @@ _PER_SPRINT_RETRY_BUDGET_FIELD: str = "per_sprint_retry_budget"
 #: 16.2). Snake_case per Pattern 1's structural-key boundary.
 _SPRINT_ESCALATION_RATE_THRESHOLD_FIELD: str = "sprint_escalation_rate_threshold"
 
+#: Default parallel-story concurrency ceiling (Story 18.1 / FR-P2-4). When
+#: ``parallel_stories`` is enabled, the epic loop fans out at most this many
+#: per-story loops concurrently. Single-sourced here so the resolver default and
+#: the dispatcher default can never drift; ``epic_lifecycle`` re-exports it.
+DEFAULT_MAX_PARALLEL_STORIES: int = 2
+
+#: Canonical ``parallel_stories`` config-file field name (Story 18.1). The opt-in
+#: gate for concurrent per-story dispatch. Snake_case per Pattern 1.
+_PARALLEL_STORIES_FIELD: str = "parallel_stories"
+
+#: Canonical ``max_parallel_stories`` config-file field name (Story 18.1). The
+#: concurrency ceiling honored when ``parallel_stories`` is true. Snake_case.
+_MAX_PARALLEL_STORIES_FIELD: str = "max_parallel_stories"
+
 
 class RetryBudgetConfigError(ValueError):
     """Raised on malformed ``retry_budget`` config input.
@@ -715,6 +729,215 @@ def read_sprint_escalation_rate_threshold_from_config_file(
     return resolve_sprint_escalation_rate_threshold(parsed, default=default)
 
 
+def resolve_parallel_stories(
+    config: Mapping[str, Any] | None = None,
+    *,
+    default: bool = False,
+) -> bool:
+    """Resolve the ``parallel_stories`` opt-in flag from a config mapping
+    (Story 18.1 / FR-P2-4).
+
+    The structural INVERSE of the integer resolvers in this module. Those reject
+    :class:`bool` (``isinstance(value, bool)`` → error) to avoid YAML
+    truthy-coercion ambiguity for integer fields; ``parallel_stories`` is a
+    genuine boolean, so this resolver does the opposite — it REQUIRES
+    ``type(value) is bool`` and rejects everything else (``int`` including
+    ``0``/``1``, ``str`` including ``"true"``/``"false"``, ``float``, and
+    containers). A non-bool here is the same class of operator typo
+    (``parallel_stories: 1`` / ``parallel_stories: "true"``) the int resolvers
+    guard against from the other direction.
+
+    Per-input contract:
+
+    * ``config is None`` → ``default`` (pre-Story-7.5 "config.yaml not yet
+      scaffolded" case).
+    * field absent / value ``None`` → ``default`` (the YAML loader parses
+      ``parallel_stories:`` with no value as :data:`None`).
+    * ``type(value) is bool`` → the value.
+    * any other value → :exc:`RetryBudgetConfigError` naming the field + the
+      YAML-bool remediation.
+    """
+    if config is None:
+        return default
+
+    if _PARALLEL_STORIES_FIELD not in config:
+        return default
+
+    value = config[_PARALLEL_STORIES_FIELD]
+
+    if value is None:
+        return default
+
+    if type(value) is not bool:
+        raise RetryBudgetConfigError(
+            f"{_PARALLEL_STORIES_FIELD} must be a YAML boolean; "
+            f"got {value!r} ({type(value).__name__}) — write the value as an "
+            f"unquoted YAML bool in config.yaml (e.g., "
+            f"'parallel_stories: true' or 'parallel_stories: false'), not as an "
+            f"integer, quoted string, or other type"
+        )
+
+    return value
+
+
+def read_parallel_stories_from_config_file(
+    config_path: pathlib.Path,
+    *,
+    default: bool = False,
+) -> bool:
+    """Read ``parallel_stories`` from a YAML config file (Story 18.1).
+
+    The boolean sibling of :func:`read_retry_budget_from_config_file`; the
+    missing-file / empty-file / malformed-YAML / non-mapping contract is
+    identical (delegates value-shape validation to
+    :func:`resolve_parallel_stories`). Uses :func:`yaml.safe_load` per the
+    loud-fail security doctrine.
+    """
+    if not config_path.exists():
+        return default
+
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RetryBudgetConfigError(
+            f"failed to read {config_path}: {exc}"
+        ) from exc
+
+    if not raw_text.strip():
+        return default
+
+    try:
+        parsed = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise RetryBudgetConfigError(
+            f"{config_path} is not valid YAML; "
+            f"parser error: {exc} — fix the YAML syntax in "
+            f"{config_path} and re-run"
+        ) from exc
+
+    if parsed is None:
+        return default
+
+    if not isinstance(parsed, Mapping):
+        raise RetryBudgetConfigError(
+            f"{config_path} top-level must be a YAML mapping; "
+            f"got {type(parsed).__name__}: {parsed!r} — write the file as "
+            f"'parallel_stories: false' (key/value pairs at the top level), "
+            f"not as a list or scalar"
+        )
+
+    return resolve_parallel_stories(parsed, default=default)
+
+
+def resolve_max_parallel_stories(
+    config: Mapping[str, Any] | None = None,
+    *,
+    default: int = DEFAULT_MAX_PARALLEL_STORIES,
+) -> int:
+    """Resolve the ``max_parallel_stories`` concurrency ceiling from a config
+    mapping (Story 18.1 / FR-P2-4).
+
+    An integer resolver with a floor of **1** and default **2**, mirroring
+    :func:`resolve_per_epic_retry_budget_multiplier` verbatim except the field
+    name. A ``max_parallel_stories`` below 1 is never a meaningful operator
+    choice — set ``parallel_stories: false`` to disable concurrency rather than
+    asking for "at most zero" in-flight stories.
+
+    Per-input contract:
+
+    * ``config is None`` → ``default``.
+    * field absent / value ``None`` → ``default``.
+    * ``type(value) is int`` (not :class:`bool`) AND ``value >= 1`` → ``value``.
+    * any other value (``bool``, string-int, ``float``, ``< 1``) →
+      :exc:`RetryBudgetConfigError`.
+    """
+    if config is None:
+        return default
+
+    if _MAX_PARALLEL_STORIES_FIELD not in config:
+        return default
+
+    value = config[_MAX_PARALLEL_STORIES_FIELD]
+
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        raise RetryBudgetConfigError(
+            f"{_MAX_PARALLEL_STORIES_FIELD} must be an integer >= 1; "
+            f"got {value!r} ({type(value).__name__}) — booleans are rejected "
+            f"to avoid YAML truthy-coercion ambiguity — write the value as an "
+            f"unquoted integer in config.yaml (e.g., 'max_parallel_stories: 2')"
+        )
+
+    if type(value) is not int:
+        raise RetryBudgetConfigError(
+            f"{_MAX_PARALLEL_STORIES_FIELD} must be a YAML int; "
+            f"got {value!r} ({type(value).__name__}) — write the value as an "
+            f"unquoted integer in config.yaml (e.g., 'max_parallel_stories: 2', "
+            f"not 'max_parallel_stories: \"2\"' or "
+            f"'max_parallel_stories: 2.0')"
+        )
+
+    if value < 1:
+        raise RetryBudgetConfigError(
+            f"{_MAX_PARALLEL_STORIES_FIELD} must be an integer >= 1; "
+            f"got {value!r} (int) — a concurrency ceiling below 1 would admit "
+            f"no in-flight stories; set it to 1 or a larger integer, or set "
+            f"'parallel_stories: false' to disable concurrent dispatch"
+        )
+
+    return value
+
+
+def read_max_parallel_stories_from_config_file(
+    config_path: pathlib.Path,
+    *,
+    default: int = DEFAULT_MAX_PARALLEL_STORIES,
+) -> int:
+    """Read ``max_parallel_stories`` from a YAML config file (Story 18.1).
+
+    The sibling of :func:`read_retry_budget_from_config_file`; the missing-file
+    / empty-file / malformed-YAML / non-mapping contract is identical (delegates
+    value-shape validation to :func:`resolve_max_parallel_stories`). Uses
+    :func:`yaml.safe_load` per the loud-fail security doctrine.
+    """
+    if not config_path.exists():
+        return default
+
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RetryBudgetConfigError(
+            f"failed to read {config_path}: {exc}"
+        ) from exc
+
+    if not raw_text.strip():
+        return default
+
+    try:
+        parsed = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise RetryBudgetConfigError(
+            f"{config_path} is not valid YAML; "
+            f"parser error: {exc} — fix the YAML syntax in "
+            f"{config_path} and re-run"
+        ) from exc
+
+    if parsed is None:
+        return default
+
+    if not isinstance(parsed, Mapping):
+        raise RetryBudgetConfigError(
+            f"{config_path} top-level must be a YAML mapping; "
+            f"got {type(parsed).__name__}: {parsed!r} — write the file as "
+            f"'max_parallel_stories: 2' (key/value pairs at the top level), "
+            f"not as a list or scalar"
+        )
+
+    return resolve_max_parallel_stories(parsed, default=default)
+
+
 def evaluate_retry_decision(
     run_state: RunState,
     resolved_budget: int,
@@ -771,6 +994,7 @@ def evaluate_retry_decision(
 
 
 __all__ = [
+    "DEFAULT_MAX_PARALLEL_STORIES",
     "DEFAULT_PER_EPIC_RETRY_MULTIPLIER",
     "DEFAULT_PER_SPRINT_RETRY_MULTIPLIER",
     "DEFAULT_RETRY_BUDGET",
@@ -778,10 +1002,14 @@ __all__ = [
     "RetryBudgetConfigError",
     "RetryDecision",
     "evaluate_retry_decision",
+    "read_max_parallel_stories_from_config_file",
+    "read_parallel_stories_from_config_file",
     "read_per_epic_retry_budget_multiplier_from_config_file",
     "read_per_sprint_retry_budget_from_config_file",
     "read_retry_budget_from_config_file",
     "read_sprint_escalation_rate_threshold_from_config_file",
+    "resolve_max_parallel_stories",
+    "resolve_parallel_stories",
     "resolve_per_epic_retry_budget_multiplier",
     "resolve_per_sprint_retry_budget_override",
     "resolve_retry_budget",

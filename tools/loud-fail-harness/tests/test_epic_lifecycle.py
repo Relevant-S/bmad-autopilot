@@ -1026,3 +1026,45 @@ def test_run_epic_loop_first_invocation_no_reconstruction(
     assert result.final_state.current_state == "epic-complete"
     assert result.final_state.per_epic_retry_budget.consumed == 1
     assert result.final_state.per_epic_retry_budget.effective_budget == 4
+
+
+# ---------------------------------------------------------------------------
+# Story 18.1 AC-4 — parallel_stories: false is bit-identical to the sequential
+# Epic-15/16 posture (the parallel branch is additive, gated solely on the flag)
+# ---------------------------------------------------------------------------
+
+
+def test_default_mode_is_byte_identical_to_explicit_false(
+    tmp_path: pathlib.Path,
+) -> None:
+    """AC-4: omitting the new parallel params (the default) and passing
+    ``parallel_stories=False`` explicitly produce a byte-for-byte identical
+    epic-run-state.yaml — the parallel branch is purely additive and the
+    sequential body runs verbatim."""
+    sprint = _write_sprint_status(
+        tmp_path,
+        {"15-1-a": "ready-for-dev", "15-2-b": "ready-for-dev", "15-3-c": "ready-for-dev"},
+    )
+    erp_default = tmp_path / "default.yaml"
+    erp_explicit = tmp_path / "explicit.yaml"
+
+    run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp_default,
+        story_loop_runner=_retry_runner({"15-1-a": 1, "15-2-b": 1}),
+        multiplier=2,
+        transient_marker_classes=_NO_TRANSIENT,
+    )
+    run_epic_loop(
+        "epic-15",
+        run_id="run-1",
+        sprint_status_path=sprint,
+        epic_run_state_path=erp_explicit,
+        story_loop_runner=_retry_runner({"15-1-a": 1, "15-2-b": 1}),
+        multiplier=2,
+        transient_marker_classes=_NO_TRANSIENT,
+        parallel_stories=False,
+    )
+    assert erp_default.read_bytes() == erp_explicit.read_bytes()

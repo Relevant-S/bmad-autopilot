@@ -76,7 +76,7 @@ from __future__ import annotations
 
 import pathlib
 from collections.abc import Callable, Mapping
-from typing import ClassVar, Final, Literal, Protocol, get_args
+from typing import TYPE_CHECKING, ClassVar, Final, Literal, Protocol, get_args
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -92,7 +92,13 @@ from loud_fail_harness.epic_run_state import (
     reconstruct_budget_on_resume,
 )
 from loud_fail_harness.reconciler import load_marker_lifetimes
-from loud_fail_harness.retry_budget import DEFAULT_PER_EPIC_RETRY_MULTIPLIER
+from loud_fail_harness.retry_budget import (
+    DEFAULT_MAX_PARALLEL_STORIES,
+    DEFAULT_PER_EPIC_RETRY_MULTIPLIER,
+)
+
+if TYPE_CHECKING:
+    from loud_fail_harness.parallel_dispatch import ParallelStoryLoopRunner
 
 #: Per-story statuses that count as terminal-and-successful for the
 #: ``epic-complete`` transition (Story 15.3 line 423 + AC-3). ``escalated`` is
@@ -529,6 +535,13 @@ def run_epic_loop(
     progress_sink: ProgressSink | None = None,
     transient_marker_classes: frozenset[str] | None = None,
     taxonomy_path: pathlib.Path | None = None,
+    parallel_stories: bool = False,
+    max_parallel_stories: int = DEFAULT_MAX_PARALLEL_STORIES,
+    parallel_story_loop_runner: ParallelStoryLoopRunner | None = None,
+    base_ref: str = "main",
+    trunk_allowlist: tuple[str, ...] = (),
+    worktrees_root: pathlib.Path | None = None,
+    repo_root: pathlib.Path | None = None,
 ) -> RunEpicLoopResult:
     """Drive an epic's ``ready-for-dev`` stories sequentially through the
     per-story loop, advancing epic-run-state after each (AC-1..AC-6).
@@ -559,8 +572,10 @@ def run_epic_loop(
            checked AFTER the boundary story reaches terminal — the in-flight
            story is never interrupted.
 
-    Stories run strictly sequentially (parallel is Epic 18 — no concurrent
-    dispatch here; AC-2). The transient-class set is resolved ONCE and threaded
+    When ``parallel_stories`` is false (the default), stories run strictly
+    sequentially (AC-4 bit-identical path). When true, phase-3 dispatch
+    delegates to ``parallel_dispatch.dispatch_stories_parallel`` (Story 18.1
+    — AC-3). The transient-class set is resolved ONCE and threaded
     through every ``advance_epic_run_state`` call so a recovery-recomputed
     transient marker never persists into the aggregate (AC-6). The durable
     ``epic-budget-exhausted`` marker is NOT transient and survives the filter.
@@ -681,6 +696,39 @@ def run_epic_loop(
             dispatched_story_ids=(),
             paused_on_story_id=None,
             wrote_path=epic_run_state_path,
+        )
+
+    # Phase-3 dispatch: ONE guarded branch (Story 18.1 AC-3). When
+    # parallel_stories is resolved true, delegate to the worktree-isolated
+    # parallel dispatcher; the same pre-dispatch admission gate (above) already
+    # ran, so an already-exhausted resume never reaches here. When false (the
+    # default), the EXISTING sequential body below runs verbatim — bit-identical
+    # to the Epic-15/16 posture (AC-4). The import is function-local so
+    # parallel_dispatch (which imports this module) introduces no import cycle.
+    if parallel_stories:
+        if parallel_story_loop_runner is None:
+            raise ValueError(
+                "parallel_stories is enabled but no parallel_story_loop_runner "
+                "was provided; the parallel path requires a "
+                "ParallelStoryLoopRunner (the worktree-aware per-story driver) "
+                "— see loud_fail_harness.parallel_dispatch"
+            )
+        from loud_fail_harness.parallel_dispatch import dispatch_stories_parallel
+
+        return dispatch_stories_parallel(
+            epic_id,
+            run_id=run_id,
+            story_ids=story_ids,
+            max_parallel_stories=max_parallel_stories,
+            runner=parallel_story_loop_runner,
+            epic_state=epic_state,
+            epic_run_state_path=epic_run_state_path,
+            transient_marker_classes=transient_marker_classes,
+            base_ref=base_ref,
+            trunk_allowlist=trunk_allowlist,
+            worktrees_root=worktrees_root,
+            repo_root=repo_root,
+            progress_sink=progress_sink,
         )
 
     total = len(story_ids)
