@@ -464,7 +464,9 @@ def test_worktree_run_state_path_explicit_worktrees_root(
 
 
 def test_worktree_run_state_path_empty_story_id_raises(tmp_path: pathlib.Path) -> None:
-    with pytest.raises(ValueError, match="non-empty"):
+    # Story 24.2 consolidation: the empty string is whitespace-only; the shared
+    # harden_path_segment helper subsumes the prior bespoke "non-empty" guard.
+    with pytest.raises(ValueError, match="whitespace-only"):
         worktree_run_state_path("", repo_root=tmp_path)
 
 

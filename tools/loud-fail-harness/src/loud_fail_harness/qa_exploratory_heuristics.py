@@ -48,8 +48,9 @@ from __future__ import annotations
 
 from typing import Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.qa_behavioral_plan import QABehavioralPlan
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
@@ -117,6 +118,14 @@ class HeuristicSkippedDiagnosticContext(BaseModel):
 
     story_id: str = Field(min_length=1)
     heuristic_kind: HeuristicKind
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "HeuristicSkippedDiagnosticContext":
+        """Input-hardening (Story 24.2 — closes deferred-work qa_exploratory_heuristics
+        ``story_id`` gap). Route ``story_id`` through the shared helper (rejects
+        whitespace-only / embedded-newline / null-byte)."""
+        harden_identifier(self.story_id, "HeuristicSkippedDiagnosticContext.story_id")
+        return self
 
 
 class HeuristicSkippedEmissionRecord(BaseModel):

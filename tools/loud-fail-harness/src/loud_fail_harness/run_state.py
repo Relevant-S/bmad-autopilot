@@ -250,6 +250,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier, harden_path_segment
+
 #: Marker-class string identifier (consumed from
 #: ``schemas/marker-taxonomy.yaml``; same source-of-truth posture as
 #: :data:`loud_fail_harness.story_doc_validator._MARKER_UNDOCUMENTED_SECTION_WRITE`).
@@ -487,6 +489,20 @@ class RunState(BaseModel):
     # attribute reassignment; direct in-place mutation is a caller-side discipline.
     cost_to_date_by_specialist: CostToDateBySpecialist
     last_retry_directive: LastRetryDirective | None = None
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> RunState:
+        """Input-hardening (Story 24.2). ``story_id``/``run_id`` compose the
+        per-specialist log path (``LOG_PATH_TEMPLATE``), the events.jsonl path,
+        and the per-worktree run-state path; ``branch_name`` composes a git ref.
+        The ``min_length=1`` constraints reject the empty string but not
+        whitespace-only / embedded-newline / null-byte / path-separator values;
+        this validator routes each through the shared ``input_hardening`` helpers.
+        """
+        harden_path_segment(self.story_id, "RunState.story_id")
+        harden_path_segment(self.run_id, "RunState.run_id")
+        harden_identifier(self.branch_name, "RunState.branch_name")
+        return self
 
 
 class StoryDocCallbackResult(BaseModel):

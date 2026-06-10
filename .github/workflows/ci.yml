@@ -328,6 +328,42 @@ jobs:
         # B-callsite-missing, C-inline-reintroduced.
         run: uv run no-destructive-resume-lint
 
+      - name: Input-hardening gate (story 24.2; Epic 24 Action #2)
+        # Codifies the input-hardening discipline that was applied-by-memory and
+        # re-discovered reactively across five consecutive epics (13 → 14 → 15 →
+        # 16 → 18) into a build-time guarantee, making a sixth recurrence
+        # structurally impossible. AST-based scanner over src/loud_fail_harness/
+        # (parallel in shape to no-destructive-resume-lint / pluggability-gate).
+        # Three structural rules:
+        #   A — every BaseModel subclass is classified in EXACTLY ONE bucket of
+        #       the closed registry _data/input_hardening_registry.yaml
+        #       (externally_constructed | internal_only); a new model cannot
+        #       merge unclassified (A-unclassified-model / A-double-classified).
+        #   B — every externally_constructed model routes each registered
+        #       identifier/path/dup field through the shared input_hardening
+        #       helper inside a validator (B-field-unhardened).
+        #   C — no broad `except (ValueError|KeyError)` silently swallows a
+        #       construction ValidationError around a registered-model
+        #       construction (C-validationerror-swallowed). NB: in pydantic
+        #       v2.13+ ValidationError subclasses ValueError, so the hazard is
+        #       the swallow, not a miss (Story 24.2 Dev Agent Record).
+        # Exit-code semantics:
+        #   0 — clean (no findings).
+        #   1 — at least one structural finding (Rule A/B/C).
+        #   2 — harness-level error (a scanned file unreadable/non-UTF-8/
+        #       non-parseable; the registry data file missing/malformed; or
+        #       registry rot — a registered model absent from the governed tree).
+        # No new substrate component / no 4th hook / no new specialist / no
+        # marker-taxonomy change (build-time gate; closed-set stays 34).
+        # Ordering rationale: runs immediately after no-destructive-resume-lint
+        # to keep the AST-structural-lint CI-step grouping; its filesystem
+        # surface (src/loud_fail_harness/ Python models) is distinct from the
+        # prior gates' inputs (schemas/, examples/, agents/, hooks/) — defense-
+        # in-depth ordering, NOT redundancy.
+        # No positional arguments — the script discovers the harness root from
+        # disk via find_repo_root and the registry via importlib.resources.
+        run: uv run input-hardening-gate
+
       - name: Review-layer-failure emission gate (story 3.3; FR28 + FR56)
         # Story 3.3 AC-9: enforces the three-channel atomic-emission
         # code-structure invariant — surface_failed_layers (at

@@ -34,8 +34,9 @@ import pathlib
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.epic_run_state import (
     EpicRunState,
     EpicRunStateNotFound,
@@ -77,6 +78,19 @@ class StoryClaim(BaseModel):
     allocated_port: int | None = None
     evidence_subpath: str | None = None
     aggregate_claim_story_id: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "StoryClaim":
+        """Input-hardening (Story 24.2 — the Epic 18 parallel-claim surface).
+        ``story_id`` / ``aggregate_claim_story_id`` key the cross-story conflict
+        domain; the ``min_length=1`` constraints accept whitespace-only values.
+        Route both through the shared helper.
+        """
+        harden_identifier(self.story_id, "StoryClaim.story_id")
+        harden_identifier(
+            self.aggregate_claim_story_id, "StoryClaim.aggregate_claim_story_id"
+        )
+        return self
 
 
 class PollutionConflict(BaseModel):

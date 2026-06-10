@@ -157,6 +157,11 @@ from pydantic import (
 )
 
 from loud_fail_harness._shared import find_repo_root
+from loud_fail_harness.input_hardening import (
+    harden_identifier,
+    harden_path_segment,
+    reject_duplicate_identifiers,
+)
 from loud_fail_harness.reconciler import load_marker_lifetimes
 from loud_fail_harness.run_state import (
     AdvanceResult,
@@ -189,30 +194,6 @@ DEFAULT_EPIC_RUN_STATE_PATH: pathlib.Path = pathlib.Path(
 DEFAULT_SPRINT_RUN_STATE_PATH: pathlib.Path = pathlib.Path(
     "_bmad/automation/sprint-run-state.yaml"
 )
-
-
-def _reject_unclean_text(value: str, field_label: str) -> str:
-    """Reject whitespace-only and embedded-newline string inputs (Epic 14
-    retrospective Action #2 input-hardening — applied proactively to the
-    externally-constructed epic-run-state model so the gap that recurred
-    unaddressed across Epics 13 + 14 does not recur on ``advance_epic_run_state``'s
-    inputs).
-
-    ``min_length=1`` at the Pydantic field level rejects the empty string but
-    NOT ``"   "`` (passes ``min_length``) nor ``"epic-15\\n"`` (an embedded
-    newline that would corrupt the on-disk YAML line-structure). This helper
-    closes both. Returns ``value`` unchanged on success so it composes inside
-    a validator.
-    """
-    if not value.strip():
-        raise ValueError(
-            f"{field_label} must not be whitespace-only; got {value!r}"
-        )
-    if "\n" in value or "\r" in value:
-        raise ValueError(
-            f"{field_label} must not contain embedded newlines; got {value!r}"
-        )
-    return value
 
 
 #: Closed enum for :attr:`EpicRunState.current_state` (and the value type of
@@ -352,22 +333,18 @@ class EpicRunState(BaseModel):
 
     @model_validator(mode="after")
     def _harden_identifier_inputs(self) -> EpicRunState:
-        """Input-hardening (Epic 14 retro Action #2). The ``min_length=1``
-        field constraints reject the empty string but not whitespace-only or
-        embedded-newline values; ``story_ids`` carries no duplicate-rejection.
-        Both gaps recurred unaddressed across Epics 13 + 14; this validator
-        closes them at the model boundary so every ``advance_epic_run_state``
-        input is structurally clean (no scattered consumer-side checks).
+        """Input-hardening (Epic 14 retro Action #2; Story 24.2 helper
+        consolidation). The ``min_length=1`` field constraints reject the empty
+        string but not whitespace-only / embedded-newline / null-byte values;
+        ``story_ids`` carries no duplicate-rejection. This validator routes every
+        externally-supplied identifier through the shared ``input_hardening``
+        helpers so ``input_hardening_gate``'s Rule B sees the coverage.
         """
-        _reject_unclean_text(self.epic_id, "EpicRunState.epic_id")
-        _reject_unclean_text(self.run_id, "EpicRunState.run_id")
+        harden_identifier(self.epic_id, "EpicRunState.epic_id")
+        harden_identifier(self.run_id, "EpicRunState.run_id")
         for story_id in self.story_ids:
-            _reject_unclean_text(story_id, "EpicRunState.story_ids[]")
-        if len(self.story_ids) != len(set(self.story_ids)):
-            raise ValueError(
-                "EpicRunState.story_ids must not contain duplicates; got "
-                f"{self.story_ids!r}"
-            )
+            harden_identifier(story_id, "EpicRunState.story_ids[]")
+        reject_duplicate_identifiers(self.story_ids, "EpicRunState.story_ids")
         return self
 
 
@@ -404,29 +381,21 @@ class SprintRunState(BaseModel):
     @model_validator(mode="after")
     def _harden_identifier_inputs(self) -> SprintRunState:
         """Input-hardening (Epic 14 retro Action #2; mirrors
-        :meth:`EpicRunState._harden_identifier_inputs` one scope up — Story 16.1
-        Dev Notes "Input-hardening"). The ``min_length=1`` field constraints
-        reject the empty string but not whitespace-only or embedded-newline
-        values, and neither ``epic_ids`` nor ``unassigned_story_ids`` carries
-        duplicate-rejection; this validator closes both at the model boundary so
-        every ``advance_sprint_run_state`` input is structurally clean.
+        :meth:`EpicRunState._harden_identifier_inputs` one scope up; Story 24.2
+        helper consolidation). Routes every externally-supplied identifier
+        through the shared ``input_hardening`` helpers so ``input_hardening_gate``'s
+        Rule B sees the coverage.
         """
-        _reject_unclean_text(self.sprint_id, "SprintRunState.sprint_id")
-        _reject_unclean_text(self.run_id, "SprintRunState.run_id")
+        harden_identifier(self.sprint_id, "SprintRunState.sprint_id")
+        harden_identifier(self.run_id, "SprintRunState.run_id")
         for epic_id in self.epic_ids:
-            _reject_unclean_text(epic_id, "SprintRunState.epic_ids[]")
+            harden_identifier(epic_id, "SprintRunState.epic_ids[]")
         for story_id in self.unassigned_story_ids:
-            _reject_unclean_text(story_id, "SprintRunState.unassigned_story_ids[]")
-        if len(self.epic_ids) != len(set(self.epic_ids)):
-            raise ValueError(
-                "SprintRunState.epic_ids must not contain duplicates; got "
-                f"{self.epic_ids!r}"
-            )
-        if len(self.unassigned_story_ids) != len(set(self.unassigned_story_ids)):
-            raise ValueError(
-                "SprintRunState.unassigned_story_ids must not contain "
-                f"duplicates; got {self.unassigned_story_ids!r}"
-            )
+            harden_identifier(story_id, "SprintRunState.unassigned_story_ids[]")
+        reject_duplicate_identifiers(self.epic_ids, "SprintRunState.epic_ids")
+        reject_duplicate_identifiers(
+            self.unassigned_story_ids, "SprintRunState.unassigned_story_ids"
+        )
         return self
 
 
@@ -465,11 +434,15 @@ def worktree_run_state_path(
           worktrees``.
         * else → ``<_default_repo_root()>/_bmad/automation/worktrees``.
 
-    Pure function; no filesystem access, no marker emission (sensor-not-
-    advisor).
+    Input-hardening (Story 24.2 — closes deferred-work ``worktree_run_state_path``
+    ``story_id`` path-traversal): ``story_id`` is routed through
+    :func:`~loud_fail_harness.input_hardening.harden_path_segment`, rejecting
+    whitespace-only / embedded-newline / null-byte / path-separator /
+    ``..``-traversal values so a hostile ``story_id`` can never escape the
+    worktrees umbrella. Pure function; no filesystem access, no marker emission
+    (sensor-not-advisor).
     """
-    if not story_id:
-        raise ValueError("story_id must be non-empty")
+    harden_path_segment(story_id, "worktree_run_state_path.story_id")
     if worktrees_root is None:
         root = repo_root if repo_root is not None else _default_repo_root()
         worktrees_root = root / "_bmad" / "automation" / "worktrees"
@@ -502,24 +475,14 @@ def epic_run_state_path_for(
     :func:`_default_repo_root` at call time (no ``find_repo_root()`` at import
     time per Epic 1 retro Action #1).
 
-    Input-hardening (Epic 14 retro Action #2): ``epic_id`` is rejected if it is
-    empty / whitespace-only / carries an embedded newline (:func:`_reject_unclean_text`)
-    or contains a path separator (``/``, ``\\``) or a ``..`` traversal segment —
-    so a malformed identifier can never compose a path outside the
-    ``_bmad/automation/`` umbrella. Pure function; no filesystem access, no
-    marker emission (sensor-not-advisor).
+    Input-hardening (Epic 14 retro Action #2; Story 24.2 helper consolidation):
+    ``epic_id`` is routed through :func:`~loud_fail_harness.input_hardening.harden_path_segment`,
+    rejecting whitespace-only / embedded-newline / null-byte / path-separator /
+    ``..``-traversal values so a malformed identifier can never compose a path
+    outside the ``_bmad/automation/`` umbrella. Pure function; no filesystem
+    access, no marker emission (sensor-not-advisor).
     """
-    _reject_unclean_text(epic_id, "epic_run_state_path_for.epic_id")
-    if "/" in epic_id or "\\" in epic_id or ".." in epic_id:
-        raise ValueError(
-            f"epic_run_state_path_for.epic_id must not contain a path "
-            f"separator or '..' traversal; got {epic_id!r}"
-        )
-    if "\x00" in epic_id:
-        raise ValueError(
-            f"epic_run_state_path_for.epic_id must not contain a null byte; "
-            f"got {epic_id!r}"
-        )
+    harden_path_segment(epic_id, "epic_run_state_path_for.epic_id")
     root = repo_root if repo_root is not None else _default_repo_root()
     return (
         root / "_bmad" / "automation" / f"epic-run-state-{epic_id}.yaml"

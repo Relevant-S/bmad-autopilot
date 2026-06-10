@@ -128,6 +128,8 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, TextIO
 
+from loud_fail_harness.input_hardening import harden_path_segment
+
 if TYPE_CHECKING:
     from loud_fail_harness.lifecycle_state_machine import EventLogAppender
 
@@ -154,7 +156,14 @@ def default_event_log_path(
     Returns:
         :class:`pathlib.Path` pointing at the canonical events.jsonl
         location.
+
+    Input-hardening (Story 24.2 — closes deferred-work ``default_event_log_path``
+    ``story_id``/``run_id`` path-traversal): both segments are routed through
+    :func:`~loud_fail_harness.input_hardening.harden_path_segment` so a hostile
+    identifier cannot escape ``qa_evidence_root``.
     """
+    harden_path_segment(story_id, "default_event_log_path.story_id")
+    harden_path_segment(run_id, "default_event_log_path.run_id")
     return qa_evidence_root / story_id / run_id / "events.jsonl"
 
 

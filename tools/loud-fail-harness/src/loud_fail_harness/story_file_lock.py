@@ -174,7 +174,9 @@ import sys
 from typing import Callable, Final, Iterator, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from loud_fail_harness.input_hardening import harden_identifier
 
 from loud_fail_harness._shared import find_repo_root
 
@@ -247,6 +249,17 @@ class LockRecord(BaseModel):
     started_at: datetime.datetime
     worktree_path: pathlib.Path
     hostname: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "LockRecord":
+        """Input-hardening (Story 24.2 — the Epic 14 ``LockRecord`` recurrence).
+        The lock-file body is parsed from operator-editable on-disk YAML; the
+        ``min_length=1`` constraint accepts whitespace-only ``story_id``. Route
+        it through the shared helper to reject whitespace-only / embedded-newline
+        / null-byte values.
+        """
+        harden_identifier(self.story_id, "LockRecord.story_id")
+        return self
 
 
 class LockAcquisitionResult(BaseModel):

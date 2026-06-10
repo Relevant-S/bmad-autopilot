@@ -172,8 +172,9 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.http_driver import verify_ac as _http_verify_ac
 from loud_fail_harness.http_driver import ApiDriver
 # Story 9.3 — mobile project type dispatch
@@ -257,6 +258,13 @@ class SmokeFirstAbortDiagnosticContext(BaseModel):
     failed_ac_id: str
     failed_assertions: tuple[str, ...]
     failed_evidence_refs: tuple[str, ...]
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "SmokeFirstAbortDiagnosticContext":
+        """Input-hardening (Story 24.2). Route ``story_id`` through the shared
+        helper (rejects whitespace-only / embedded-newline / null-byte)."""
+        harden_identifier(self.story_id, "SmokeFirstAbortDiagnosticContext.story_id")
+        return self
 
 
 class SmokeFirstAbortEmissionRecord(BaseModel):
@@ -364,6 +372,13 @@ class FlowBranchSkippedDiagnosticContext(BaseModel):
     branch_id: str = Field(min_length=1)
     branch_description: str = Field(min_length=1)
     skip_rationale: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "FlowBranchSkippedDiagnosticContext":
+        """Input-hardening (Story 24.2). Route ``story_id`` through the shared
+        helper (rejects whitespace-only / embedded-newline / null-byte)."""
+        harden_identifier(self.story_id, "FlowBranchSkippedDiagnosticContext.story_id")
+        return self
 
 
 class FlowBranchSkippedEmissionRecord(BaseModel):

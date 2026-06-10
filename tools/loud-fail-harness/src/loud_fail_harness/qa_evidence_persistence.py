@@ -124,6 +124,7 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
@@ -288,6 +289,14 @@ class EvidenceTruncatedDiagnosticContext(BaseModel):
     story_id: str = Field(min_length=1)
     run_id: str = Field(min_length=1)
     how_to_enable_pointer: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "EvidenceTruncatedDiagnosticContext":
+        """Input-hardening (Story 24.2). Route ``story_id``/``run_id`` through the
+        shared helper (rejects whitespace-only / embedded-newline / null-byte)."""
+        harden_identifier(self.story_id, "EvidenceTruncatedDiagnosticContext.story_id")
+        harden_identifier(self.run_id, "EvidenceTruncatedDiagnosticContext.run_id")
+        return self
 
 
 class EvidenceTruncatedEmissionRecord(BaseModel):

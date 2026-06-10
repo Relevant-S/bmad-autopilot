@@ -326,6 +326,8 @@ from typing import (
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from loud_fail_harness.input_hardening import harden_path_segment
+
 from loud_fail_harness._shared import find_repo_root, load_schema
 from loud_fail_harness.exceptions import ContractViolation
 from loud_fail_harness.envelope_validator import format_errors, validate_envelope
@@ -824,6 +826,11 @@ def persist_dispatch_log(
             "value to clamp silently."
         )
 
+    # Input-hardening (Story 24.2 — closes deferred-work LOG_PATH_TEMPLATE
+    # story_id path-traversal): the two identifier segments compose a path under
+    # log_root; harden them so a hostile story_id/run_id cannot escape it.
+    harden_path_segment(payload.story_id, "persist_dispatch_log.story_id")
+    harden_path_segment(run_id, "persist_dispatch_log.run_id")
     log_path = log_root / LOG_PATH_TEMPLATE.format(
         story_id=payload.story_id,
         run_id=run_id,

@@ -47,8 +47,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     validate_marker_emission,
@@ -192,6 +193,14 @@ class Tier3NotConfiguredDiagnosticContext(BaseModel):
     story_id: str = Field(min_length=1)
     ac_id: str = Field(min_length=1)
     how_to_enable_pointer: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "Tier3NotConfiguredDiagnosticContext":
+        """Input-hardening (Story 24.2 — closes deferred-work qa_evidence_tier
+        ``story_id`` gap). Route ``story_id`` through the shared helper (rejects
+        whitespace-only / embedded-newline / null-byte)."""
+        harden_identifier(self.story_id, "Tier3NotConfiguredDiagnosticContext.story_id")
+        return self
 
 
 class Tier3NotConfiguredEmissionRecord(BaseModel):

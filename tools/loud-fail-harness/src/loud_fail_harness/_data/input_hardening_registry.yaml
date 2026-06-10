@@ -1,0 +1,250 @@
+# Input-hardening model-classification registry — Story 24.2 (Epic 24 Action #2).
+#
+# The CLOSED dual-registry enforced by `input-hardening-gate` (Rule A): every
+# BaseModel subclass discovered under src/loud_fail_harness/ MUST appear in
+# EXACTLY ONE bucket. A new model cannot merge unclassified — that structural
+# property is what makes the 13->14->15->16->18 input-hardening recurrence
+# impossible to recur (the marker-taxonomy / fixture-coverage closed-enumeration
+# discipline applied to models). Mirrors _data/marker_coverage_surfaces.yaml as a
+# package-bundled data file (loaded via importlib.resources, cwd-independent).
+#
+# externally_constructed: models built from parsed text / on-disk YAML /
+#   story-doc frontmatter / config / CLI args / operator edits OR (the QA
+#   *DiagnosticContext family) seeded at specialist runtime from parsed plan /
+#   evidence data. Each names the string fields carrying a hostile-input surface:
+#     identifier_fields  -> harden_identifier        (whitespace/newline/null)
+#     path_fields        -> harden_path_segment      (+ separators + '..')
+#     dup_key_fields     -> reject_duplicate_identifiers
+#   A collection whose ELEMENTS are hardened per-item uses the "<Model>.<field>[]"
+#   label (the trailing [] is stripped by the gate to credit the field). Rule B
+#   asserts every named field is routed through its helper inside a validator.
+#
+# internal_only: models constructed solely from already-validated in-process
+#   data (envelopes, *Result/*Outcome/*Request, gate-internal Lint*/Finding
+#   models, *Emission/*EmissionRecord wrappers around an already-hardened
+#   diagnostic context). Exempt BY DESIGN; the registry entry is the
+#   rationale-of-record.
+
+externally_constructed:
+  epic_run_state.EpicRunState:
+    identifier_fields: [epic_id, run_id, story_ids]
+    dup_key_fields: [story_ids]
+  epic_run_state.SprintRunState:
+    identifier_fields: [sprint_id, run_id, epic_ids, unassigned_story_ids]
+    dup_key_fields: [epic_ids, unassigned_story_ids]
+  run_state.RunState:
+    identifier_fields: [branch_name]
+    path_fields: [story_id, run_id]
+  qa_behavioral_plan.FlowBranch:
+    identifier_fields: [branch_id]
+  qa_plan_drift.PlanDriftDiagnosticContext:
+    identifier_fields: [story_id]
+  story_file_lock.LockRecord:
+    identifier_fields: [story_id]
+  parallel_pollution.StoryClaim:
+    identifier_fields: [story_id, aggregate_claim_story_id]
+  qa_ac_iteration.SmokeFirstAbortDiagnosticContext:
+    # failed_ac_id comes from AcEntry.ac_id (internal_only — parsed plan boundary);
+    # only story_id is a raw external-ingress field here.
+    identifier_fields: [story_id]
+  qa_ac_iteration.FlowBranchSkippedDiagnosticContext:
+    # branch_id arrives pre-validated via FlowBranch._harden_identifier_inputs
+    # (FlowBranch is externally_constructed with identifier_fields: [branch_id]);
+    # ac_id comes from AcEntry.ac_id (internal_only). Only story_id is raw.
+    identifier_fields: [story_id]
+  qa_evidence_persistence.EvidenceTruncatedDiagnosticContext:
+    identifier_fields: [story_id, run_id]
+  qa_evidence_tier.Tier3NotConfiguredDiagnosticContext:
+    # ac_id comes from AcEntry.ac_id (internal_only — parsed plan boundary);
+    # only story_id is a raw external-ingress field here.
+    identifier_fields: [story_id]
+  qa_exploratory_heuristics.HeuristicSkippedDiagnosticContext:
+    identifier_fields: [story_id]
+
+# parse_functions: registered free functions that RETURN an externally_constructed
+# model (Rule C treats a call to one inside a try-body like a direct construction).
+# None registered at landing — the run-state loaders raise typed *ParseError, not
+# a bare construction.
+parse_functions: []
+
+internal_only:
+  - branch_lifecycle.BranchLifecycleResult
+  - branch_lifecycle.WorkingTreeProbeResult
+  - bundle_assembly_failure_emission_gate.ForbiddenEmissionFinding
+  - bundle_assembly_failure_emission_gate.GateResult
+  - config_qa_runbook_stub.StubScaffoldOutcome
+  - config_qa_runbook_stub.StubScaffoldRequest
+  - cross_state_recovery.RecoveryOutcome
+  - cross_state_recovery.RecoveryRequest
+  - dependencies_validator.ValidationFinding
+  - enumeration_check.CheckResult
+  - enumeration_check.Reference
+  - env_provisioning.EnvSetupFailureDiagnostic
+  - env_provisioning.EnvSetupFailureEmission
+  - env_provisioning.MarkerEmissionRecord
+  - env_provisioning.ProvisionedEnv
+  - epic_lifecycle.RunEpicLoopResult
+  - epic_lifecycle.StoryLoopOutcome
+  - epic_run_state.EpicRunStateAdvanceResult
+  - epic_run_state.PerEpicCostPartition
+  - epic_run_state.PerEpicRetryBudget
+  - epic_run_state.PerSprintRetryBudget
+  - epic_run_state.SprintRunStateAdvanceResult
+  - epic_status_command.EpicInspection
+  - epic_status_command.EpicStatusOutcome
+  - epic_status_command.EpicStatusRequest
+  - epic_status_command.EpicStoryRow
+  - fixture_coverage.CoverageResult
+  - fixture_coverage.Fixture
+  - fixture_coverage.Reference
+  - fixture_coverage.ShapeViolation
+  - flow_branch_coverage_gate.BranchFinding
+  - flow_branch_coverage_gate.BranchReference
+  - flow_branch_coverage_gate.GateResult
+  - flow_branch_coverage_gate.OutcomeRecord
+  - flow_branch_coverage_gate.ParsedCase
+  - fr33_fixture_gate.GateResult
+  - fr33_fixture_gate.Reference
+  - fr33_fixture_gate.ReplayFinding
+  - fr33_runtime_gate.RuntimeFinding
+  - fr33_runtime_gate.RuntimeGateResult
+  - fr33_runtime_gate.RuntimeReference
+  - hook_budget_gate.CountFinding
+  - hook_budget_gate.GateResult
+  - hook_budget_gate.LineFinding
+  - hook_budget_gate.Reference
+  - http_driver.ApiAssertion
+  - http_driver.HttpResponse
+  - http_driver.NetworkTraceRecord
+  - init_non_destructive_guard.GuardOutcome
+  - init_non_destructive_guard.GuardRequest
+  - init_non_destructive_guard.MergeResult
+  - init_preconditions.PreconditionProbeRegistry
+  - init_preconditions.PreconditionProbeResult
+  - init_preconditions.PreconditionResult
+  - init_preconditions.PreconditionRun
+  - input_hardening_gate.LintFinding
+  - input_hardening_gate.LintResult
+  - input_hardening_gate.ModelRegistry
+  - input_hardening_gate._DiscoveredModel
+  - input_hardening_gate._FieldBuckets
+  - install_path.SpikeOutcome
+  - lad_mcp_unavailable.LadMcpUnavailableEmission
+  - lifecycle_state_machine.CommitTransitionResult
+  - lifecycle_state_machine.RecordHaltResult
+  - lifecycle_state_machine._AdvanceDecision
+  - lifecycle_state_machine._HaltDecision
+  - mobile_driver.MobileDriverAssertion
+  - mobile_driver.MobileElement
+  - mobile_driver.MobileMcpUnavailableDiagnostic
+  - mobile_driver.MobileMcpUnavailableEmission
+  - mobile_heuristic_spec.MobileHeuristicSpec
+  - multi_story_status.EpicGroupSummary
+  - multi_story_status.ListingOutcome
+  - multi_story_status.ListingRequest
+  - multi_story_status.SprintGroupSummary
+  - multi_story_status.StoryListing
+  - multi_story_status.StoryRowSummary
+  - mvp_completion_evidence.CoverageReport
+  - mvp_completion_evidence.CoverageRow
+  - mvp_completion_evidence.LintFinding
+  - naming_lint.ValidationFinding
+  - no_destructive_resume_guard.Verdict
+  - no_destructive_resume_lint.LintFinding
+  - no_destructive_resume_lint.LintResult
+  - onboarding_benchmark.BenchmarkRecord
+  - onboarding_benchmark.BenchmarkRequest
+  - onboarding_benchmark.ComponentTimings
+  - onboarding_benchmark.EnvironmentNotes
+  - orchestrator_run_entry.AcceptanceCriterion
+  - orchestrator_run_entry.DispatchCallbackResult
+  - orchestrator_run_entry.RunStoryLoopEntryResult
+  - orchestrator_run_entry.SprintStatusResolution
+  - orchestrator_run_entry.StoryDocResolution
+  - parallel_pollution.PollutionConflict
+  - phase_1_5_completion_evidence.CoverageReport
+  - phase_1_5_completion_evidence.CoverageRow
+  - phase_1_5_completion_evidence.LintFinding
+  - playwright_driver.AcResult
+  - playwright_driver.MaskedSelectorPolicy
+  - playwright_driver.NetworkRequest
+  - playwright_driver.PlaywrightMcpUnavailableDiagnostic
+  - playwright_driver.PlaywrightMcpUnavailableEmission
+  - playwright_driver.WebDriverAssertion
+  - pluggability_gate.CrossReferenceFinding
+  - pluggability_gate.GateResult
+  - pluggability_gate.Reference
+  - project_type_detection.DetectionOutcome
+  - project_type_detection.DetectionRequest
+  - project_type_detection.WriteResult
+  - qa_ac_iteration.AcFlowBranchCoverage
+  - qa_ac_iteration.AcIterationResult
+  - qa_ac_iteration.FlowBranchSkippedEmission
+  - qa_ac_iteration.FlowBranchSkippedEmissionRecord
+  - qa_ac_iteration.SmokeFirstAbortEmission
+  - qa_ac_iteration.SmokeFirstAbortEmissionRecord
+  - qa_behavioral_plan.AcEntry
+  - qa_behavioral_plan.QABehavioralPlan
+  - qa_behavioral_plan.QABehavioralPlanEntry
+  - qa_evidence_persistence.EvidenceTruncatedEmission
+  - qa_evidence_persistence.EvidenceTruncatedEmissionRecord
+  - qa_evidence_persistence.SizeBudgetOutcome
+  - qa_evidence_tier.EvidenceRef
+  - qa_evidence_tier.PlanAndConfigForEvaluation
+  - qa_evidence_tier.Tier3NotConfiguredEmission
+  - qa_evidence_tier.Tier3NotConfiguredEmissionRecord
+  - qa_exploratory_heuristics.HeuristicSkippedEmission
+  - qa_exploratory_heuristics.HeuristicSkippedEmissionRecord
+  - qa_plan_drift.PlanDriftEmission
+  - qa_plan_drift.PlanDriftEmissionRecord
+  - reconciler.ClassificationResult
+  - reconciler.Marker
+  - reconciler.MatchedPair
+  - reconciler.SkipEvent
+  - resume_command.ResumeOutcome
+  - resume_command.ResumeRequest
+  - retry_budget_exhaustion.ExhaustionContext
+  - retry_budget_exhaustion.RetryBudgetExhaustionDiagnostic
+  - retry_budget_exhaustion.RetryBudgetExhaustionResult
+  - retry_history.RetryAttemptRef
+  - retry_history.RetryRoundArtifacts
+  - review_layer_failure_emission_gate.ForbiddenEmissionFinding
+  - review_layer_failure_emission_gate.GateResult
+  - run_state.AdvanceResult
+  - run_state.CostToDateBySpecialist
+  - run_state.LastRetryDirective
+  - run_state.RetryAttempt
+  - run_state.StoryDocCallbackResult
+  - sample_story_scaffold.SampleScaffoldOutcome
+  - sample_story_scaffold.SampleScaffoldRequest
+  - session_start_reattach.ReattachOutcome
+  - session_start_reattach.ReattachRequest
+  - specialist_dispatch.MarkerClassRegistry
+  - specialist_dispatch.ReturnEnvelopeValidation
+  - specialist_dispatch.SpecialistDispatchPayload
+  - sprint_lifecycle.EpicLoopOutcome
+  - sprint_lifecycle.RunSprintLoopResult
+  - sprint_status_artifact.SprintActiveMarker
+  - sprint_status_artifact.SprintEpicRow
+  - sprint_status_artifact.SprintEscalationSummary
+  - sprint_status_artifact.SprintRetryBudgetSummary
+  - sprint_status_artifact.SprintStatusArtifact
+  - sprint_status_artifact.SprintStoryRow
+  - sprint_status_artifact_validator.ArtifactValidationResult
+  - sprint_status_command.SprintStatusOutcome
+  - sprint_status_command.SprintStatusRequest
+  - status_command.StatusOutcome
+  - status_command.StatusRequest
+  - status_command.StoryInspection
+  - story_doc_validator.ValidationResult
+  - story_doc_version_check.VersionCheckOutcome
+  - story_doc_version_check.VersionCheckRequest
+  - story_file_lock.LockAcquisitionResult
+  - story_file_lock.LockInspectionResult
+  - story_file_lock.LockReleaseResult
+  - story_file_lock.StalenessVerdict
+  - tea_boundary_orientation.OrientationOutcome
+  - tea_boundary_orientation.OrientationRequest
+  - worktree_lifecycle.WorktreeCleanupResult
+  - worktree_lifecycle.WorktreeInspectionResult
+  - worktree_lifecycle.WorktreeLifecycleResult

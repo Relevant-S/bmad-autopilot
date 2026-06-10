@@ -165,6 +165,7 @@ from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.qa_plan_persistence_compromise import (
     render_compromise_blockquote,
 )
@@ -281,6 +282,18 @@ class FlowBranch(BaseModel):
             raise ValueError(
                 "must-visit flow branch must not carry a skip_rationale"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> FlowBranch:
+        """Input-hardening (Story 24.2 — the Epic 13 ``FlowBranch`` origin of
+        the recurrence). ``branch_id`` is the ``<branch-id>`` component of the
+        ``heuristic-skipped: flow-branch-<branch-id>`` marker key. Its
+        ``Field(pattern=…)`` rejects leading/trailing/embedded whitespace but a
+        null byte is non-whitespace and slips through; route it through the
+        shared helper to close that.
+        """
+        harden_identifier(self.branch_id, "FlowBranch.branch_id")
         return self
 
 

@@ -291,6 +291,7 @@ _INTRA_PACKAGE_IMPORT_ALLOWLIST = frozenset(
         "loud_fail_harness.envelope_validator",
         "loud_fail_harness.event_validator",
         "loud_fail_harness.exceptions",
+        "loud_fail_harness.input_hardening",
         "loud_fail_harness.marker_wiring",
         "loud_fail_harness.orchestrator_run_entry",
         "loud_fail_harness.reconciler",

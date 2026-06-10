@@ -185,6 +185,20 @@ flow-branch-coverage-gate = "loud_fail_harness.flow_branch_coverage_gate:main"
 # because all prior [project.scripts] entries pre-date this story; the position
 # does NOT reflect CI execution order.
 sprint-status-artifact-validator = "loud_fail_harness.sprint_status_artifact_validator:main"
+# input-hardening-gate (Story 24.2; Epic 24 Action #2) is a CI GATE (NOT a
+# library-as-CLI-aid): it scans the committed src/loud_fail_harness/ tree on
+# every PR/push, so it has a canonical filesystem surface unlike
+# story-doc-validator / marker-coverage-audit. Enforces the closed
+# model-classification registry (Rule A), per-field hardening coverage (Rule B),
+# and the ValidationError catch-boundary (Rule C) that codify the
+# 13→14→15→16→18 input-hardening recurrence as a build-time guarantee. It is a
+# sibling library + lint, NOT a 6th substrate component (ADR-003 FIVE-component
+# lock holds — precedent: naming-lint / pluggability-gate / no-destructive-
+# resume-lint), and emits NO runtime marker (build-time gate). Listed LAST
+# because all prior [project.scripts] entries pre-date this story; the position
+# in this table does NOT reflect CI execution order — the CI step runs after
+# no-destructive-resume-lint in .github/workflows/ci.yml.
+input-hardening-gate = "loud_fail_harness.input_hardening_gate:main"
 
 [dependency-groups]
 dev = [

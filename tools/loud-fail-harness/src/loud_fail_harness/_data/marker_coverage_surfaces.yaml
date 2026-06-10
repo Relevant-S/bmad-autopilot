@@ -2151,7 +2151,7 @@ verdicts:
   - marker_class: recovery-state-conflict
     surface_name: orchestrator-state-machine
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/epic_run_state.py:1005
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/epic_run_state.py:968
     rationale: |-
       Story 16.5 adds a THIRD recovery-state-conflict emission path: resume
       budget reconstruction (run_epic_loop / run_sprint_loop) raises the typed

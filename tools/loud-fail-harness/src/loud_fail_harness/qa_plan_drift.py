@@ -158,8 +158,9 @@ Sensor-not-advisor (PRD-level invariant + Pattern 5):
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from loud_fail_harness.input_hardening import harden_identifier
 from loud_fail_harness.qa_behavioral_plan import (
     AcEntry,
     PlanStatus,
@@ -214,6 +215,17 @@ class PlanDriftDiagnosticContext(BaseModel):
     prior_plan_status: PlanStatus
     prior_ac_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     current_ac_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _harden_identifier_inputs(self) -> "PlanDriftDiagnosticContext":
+        """Input-hardening (Story 24.2 — closes deferred-work
+        ``PlanDriftDiagnosticContext.story_id`` whitespace-only gap). The
+        ``min_length=1`` constraint accepts ``"   "``; route ``story_id``
+        through the shared helper to reject whitespace-only / embedded-newline /
+        null-byte values.
+        """
+        harden_identifier(self.story_id, "PlanDriftDiagnosticContext.story_id")
+        return self
 
 
 class PlanDriftEmissionRecord(BaseModel):
