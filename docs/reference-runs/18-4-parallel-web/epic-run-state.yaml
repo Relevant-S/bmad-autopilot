@@ -1,0 +1,22 @@
+schema_version: '1.0'
+epic_id: epic-918
+run_id: run-epic-918-ref-001
+current_state: epic-complete
+story_ids:
+- 918-1-alpha
+- 918-2-bravo
+per_story_status:
+  918-1-alpha: merge-ready
+  918-2-bravo: merge-ready
+per_epic_retry_budget:
+  multiplier: 2
+  story_count: 2
+  effective_budget: 4
+  consumed: 0
+per_epic_cost_partition:
+  per_story_cost:
+    918-1-alpha: 1.5
+    918-2-bravo: 2.25
+  epic_cost_total: 3.75
+active_markers: []
+marker_contexts: {}

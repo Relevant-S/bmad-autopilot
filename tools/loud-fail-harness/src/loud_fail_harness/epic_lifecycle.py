@@ -752,6 +752,7 @@ def run_epic_loop(
                 progress_sink=progress_sink,
                 claim_provider=claim_provider,
                 claim_release=port_allocator.release,
+                claim_seed=claim_provider.seed_carrier,
             )
         except DisjointPortExhausted:
             # Impossibility-class signal (Story 18.3 AC-1): the OS ephemeral

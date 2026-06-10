@@ -156,6 +156,34 @@ class ParallelStoryLoopRunner(Protocol):
     ) -> StoryLoopOutcome: ...
 
 
+class ClaimCarrierSeed(Protocol):
+    """The post-``create_worktree`` carrier-write seam (Story 18.4).
+
+    The dispatcher invokes this AFTER an admitted unit's worktree exists and
+    BEFORE the runner, handing it the registered
+    :class:`~loud_fail_harness.parallel_pollution.StoryClaim` and the
+    per-worktree ``run_state_path``, so the implementation persists the seeded
+    port + env namespace into the now-existing worktree (the production impl is
+    ``env_provisioning.ParallelEnvClaimProvider.seed_carrier``). It is the
+    deferred half of the claim provider: ``claim_provider`` allocates the port +
+    registers the claim at pre-admission (main thread), but the carrier FILE
+    write is deferred to here so it cannot create the per-worktree directory
+    before ``create_worktree``'s ``git worktree add`` (which requires an empty
+    target — the eager in-provider pre-seed broke the real parallel path, Story
+    18.4). Keyword-only + non-defaulted (the project's structural-callback
+    discipline). Inert when the dispatcher is called without it; an internal
+    seam (like ``claim_release``), so it stays out of ``__all__``.
+    """
+
+    def __call__(
+        self,
+        *,
+        story_id: str,
+        claim: parallel_pollution.StoryClaim,
+        run_state_path: pathlib.Path,
+    ) -> None: ...
+
+
 def dispatch_stories_parallel(
     epic_id: str,
     *,
@@ -173,6 +201,7 @@ def dispatch_stories_parallel(
     progress_sink: ProgressSink | None = None,
     claim_provider: parallel_pollution.StoryClaimProvider | None = None,
     claim_release: Callable[[int], None] | None = None,
+    claim_seed: ClaimCarrierSeed | None = None,
 ) -> RunEpicLoopResult:
     """Fan out the enumerated stories concurrently, each worktree-isolated, and
     fold their terminals into the epic aggregate on the dispatching thread.
@@ -298,7 +327,11 @@ def dispatch_stories_parallel(
             paused_on = conflicts[0].story_id
 
     def _run_unit(
-        *, story_id: str, index: int, total: int
+        *,
+        story_id: str,
+        index: int,
+        total: int,
+        claim: parallel_pollution.StoryClaim | None = None,
     ) -> StoryLoopOutcome:
         worktree = worktree_lifecycle.create_worktree(
             story_id,
@@ -312,6 +345,14 @@ def dispatch_stories_parallel(
             run_state_path = worktree_run_state_path(
                 story_id, worktrees_root=worktrees_root, repo_root=repo_root
             )
+            # Deferred carrier write (Story 18.4): the worktree now exists, so
+            # seeding the per-worktree run-state no longer collides with
+            # create_worktree's empty-target requirement. Still before the
+            # runner, so the seeded port is on disk when env-provisioning reads.
+            if claim_seed is not None and claim is not None:
+                claim_seed(
+                    story_id=story_id, claim=claim, run_state_path=run_state_path
+                )
             with story_file_lock_module.story_file_lock(
                 story_id, worktree_path=worktree.worktree_path, repo_root=repo_root
             ):
@@ -354,6 +395,7 @@ def dispatch_stories_parallel(
                 and _admit_ok()
             ):
                 story_id = pending[0]
+                claim: parallel_pollution.StoryClaim | None = None
                 if claim_provider is not None:
                     # Pre-admission claim check (cadence point 1): the incoming
                     # claim is detected against the LIVE registry before the unit
@@ -373,6 +415,7 @@ def dispatch_stories_parallel(
                     story_id=story_id,
                     index=index_by_story[story_id],
                     total=total,
+                    claim=claim,
                 )
                 in_flight[future] = story_id
                 admitted_order.append(story_id)

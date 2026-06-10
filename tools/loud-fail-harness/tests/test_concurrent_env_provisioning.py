@@ -10,9 +10,11 @@ AC mapping (verbatim from
     * AC-2 — ``story_env_namespace`` is a deterministic, collision-free,
       grammar-valid env-var prefix; per-story PID isolation is witnessed.
     * AC-3 — the production ``ParallelEnvClaimProvider`` sources a disjoint port
-      + namespace + evidence subpath + aggregate-claim id, pre-seeds the carrier,
-      and (driven through the dispatcher) keeps Story 18.2's detector silent on a
-      clean run; the ``claim_release`` seam frees ports at terminal cleanup.
+      + namespace + evidence subpath + aggregate-claim id at pre-admission and
+      defers the carrier write to ``seed_carrier`` (post-``create_worktree``,
+      Story 18.4), and (driven through the dispatcher) keeps Story 18.2's detector
+      silent on a clean run; the ``claim_release`` seam frees ports at terminal
+      cleanup.
     * AC-4 — per-story teardown tears down ONLY that story's env; A's released
       port does not affect B's held port.
     * AC-5 — per-story orphan cleanup emits one ``orphan-process-cleanup`` record
@@ -34,6 +36,7 @@ import pytest
 import yaml
 
 from loud_fail_harness import env_provisioning, parallel_dispatch
+from loud_fail_harness.epic_run_state import worktree_run_state_path
 from loud_fail_harness.env_provisioning import (
     ORPHAN_PROCESS_CLEANUP_MARKER,
     DisjointPortAllocator,
@@ -250,9 +253,15 @@ def test_per_story_pid_isolation_across_worktree_run_states(
 # --------------------------------------------------------------------------- #
 
 
-def test_provider_returns_disjoint_claim_and_preseeds_carrier(
+def test_provider_allocates_disjoint_claim_and_seed_carrier_writes(
     tmp_path: pathlib.Path,
 ) -> None:
+    """``__call__`` allocates a disjoint port + evidence/aggregate ids at
+    pre-admission but does NOT write the carrier file (Story 18.4 moved the
+    eager pre-seed out of ``__call__`` because it pre-created the
+    ``git worktree add`` target). The carrier write is the DEFERRED
+    ``seed_carrier`` half, which the dispatcher invokes after
+    ``create_worktree``."""
     provider = ParallelEnvClaimProvider(
         run_id="run-18-3",
         allocator=DisjointPortAllocator(),
@@ -267,15 +276,21 @@ def test_provider_returns_disjoint_claim_and_preseeds_carrier(
     assert claim_b.evidence_subpath == "qa-evidence/18-3-b/run-18-3/"
     assert claim_b.aggregate_claim_story_id == "18-3-b"
 
-    base = tmp_path / "_bmad" / "automation" / "worktrees"
-    # The carrier: BOTH stories' per-worktree run-states are pre-seeded with
-    # their own disjoint port + env namespace (Story 14.4 path).
-    rs_a = base / "18-3-a" / "run-state.yaml"
+    # __call__ alone writes NO carrier file — the per-worktree run-state does
+    # not yet exist (so it cannot pre-create create_worktree's empty target).
+    rs_a = worktree_run_state_path("18-3-a", repo_root=tmp_path)
+    rs_b = worktree_run_state_path("18-3-b", repo_root=tmp_path)
+    assert not rs_a.exists()
+    assert not rs_b.exists()
+
+    # The deferred seed_carrier half writes the port + namespace into the
+    # per-worktree run-state path the dispatcher hands it (post-create_worktree).
+    provider.seed_carrier(story_id="18-3-a", claim=claim_a, run_state_path=rs_a)
+    provider.seed_carrier(story_id="18-3-b", claim=claim_b, run_state_path=rs_b)
+
     seeded_a = _read(rs_a)
     assert seeded_a["allocated_port"] == claim_a.allocated_port
     assert seeded_a["env_namespace"] == story_env_namespace("18-3-a")
-
-    rs_b = base / "18-3-b" / "run-state.yaml"
     seeded_b = _read(rs_b)
     assert seeded_b["allocated_port"] == claim_b.allocated_port
     assert seeded_b["env_namespace"] == story_env_namespace("18-3-b")
@@ -373,6 +388,7 @@ def test_production_provider_clean_run_emits_no_pollution_marker(
         repo_root=tmp_path,
         claim_provider=provider,
         claim_release=allocator.release,
+        claim_seed=provider.seed_carrier,
     )
     assert result.final_state.current_state == "epic-complete"
     assert all(
@@ -381,10 +397,12 @@ def test_production_provider_clean_run_emits_no_pollution_marker(
     )
     assert set(spy.created) == set(story_ids)
 
-    # Disjointness witness: the two stories pre-seeded DISTINCT ports.
-    base = tmp_path / "_bmad" / "automation" / "worktrees"
-    port_a = _read(base / "18-3-a" / "run-state.yaml")["allocated_port"]
-    port_b = _read(base / "18-3-b" / "run-state.yaml")["allocated_port"]
+    # Disjointness witness: the deferred seed_carrier wrote DISTINCT ports into
+    # each story's per-worktree run-state (the _Spy redirects
+    # worktree_run_state_path → tmp_path/rs/<story>.yaml, the dispatcher-supplied
+    # run_state_path seed_carrier is handed post-create_worktree).
+    port_a = _read(tmp_path / "rs" / "18-3-a.yaml")["allocated_port"]
+    port_b = _read(tmp_path / "rs" / "18-3-b.yaml")["allocated_port"]
     assert port_a != port_b
 
 

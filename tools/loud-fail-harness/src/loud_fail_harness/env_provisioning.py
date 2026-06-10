@@ -236,7 +236,6 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from loud_fail_harness._shared import find_repo_root, load_schema
-from loud_fail_harness.epic_run_state import worktree_run_state_path
 from loud_fail_harness.event_validator import validate_event
 
 if TYPE_CHECKING:
@@ -1513,10 +1512,12 @@ class ParallelEnvClaimProvider:
     18.2 AC-2 named — a relative string label used for equality-based collision
     detection in the live-claim registry; not materialized or resolved against
     the filesystem inside this provider); sets
-    ``aggregate_claim_story_id = story_id``; pre-seeds the port + namespace into
-    the per-worktree run-state (:func:`pre_seed_parallel_env`, the AC-3
-    carrier); and returns the populated ``StoryClaim`` for the dispatcher's
-    live registry.
+    ``aggregate_claim_story_id = story_id``; and returns the populated
+    ``StoryClaim`` for the dispatcher's live registry. The port + namespace
+    carrier write into the per-worktree run-state
+    (:func:`pre_seed_parallel_env`) is deferred to :meth:`seed_carrier` (the
+    ``ClaimCarrierSeed`` seam the dispatcher invokes AFTER ``create_worktree``),
+    so the seed never pre-creates the ``git worktree add`` target (Story 18.4).
 
     Called ONLY on the dispatching (main) thread (single-writer per Story 18.2
     AC-2), so the shared :class:`DisjointPortAllocator` needs no lock. The
@@ -1544,24 +1545,43 @@ class ParallelEnvClaimProvider:
         from loud_fail_harness import parallel_pollution
 
         port = self._allocator.allocate()
-        try:
-            namespace = story_env_namespace(story_id)
-            run_state_path = worktree_run_state_path(
-                story_id,
-                worktrees_root=self._worktrees_root,
-                repo_root=self._repo_root,
-            )
-            pre_seed_parallel_env(
-                run_state_path, allocated_port=port, env_namespace=namespace
-            )
-        except Exception:
-            self._allocator.release(port)
-            raise
         return parallel_pollution.StoryClaim(
             story_id=story_id,
             allocated_port=port,
             evidence_subpath=f"qa-evidence/{story_id}/{self._run_id}/",
             aggregate_claim_story_id=story_id,
+        )
+
+    def seed_carrier(
+        self,
+        *,
+        story_id: str,
+        claim: parallel_pollution.StoryClaim,
+        run_state_path: pathlib.Path,
+    ) -> None:
+        """Deferred carrier write (the ``ClaimCarrierSeed`` seam): persist the
+        allocated port + env namespace into the per-worktree run-state AFTER the
+        dispatcher created the worktree.
+
+        Pairs with :meth:`__call__`, which allocates the port + registers the
+        claim at pre-admission (main thread) but no longer writes the carrier
+        file there. The eager in-``__call__`` ``pre_seed_parallel_env`` created
+        the per-worktree directory BEFORE ``create_worktree``'s ``git worktree
+        add`` ran, so the real parallel path crashed with ``fatal: '<path>'
+        already exists`` (surfaced by the Story 18.4 integration witness — the
+        Story 18.1–18.3 unit tests stubbed ``create_worktree`` so never hit it).
+        Invoking the carrier write here, after the worktree exists, keeps the
+        seed from pre-creating the ``git worktree add`` target.
+        """
+        if claim.allocated_port is None:
+            raise ValueError(
+                "ParallelEnvClaimProvider.seed_carrier requires a claim with an "
+                f"allocated port for story {story_id!r}; got None"
+            )
+        pre_seed_parallel_env(
+            run_state_path,
+            allocated_port=claim.allocated_port,
+            env_namespace=story_env_namespace(story_id),
         )
 
 
