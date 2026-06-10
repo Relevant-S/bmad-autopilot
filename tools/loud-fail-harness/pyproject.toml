@@ -199,6 +199,23 @@ sprint-status-artifact-validator = "loud_fail_harness.sprint_status_artifact_val
 # in this table does NOT reflect CI execution order — the CI step runs after
 # no-destructive-resume-lint in .github/workflows/ci.yml.
 input-hardening-gate = "loud_fail_harness.input_hardening_gate:main"
+# done-story-review-ledger-gate (Story 24.3; Epic 24 Action #3) is a CI GATE
+# in shape (LintFinding/LintResult/main exit 0/1/2, mirroring no-destructive-
+# resume-lint), but is exercised in inner CI via pytest over fixtures rather
+# than a dedicated ci.yml step — the governed surface is a target workspace's
+# `_bmad-output/implementation-artifacts/` story docs, which are NOT present in
+# the inner-repo CI working-directory (tools/loud-fail-harness). Same posture
+# as story-doc-validator (pyproject.toml lines 38-46): no canonical filesystem
+# surface to scan inside the harness, so its real teeth are a Dev/SM-invoked
+# `uv run done-story-review-ledger-gate --sprint-status … --artifacts-dir …`.
+# Joins sprint-status `done` status × story-doc `### Review Findings`
+# checkboxes; codifies the 18.3 traceability drift. Sibling library + lint, NOT
+# a 6th substrate component (ADR-003 FIVE-component lock holds — precedent:
+# naming-lint / pluggability-gate / no-destructive-resume-lint), and emits NO
+# runtime marker (build-time gate; closed-set stays 34, schema_version "1.12").
+# Listed LAST because all prior [project.scripts] entries pre-date this story;
+# the position in this table does NOT reflect CI execution order.
+done-story-review-ledger-gate = "loud_fail_harness.done_story_review_ledger_gate:main"
 
 [dependency-groups]
 dev = [

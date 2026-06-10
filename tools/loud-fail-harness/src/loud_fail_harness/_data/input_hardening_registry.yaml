@@ -77,6 +77,8 @@ internal_only:
   - cross_state_recovery.RecoveryOutcome
   - cross_state_recovery.RecoveryRequest
   - dependencies_validator.ValidationFinding
+  - done_story_review_ledger_gate.LintFinding
+  - done_story_review_ledger_gate.LintResult
   - enumeration_check.CheckResult
   - enumeration_check.Reference
   - env_provisioning.EnvSetupFailureDiagnostic
