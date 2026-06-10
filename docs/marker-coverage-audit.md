@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 462
-- Emitted: 44
-- Not-applicable: 418
+- Total intersections: 476
+- Emitted: 45
+- Not-applicable: 431
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -273,6 +273,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | orphan-run-state-detected | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | specialist-wrapper-qa | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
 | orphan-run-state-detected | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | FR48b multi-story status enumerator surfaces orphan run-state; this surface is not the status enumerator. |
+| parallel-dispatch-infra-failed | bundle-assembler | not-applicable | `n/a` | 2026-06-10 | Parallel-dispatcher admission/seed infra loud-fail marker (Story 24.1); emitted by the parallel dispatcher into the epic-run-state active_markers, not by bundle assembly. The running epic-level PR bundle (Story 15.3) renders the marker but does not produce it. |
+| parallel-dispatch-infra-failed | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-10 | The infra-failure marker is a parallel-dispatch RUNTIME fold-then-surface event (Story 24.1); the cost-telemetry pipeline has no code path that produces it (the folded per-epic cost partition is an INPUT to the fold, not the emitter of this marker). |
+| parallel-dispatch-infra-failed | hook-session-start | not-applicable | `n/a` | 2026-06-10 | The admission/seed infra failure is detected inside the parallel dispatcher's drain loop (Story 24.1), not at SessionStart reattachment; the hook has no code path that produces this event. |
+| parallel-dispatch-infra-failed | hook-stop | not-applicable | `n/a` | 2026-06-10 | The marker is emitted by the dispatcher into the epic-run-state active_markers (Story 24.1); the Stop hook has no code path that produces this event. |
+| parallel-dispatch-infra-failed | hook-subagent-stop | not-applicable | `n/a` | 2026-06-10 | The admission/seed infra failure is a dispatching-thread fold-then-surface event (Story 24.1); the SubagentStop hook has no code path that produces this event. |
+| parallel-dispatch-infra-failed | orchestrator-dispatch-wrapper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/parallel_dispatch.py:389` | 2026-06-10 | Story 24.1 wired the typed `ParallelDispatchInfraFailure` boundary on the two named arms (`claim_provider` admission + `seed_carrier` seed) into `dispatch_stories_parallel`; `_emit_infra_failure` folds every completed in-flight terminal first, then appends the durable sub-classified marker and pauses on `epic-paused-on-escalation`. The dispatcher is the SOLE home of this marker class (constant `PARALLEL_DISPATCH_INFRA_FAILED_MARKER`). |
+| parallel-dispatch-infra-failed | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-10 | The orchestrator skill prose names the parallel-dispatch pause but does not itself emit the marker; the canonical emission is the Python composition in `parallel_dispatch._emit_infra_failure` (Story 24.1), audited under the orchestrator-dispatch-wrapper surface. |
+| parallel-dispatch-infra-failed | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-10 | The per-story run-state helpers persist per-story state; the infra-failure marker is emitted into the EPIC-scope run-state by the dispatcher (Story 24.1) via `advance_epic_run_state`, audited under the orchestrator-dispatch-wrapper surface. |
+| parallel-dispatch-infra-failed | orchestrator-state-machine | not-applicable | `n/a` | 2026-06-10 | The BMAD lifecycle state machine + retry-budget enforcement does not produce this marker; it is a parallel-dispatch-substrate infra-failure surface emitted by `parallel_dispatch._emit_infra_failure` (Story 24.1), audited under the orchestrator-dispatch-wrapper surface. |
+| parallel-dispatch-infra-failed | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-10 | The infra-failure marker is a runtime parallel-dispatch event (Story 24.1); the fixture-driven reconciliation gate has no code path that produces it (the synthetic fixture declares the expected marker but does not emit it). |
+| parallel-dispatch-infra-failed | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-10 | The marker is emitted by the dispatcher (Story 24.1); the runtime reconciliation gate audits emission coverage but does not itself produce this event. |
+| parallel-dispatch-infra-failed | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-10 | The admission/seed infra failure is an orchestrator-substrate event (Story 24.1); the Dev specialist wrapper has no code path that produces it. |
+| parallel-dispatch-infra-failed | specialist-wrapper-qa | not-applicable | `n/a` | 2026-06-10 | The admission/seed infra failure is an orchestrator-substrate event (Story 24.1); the QA specialist wrapper has no code path that produces it. |
+| parallel-dispatch-infra-failed | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-10 | The admission/seed infra failure is an orchestrator-substrate event (Story 24.1); the Review-BMAD specialist wrapper has no code path that produces it. |
 | parallel-story-state-pollution | bundle-assembler | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only (Epic 18 Story 18.2); the bundle-assembler has no shared-state-collision code path. |
 | parallel-story-state-pollution | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) is detected at the orchestrator parallel-dispatch altitude only; cost-telemetry is a separate observability pipeline with no shared-state-collision code path. |
 | parallel-story-state-pollution | hook-session-start | not-applicable | `n/a` | 2026-05-30 | Parallel-mode cross-story state-pollution marker (Story 14.5, pre-provision) fires at parallel-dispatch RUNTIME (Epic 18 altitude), explicitly NOT at SessionStart; the SessionStart hook has no shared-state-collision code path. |

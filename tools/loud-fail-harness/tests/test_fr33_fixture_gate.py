@@ -34,7 +34,7 @@ Pydantic v2 frozen-model discipline:
     [x] GateResult is frozen (assignment raises)               → test_gate_result_is_frozen
 
 CLI / main exit-code matrix (AC-4, AC-6):
-    [x] canonical corpus validates → exit 0 + 33 Summary line  → test_canonical_corpus_validates
+    [x] canonical corpus validates → exit 0 + 34 Summary line  → test_canonical_corpus_validates
     [x] main exits 1 on dangling_event_class                   → test_main_exits_one_on_dangling_event_class
     [x] main --help resolves to argparse                       → test_main_help_resolves
     [x] main with no flags resolves canonical files            → test_main_with_no_flags_resolves_canonical_files
@@ -532,7 +532,7 @@ def test_mixed_precedence_harness_bug_wins(
 def test_pr_introduces_reconciler_regression(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Epic AC #2: PR regresses reconciler → ALL 33 fixtures hit reconciliation_mismatch."""
+    """Epic AC #2: PR regresses reconciler → ALL 34 fixtures hit reconciliation_mismatch."""
 
     def regressed_reconcile(
         skips: list[SkipEvent], markers: list[Marker]
@@ -545,7 +545,7 @@ def test_pr_introduces_reconciler_regression(
 
     rc, out, _ = _capture_main([])
     assert rc == 1
-    assert "33 reconciliation-mismatch finding(s)" in out
+    assert "34 reconciliation-mismatch finding(s)" in out
     # Spot-check that several canonical fixtures appear
     for fixture_stem in (
         "heuristic-skipped",
@@ -846,14 +846,14 @@ def test_gate_result_is_frozen() -> None:
 
 
 def test_canonical_corpus_validates() -> None:
-    """The canonical 33-fixture corpus + canonical schemas → exit 0 (story
+    """The canonical 34-fixture corpus + canonical schemas → exit 0 (story
     2.3 added 2 markers + 2 fixtures (27 → 29); story 14.3 added 1 marker
     + 1 fixture (29 → 30); story 14.5 added 1 marker + 1 fixture (30 → 31);
     story 15.2 added 1 marker + 1 fixture (31 → 32); story 16.2 added 1 marker
-    + 1 fixture (32 → 33))."""
+    + 1 fixture (32 → 33); story 24.1 added 1 marker + 1 fixture (33 → 34))."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "Summary: 33 passing fixture(s)" in out
+    assert "Summary: 34 passing fixture(s)" in out
     assert "0 reconciliation-mismatch finding(s)" in out
     assert "0 harness-bug finding(s)" in out
     assert "0 dangling-event-class finding(s)" in out

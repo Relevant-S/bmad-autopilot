@@ -63,9 +63,24 @@ Cross-story state-pollution detection (Story 18.2):
     The detector + emitter + marker literal live in the sibling substrate
     library :mod:`~loud_fail_harness.parallel_pollution`; this module wires the
     detection seam (the optional ``claim_provider`` + the main-thread live-claim
-    registry) and DELEGATES detect/emit/pause to that library. The marker class
-    string is NOT referenced here (it has exactly one home — the detection
-    library), so this module stays taxonomy-neutral at the source level.
+    registry) and DELEGATES detect/emit/pause to that library. The pollution
+    marker class string is NOT referenced here (it has exactly one home — the
+    detection library), so this module remains neutral about THAT class.
+
+Dispatcher-infra failure (Story 24.1):
+    The dispatcher owns exactly ONE marker class of its own —
+    ``parallel-dispatch-infra-failed`` (single-homed here as
+    :data:`PARALLEL_DISPATCH_INFRA_FAILED_MARKER`). When ``claim_provider``
+    (admission arm) or ``seed_carrier`` (seed arm) raises, the failure is
+    converted to a typed :class:`ParallelDispatchInfraFailure` and routed through
+    ``_emit_infra_failure`` — folding every already-completed in-flight terminal
+    into ``epic-run-state.yaml`` FIRST, then pausing on
+    ``epic-paused-on-escalation`` with the durable sub-classified marker (never
+    propagate-and-drop via ``ThreadPoolExecutor`` shutdown). The taxonomy YAML is
+    the authoritative source; the constant matches it byte-for-byte. Every OTHER
+    worker exception keeps the accepted loud-fail-by-exception path (AC-7). So the
+    module is taxonomy-neutral about the pollution class but is the SOLE emitter
+    of its own infra-failure class — one honest exception, single-homed.
 
 What this library does NOT do:
     * **No concurrent-env-provisioning discipline** — Story 18.3 owns the FR7
@@ -93,7 +108,7 @@ import collections
 import concurrent.futures as cf
 import pathlib
 from collections.abc import Callable
-from typing import Protocol
+from typing import ClassVar, Final, Protocol
 
 from loud_fail_harness import parallel_pollution
 from loud_fail_harness import story_file_lock as story_file_lock_module
@@ -121,6 +136,42 @@ _PAUSED_EPIC_STATES: frozenset[str] = frozenset(
 _EXPECTED_TERMINAL: frozenset[str] = TERMINAL_PER_STORY_STATUSES | frozenset(
     {"escalated"}
 )
+
+
+PARALLEL_DISPATCH_INFRA_FAILED_MARKER: Final = "parallel-dispatch-infra-failed"
+_CLAIM_PROVIDER_FAILED: Final = "claim-provider-failed"
+_SEED_CARRIER_FAILED: Final = "seed-carrier-failed"
+
+
+class ParallelDispatchInfraFailure(Exception):
+    """A dispatcher-infra failure in one of the two named arms — the admission
+    arm (``claim_provider``) or the seed arm (``seed_carrier`` →
+    ``pre_seed_parallel_env``) — that MUST fold-then-surface rather than
+    propagate-and-drop (Story 24.1; closes ``deferred-work.md`` ``:24`` + ``:9``).
+
+    The typed discriminator that keeps the fold-then-surface fix scoped to
+    exactly these two arms: a worker exception carrying this type routes through
+    :func:`dispatch_stories_parallel`'s ``_emit_infra_failure`` (fold every
+    completed in-flight terminal FIRST, then pause on
+    ``epic-paused-on-escalation`` with the durable
+    ``parallel-dispatch-infra-failed`` marker), while any OTHER worker exception
+    (``create_worktree`` / ``story_file_lock`` / the ``runner`` itself) keeps the
+    established loud-fail-by-exception behaviour and re-raises after its batch
+    siblings fold (Story 24.1 AC-7). Follows the project typed-exception
+    convention (``ResumeBudgetReconstructionConflict`` / ``DisjointPortExhausted``
+    — context as ``__init__`` attributes; ``marker_class`` ``ClassVar`` for the
+    one error-class ↔ marker-class correspondence Pattern 5 mandates).
+    """
+
+    marker_class: ClassVar[str] = PARALLEL_DISPATCH_INFRA_FAILED_MARKER
+
+    def __init__(self, *, sub_classification: str, story_id: str) -> None:
+        self.sub_classification = sub_classification
+        self.story_id = story_id
+        super().__init__(
+            f"parallel-dispatch infrastructure failure "
+            f"({sub_classification}) for story {story_id!r}"
+        )
 
 
 class ParallelStoryLoopRunner(Protocol):
@@ -285,6 +336,7 @@ def dispatch_stories_parallel(
     paused_on: str | None = None
     live_claims: dict[str, parallel_pollution.StoryClaim] = {}
     pollution_detected = False
+    infra_failed = False
 
     def _admit_ok() -> bool:
         # Reuse apply_epic_budget as the admission decision (the budget decision
@@ -326,6 +378,41 @@ def dispatch_stories_parallel(
         if paused_on is None:
             paused_on = conflicts[0].story_id
 
+    def _emit_infra_failure(*, story_id: str, sub_classification: str) -> None:
+        # Sibling of _emit_pollution for the two dispatcher-infra arms (Story
+        # 24.1): append the durable sub-classified marker + first-emission
+        # context, pause on epic-paused-on-escalation, and persist via the SAME
+        # atomic write the fold path uses. ``infra_failed`` makes the pause
+        # sticky so a draining story's fold (which recomputes current_state from
+        # per_story_status — unaware of the infra failure) cannot downgrade it.
+        nonlocal epic_state, paused_on, infra_failed
+        full = f"{PARALLEL_DISPATCH_INFRA_FAILED_MARKER}: {sub_classification}"
+        active = epic_state.active_markers
+        update: dict[str, object] = {
+            "current_state": "epic-paused-on-escalation"
+        }
+        if full not in active:
+            update["active_markers"] = (*active, full)
+            if PARALLEL_DISPATCH_INFRA_FAILED_MARKER not in epic_state.marker_contexts:
+                contexts = dict(epic_state.marker_contexts)
+                contexts[PARALLEL_DISPATCH_INFRA_FAILED_MARKER] = {
+                    "epic_id": epic_id,
+                    "run_id": run_id,
+                    "story_id": story_id,
+                    "failing_arm": sub_classification,
+                }
+                update["marker_contexts"] = contexts
+        epic_state = epic_state.model_copy(update=update)
+        advance = advance_epic_run_state(
+            epic_run_state_path,
+            epic_state,
+            transient_marker_classes=transient_marker_classes,
+        )
+        epic_state = advance.next_state
+        infra_failed = True
+        if paused_on is None:
+            paused_on = story_id
+
     def _run_unit(
         *,
         story_id: str,
@@ -350,9 +437,17 @@ def dispatch_stories_parallel(
             # create_worktree's empty-target requirement. Still before the
             # runner, so the seeded port is on disk when env-provisioning reads.
             if claim_seed is not None and claim is not None:
-                claim_seed(
-                    story_id=story_id, claim=claim, run_state_path=run_state_path
-                )
+                try:
+                    claim_seed(
+                        story_id=story_id,
+                        claim=claim,
+                        run_state_path=run_state_path,
+                    )
+                except Exception as exc:
+                    raise ParallelDispatchInfraFailure(
+                        sub_classification=_SEED_CARRIER_FAILED,
+                        story_id=story_id,
+                    ) from exc
             with story_file_lock_module.story_file_lock(
                 story_id, worktree_path=worktree.worktree_path, repo_root=repo_root
             ):
@@ -401,7 +496,24 @@ def dispatch_stories_parallel(
                     # claim is detected against the LIVE registry before the unit
                     # acts on the shared surface. A conflict pauses admission and
                     # leaves the colliding story undispatched (never admitted).
-                    claim = claim_provider(story_id=story_id)
+                    try:
+                        try:
+                            claim = claim_provider(story_id=story_id)
+                        except Exception as exc:
+                            raise ParallelDispatchInfraFailure(
+                                sub_classification=_CLAIM_PROVIDER_FAILED,
+                                story_id=story_id,
+                            ) from exc
+                    except ParallelDispatchInfraFailure as infra:
+                        # Route like pollution's break (fold-then-surface, Story
+                        # 24.1): the failed claim was never registered in
+                        # live_claims, so the story is left undispatched; the
+                        # outer drain loop folds every remaining terminal.
+                        _emit_infra_failure(
+                            story_id=infra.story_id,
+                            sub_classification=infra.sub_classification,
+                        )
+                        break
                     conflicts = parallel_pollution.detect_state_pollution(
                         (*live_claims.values(), claim)
                     )
@@ -485,10 +597,11 @@ def dispatch_stories_parallel(
                     # stories were admitted simultaneously (pending is empty).
                     has_undispatched=bool(pending) or bool(in_flight),
                 )
-                # A pollution pause already emitted in an earlier batch must
-                # survive this fold (fold_story_terminal recomputes current_state
-                # from per_story_status, which carries no pollution signal).
-                if pollution_detected:
+                # A pollution OR dispatcher-infra pause already emitted in an
+                # earlier batch must survive this fold (fold_story_terminal
+                # recomputes current_state from per_story_status, which carries
+                # neither pollution nor infra-failure signal).
+                if pollution_detected or infra_failed:
                     resolved_state = "epic-paused-on-escalation"
                 active_markers = epic_state.active_markers
                 if (
@@ -550,8 +663,26 @@ def dispatch_stories_parallel(
                     fold_conflicts.append(preimage_conflict)
                 _emit_pollution(tuple(fold_conflicts))
 
-            if worker_errors:
-                raise worker_errors[0][1]
+            # Partition the typed dispatcher-infra failures (seed arm) from
+            # genuine internal-infrastructure exceptions (create_worktree /
+            # story_file_lock / runner). Infra emission runs BEFORE any non-infra
+            # re-raise (and after the completed-batch folds + the pollution/infra
+            # re-check above) so a co-occurring infra failure is never discarded
+            # by a sibling crash (Story 24.1 AC-7).
+            infra_failures: list[ParallelDispatchInfraFailure] = []
+            non_infra_errors: list[tuple[str, BaseException]] = []
+            for failed_story_id, worker_exc in worker_errors:
+                if isinstance(worker_exc, ParallelDispatchInfraFailure):
+                    infra_failures.append(worker_exc)
+                else:
+                    non_infra_errors.append((failed_story_id, worker_exc))
+            for failure in infra_failures:
+                _emit_infra_failure(
+                    story_id=failure.story_id,
+                    sub_classification=failure.sub_classification,
+                )
+            if non_infra_errors:
+                raise non_infra_errors[0][1]
 
             _try_admit()
 

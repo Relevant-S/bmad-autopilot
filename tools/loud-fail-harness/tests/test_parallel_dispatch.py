@@ -35,6 +35,7 @@ from loud_fail_harness.epic_lifecycle import (
     run_epic_loop,
 )
 from loud_fail_harness.parallel_dispatch import dispatch_stories_parallel
+from loud_fail_harness.parallel_pollution import StoryClaim
 
 _NO_TRANSIENT: frozenset[str] = frozenset()
 
@@ -187,16 +188,32 @@ def test_module_all_is_exact_public_surface() -> None:
     ]
 
 
-def test_module_is_taxonomy_neutral() -> None:
-    """AC-2 / AC-7: the dispatcher declares NO new marker class and never
-    references ``parallel-story-state-pollution`` (Story 18.2 owns that emitter).
-    Re-using the existing ``EPIC_BUDGET_EXHAUSTED_MARKER`` (imported, not
-    declared) is explicitly endorsed by AC-5."""
+def test_module_is_taxonomy_neutral_about_pollution() -> None:
+    """Story 18.2 owns the ``parallel-story-state-pollution`` emitter; the
+    dispatcher delegates to it by module reference and never names that class.
+    (Story 24.1 narrows the original 18.1 "no marker of its own" claim: the
+    dispatcher now single-homes exactly ONE class of its own — see
+    ``test_module_single_homes_its_own_infra_marker``.)"""
     source = pathlib.Path(parallel_dispatch.__file__).read_text(encoding="utf-8")
     assert "parallel-story-state-pollution" not in source
-    # The only marker constant in scope is the imported (reused) epic-budget one;
-    # the module assigns no marker literal of its own.
-    assert "_MARKER" not in source.replace("EPIC_BUDGET_EXHAUSTED_MARKER", "")
+
+
+def test_module_single_homes_its_own_infra_marker() -> None:
+    """AC-4 / single-emitter discipline: the dispatcher is the SOLE home of the
+    ``parallel-dispatch-infra-failed`` marker class (Story 24.1). The constant
+    matches the taxonomy YAML byte-for-byte; the reused (imported, not declared)
+    ``EPIC_BUDGET_EXHAUSTED_MARKER`` is the only OTHER marker constant in scope."""
+    assert (
+        parallel_dispatch.PARALLEL_DISPATCH_INFRA_FAILED_MARKER
+        == "parallel-dispatch-infra-failed"
+    )
+    source = pathlib.Path(parallel_dispatch.__file__).read_text(encoding="utf-8")
+    # The only ``_MARKER`` constants in scope are the imported epic-budget one
+    # and the dispatcher's own infra-failure home — no OTHER marker literal.
+    stripped = source.replace("EPIC_BUDGET_EXHAUSTED_MARKER", "").replace(
+        "PARALLEL_DISPATCH_INFRA_FAILED_MARKER", ""
+    )
+    assert "_MARKER" not in stripped
 
 
 # ---------------------------------------------------------------------------
@@ -623,3 +640,223 @@ def test_false_path_creates_no_worktree_and_is_byte_stable(
             # parallel_stories defaults to False
         )
     assert erp_a.read_bytes() == erp_b.read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# Story 24.1 — dispatcher admission/seed infra arm: fold-then-surface loud-fail
+# ---------------------------------------------------------------------------
+
+_INFRA_MARKER = parallel_dispatch.PARALLEL_DISPATCH_INFRA_FAILED_MARKER
+
+
+def _disjoint_claim(story_id: str, *, port: int) -> StoryClaim:
+    return StoryClaim(
+        story_id=story_id,
+        allocated_port=port,
+        evidence_subpath=f"qa-evidence/{story_id}/run-1",
+        aggregate_claim_story_id=story_id,
+    )
+
+
+def test_admission_arm_folds_completed_then_surfaces_marker(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-1 + AC-3: when ``claim_provider`` raises for the next story while a
+    sibling is in flight, the completed sibling's terminal is folded to the
+    on-disk ``epic-run-state.yaml`` FIRST, THEN the epic pauses on
+    ``epic-paused-on-escalation`` with the durable
+    ``parallel-dispatch-infra-failed: claim-provider-failed`` marker; the
+    function RETURNS (does not propagate) and names the failing story."""
+    spy = _SubstrateSpy(monkeypatch, tmp_path)
+    story_ids = ("18-1-a", "18-2-b")
+    runner = _make_runner(spy)
+    erp = tmp_path / "epic-run-state.yaml"
+    ports = {"18-1-a": 5101}
+
+    def _provider(*, story_id: str) -> StoryClaim:
+        if story_id == "18-2-b":
+            raise ValueError("simulated claim_provider infra failure")
+        return _disjoint_claim(story_id, port=ports[story_id])
+
+    result = dispatch_stories_parallel(
+        "epic-18",
+        run_id="run-1",
+        story_ids=story_ids,
+        max_parallel_stories=2,
+        runner=runner,
+        epic_state=_epic_state(story_ids),
+        epic_run_state_path=erp,
+        transient_marker_classes=_NO_TRANSIENT,
+        base_ref="main",
+        trunk_allowlist=(),
+        claim_provider=_provider,
+    )
+
+    # Returned (no raise), paused on the failing story, no further admission.
+    assert result.paused_on_story_id == "18-2-b"
+    assert result.final_state.current_state == "epic-paused-on-escalation"
+    assert spy.created == ["18-1-a"]  # 18-2-b never admitted
+
+    # AC-3: the on-disk fold of the completed sibling survives — re-read from
+    # disk, NOT the in-memory state (the executor-shutdown drop loses the
+    # on-disk fold if the fix only mutates in memory).
+    on_disk = yaml.safe_load(erp.read_text(encoding="utf-8"))
+    assert on_disk["per_story_status"]["18-1-a"] == "merge-ready"
+    assert on_disk["current_state"] == "epic-paused-on-escalation"
+    assert (
+        f"{_INFRA_MARKER}: claim-provider-failed" in on_disk["active_markers"]
+    )
+    assert on_disk["marker_contexts"][_INFRA_MARKER] == {
+        "epic_id": "epic-18",
+        "run_id": "run-1",
+        "story_id": "18-2-b",
+        "failing_arm": "claim-provider-failed",
+    }
+    # AC-1: the failing story was never admitted — its status must not have been
+    # folded (remains at initial ready-for-dev, never advanced to a terminal).
+    assert on_disk["per_story_status"]["18-2-b"] == "ready-for-dev"
+
+
+def test_seed_arm_folds_completed_then_surfaces_marker(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-2 + AC-3: a ``claim_seed`` (``seed_carrier``) ``OSError`` for one
+    admitted story, while a sibling completes successfully, folds the sibling's
+    terminal FIRST then pauses with
+    ``parallel-dispatch-infra-failed: seed-carrier-failed``; the function
+    RETURNS (does not re-raise the ``OSError``)."""
+    spy = _SubstrateSpy(monkeypatch, tmp_path)
+    story_ids = ("18-1-a", "18-2-b")
+    runner = _make_runner(spy)
+    erp = tmp_path / "epic-run-state.yaml"
+    ports = {"18-1-a": 5101, "18-2-b": 5102}
+
+    def _provider(*, story_id: str) -> StoryClaim:
+        return _disjoint_claim(story_id, port=ports[story_id])
+
+    def _seed(
+        *, story_id: str, claim: StoryClaim, run_state_path: pathlib.Path
+    ) -> None:
+        if story_id == "18-2-b":
+            raise OSError("simulated seed_carrier write failure")
+
+    result = dispatch_stories_parallel(
+        "epic-18",
+        run_id="run-1",
+        story_ids=story_ids,
+        max_parallel_stories=2,
+        runner=runner,
+        epic_state=_epic_state(story_ids),
+        epic_run_state_path=erp,
+        transient_marker_classes=_NO_TRANSIENT,
+        base_ref="main",
+        trunk_allowlist=(),
+        claim_provider=_provider,
+        claim_seed=_seed,
+    )
+
+    assert result.paused_on_story_id == "18-2-b"
+    assert result.final_state.current_state == "epic-paused-on-escalation"
+
+    on_disk = yaml.safe_load(erp.read_text(encoding="utf-8"))
+    assert on_disk["per_story_status"]["18-1-a"] == "merge-ready"
+    assert on_disk["current_state"] == "epic-paused-on-escalation"
+    assert f"{_INFRA_MARKER}: seed-carrier-failed" in on_disk["active_markers"]
+    assert on_disk["marker_contexts"][_INFRA_MARKER]["failing_arm"] == (
+        "seed-carrier-failed"
+    )
+
+
+def test_infra_failure_pause_is_sticky_against_later_sibling_fold(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-6: a sibling that folds in a LATER batch (after the infra failure was
+    surfaced) cannot downgrade ``current_state`` away from
+    ``epic-paused-on-escalation`` — the infra pause is sticky (mirrors
+    ``pollution_detected``)."""
+    spy = _SubstrateSpy(monkeypatch, tmp_path)
+    story_ids = ("18-1-a", "18-2-b", "18-3-c")
+    # 18-1-a's seed fails fast; 18-2-b's runner sleeps so it folds in a LATER
+    # batch (after the infra marker is emitted); 18-3-c is never admitted.
+    runner = _make_runner(spy, overlap_seconds=0.05)
+    erp = tmp_path / "epic-run-state.yaml"
+    ports = {"18-1-a": 5101, "18-2-b": 5102, "18-3-c": 5103}
+
+    def _provider(*, story_id: str) -> StoryClaim:
+        return _disjoint_claim(story_id, port=ports[story_id])
+
+    def _seed(
+        *, story_id: str, claim: StoryClaim, run_state_path: pathlib.Path
+    ) -> None:
+        if story_id == "18-1-a":
+            raise OSError("simulated seed_carrier write failure")
+
+    result = dispatch_stories_parallel(
+        "epic-18",
+        run_id="run-1",
+        story_ids=story_ids,
+        max_parallel_stories=2,
+        runner=runner,
+        epic_state=_epic_state(story_ids),
+        epic_run_state_path=erp,
+        transient_marker_classes=_NO_TRANSIENT,
+        base_ref="main",
+        trunk_allowlist=(),
+        claim_provider=_provider,
+        claim_seed=_seed,
+    )
+
+    assert result.final_state.current_state == "epic-paused-on-escalation"
+    assert result.paused_on_story_id == "18-1-a"
+    assert "18-3-c" not in spy.created  # paused → never admitted
+
+    on_disk = yaml.safe_load(erp.read_text(encoding="utf-8"))
+    # The later-folding sibling IS recorded, and did NOT downgrade the pause.
+    assert on_disk["per_story_status"]["18-2-b"] == "merge-ready"
+    assert on_disk["current_state"] == "epic-paused-on-escalation"
+
+
+def test_non_infra_runner_exception_still_propagates_after_sibling_fold(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AC-7: a plain ``runner`` ``RuntimeError`` (NOT a
+    ``ParallelDispatchInfraFailure``) STILL propagates after its batch siblings
+    fold — the accepted loud-crash-by-exception path is preserved and NO infra
+    marker is emitted for it."""
+    _SubstrateSpy(monkeypatch, tmp_path)  # patches the substrate seams in-place
+    story_ids = ("18-1-a", "18-2-b")
+    erp = tmp_path / "epic-run-state.yaml"
+
+    def _mixed_runner(
+        *,
+        story_id: str,
+        index: int,
+        total: int,
+        worktree_path: pathlib.Path,
+        run_state_path: pathlib.Path,
+    ) -> StoryLoopOutcome:
+        if story_id == "18-2-b":
+            time.sleep(0.05)  # fold 18-1-a in an earlier batch first
+            raise RuntimeError("simulated non-infra runner failure")
+        return StoryLoopOutcome(terminal_status="merge-ready", retries_consumed=0)  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError, match="simulated non-infra runner failure"):
+        dispatch_stories_parallel(
+            "epic-18",
+            run_id="run-1",
+            story_ids=story_ids,
+            max_parallel_stories=2,
+            runner=_mixed_runner,
+            epic_state=_epic_state(story_ids),
+            epic_run_state_path=erp,
+            transient_marker_classes=_NO_TRANSIENT,
+            base_ref="main",
+            trunk_allowlist=(),
+        )
+
+    # The completed sibling folded before the re-raise; no infra marker emitted.
+    on_disk = yaml.safe_load(erp.read_text(encoding="utf-8"))
+    assert on_disk["per_story_status"]["18-1-a"] == "merge-ready"
+    assert all(
+        not m.startswith(_INFRA_MARKER) for m in on_disk["active_markers"]
+    )

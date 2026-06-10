@@ -3543,3 +3543,122 @@ verdicts:
       16.2); the Review-BMAD specialist wrapper has no code path that produces
       this event.
     audit_date: "2026-06-03"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      Parallel-dispatcher admission/seed infra loud-fail marker (Story 24.1);
+      emitted by the parallel dispatcher into the epic-run-state active_markers,
+      not by bundle assembly. The running epic-level PR bundle (Story 15.3)
+      renders the marker but does not produce it.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      The infra-failure marker is a parallel-dispatch RUNTIME fold-then-surface
+      event (Story 24.1); the cost-telemetry pipeline has no code path that
+      produces it (the folded per-epic cost partition is an INPUT to the fold,
+      not the emitter of this marker).
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      The admission/seed infra failure is detected inside the parallel
+      dispatcher's drain loop (Story 24.1), not at SessionStart reattachment;
+      the hook has no code path that produces this event.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      The marker is emitted by the dispatcher into the epic-run-state
+      active_markers (Story 24.1); the Stop hook has no code path that produces
+      this event.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      The admission/seed infra failure is a dispatching-thread fold-then-surface
+      event (Story 24.1); the SubagentStop hook has no code path that produces
+      this event.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/parallel_dispatch.py:389
+    audit_date: "2026-06-10"
+    rationale: |-
+      Story 24.1 wired the typed `ParallelDispatchInfraFailure` boundary on the
+      two named arms (`claim_provider` admission + `seed_carrier` seed) into
+      `dispatch_stories_parallel`; `_emit_infra_failure` folds every completed
+      in-flight terminal first, then appends the durable sub-classified marker
+      and pauses on `epic-paused-on-escalation`. The dispatcher is the SOLE home
+      of this marker class (constant `PARALLEL_DISPATCH_INFRA_FAILED_MARKER`).
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      The orchestrator skill prose names the parallel-dispatch pause but does not
+      itself emit the marker; the canonical emission is the Python composition in
+      `parallel_dispatch._emit_infra_failure` (Story 24.1), audited under the
+      orchestrator-dispatch-wrapper surface.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      The per-story run-state helpers persist per-story state; the infra-failure
+      marker is emitted into the EPIC-scope run-state by the dispatcher (Story
+      24.1) via `advance_epic_run_state`, audited under the
+      orchestrator-dispatch-wrapper surface.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      The BMAD lifecycle state machine + retry-budget enforcement does not
+      produce this marker; it is a parallel-dispatch-substrate infra-failure
+      surface emitted by `parallel_dispatch._emit_infra_failure` (Story 24.1),
+      audited under the orchestrator-dispatch-wrapper surface.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      The infra-failure marker is a runtime parallel-dispatch event (Story 24.1);
+      the fixture-driven reconciliation gate has no code path that produces it
+      (the synthetic fixture declares the expected marker but does not emit it).
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      The marker is emitted by the dispatcher (Story 24.1); the runtime
+      reconciliation gate audits emission coverage but does not itself produce
+      this event.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      The admission/seed infra failure is an orchestrator-substrate event (Story
+      24.1); the Dev specialist wrapper has no code path that produces it.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      The admission/seed infra failure is an orchestrator-substrate event (Story
+      24.1); the QA specialist wrapper has no code path that produces it.
+    audit_date: "2026-06-10"
+  - marker_class: parallel-dispatch-infra-failed
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      The admission/seed infra failure is an orchestrator-substrate event (Story
+      24.1); the Review-BMAD specialist wrapper has no code path that produces
+      it.
+    audit_date: "2026-06-10"

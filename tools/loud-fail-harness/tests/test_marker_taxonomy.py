@@ -45,16 +45,18 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_11(taxonomy_data: dict) -> None:
-    """Story 16.2 bumps schema_version from ``"1.10"`` to ``"1.11"`` for the
-    new top-level marker class ``sprint-escalation-rate-exceeded`` (sprint-scope
-    systemic-escalation signal; FR-P2-2). Treated as PATCH per epics-phase-2.md
-    line 70 + line 149 + the Story 14.3 / 14.5 / 15.2 new-Phase-2-class-as-PATCH
-    precedent; the closed-set grows 32 → 33 (the authoritative count is the
+def test_taxonomy_schema_version_is_1_12(taxonomy_data: dict) -> None:
+    """Story 24.1 bumps schema_version from ``"1.11"`` to ``"1.12"`` for the
+    new top-level marker class ``parallel-dispatch-infra-failed`` (the
+    parallel-dispatcher admission-arm / seed-arm infra loud-fail surface;
+    FR-P2-4 / Epic 24). MINOR bump per the documented new-top-level-class rule +
+    epics-phase-2.md line 70 + the Story 14.5 / 15.2 / 16.2 new-Phase-2-class
+    precedent; the closed-set grows 33 → 34 (the authoritative count is the
     ``CANONICAL_MARKER_CLASSES`` list in ``test_reconciler.py``). Prior
-    Story 15.2 bumped 1.9 → 1.10 for the ``epic-budget-exhausted`` entry.
+    Story 16.2 bumped 1.10 → 1.11 for the ``sprint-escalation-rate-exceeded``
+    entry.
     """
-    assert taxonomy_data.get("schema_version") == "1.11"
+    assert taxonomy_data.get("schema_version") == "1.12"
 
 
 def test_worktree_stale_lock_declares_transient_lifetime(

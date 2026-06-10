@@ -249,13 +249,42 @@
 #                            `SPRINT_ESCALATION_RATE_EXCEEDED_MARKER` to the
 #                            sprint-run-state `active_markers`) — NOT a flip-the-
 #                            switch deferral.
+#   1.11 → 1.12 (Story 24.1) — additive: appended `parallel-dispatch-infra-
+#                            failed` as a NEW top-level marker class for the
+#                            parallel-dispatcher admission-arm (`claim_provider`)
+#                            and seed-arm (`seed_carrier`) infrastructure-failure
+#                            surface (FR-P2-4 / Epic 24). Top-level addition (NOT
+#                            folded under `parallel-story-state-pollution` or
+#                            `worktree-stale-lock`): the categorical axis is "a
+#                            dispatcher-infra EXCEPTION in one of two named arms,
+#                            folded-then-surfaced" — distinct from pollution
+#                            (cross-story shared-surface write COLLISION) and from
+#                            `worktree-stale-lock` (single-story lock remnant).
+#                            Two sub_classifications mirror the two arms 1:1:
+#                            `claim-provider-failed` / `seed-carrier-failed`.
+#                            Default `durable` lifetime by omission (survives the
+#                            Story 15.1 transient write-back filter — marker-
+#                            permanence, Story 1.4). `pointer_context_fields:
+#                            [epic_id, run_id, story_id, failing_arm]`. The
+#                            top-level 34-class closed-set is the new invariant
+#                            (was 33 since Story 16.2). Treated as MINOR per the
+#                            documented bump rule (a new top-level class) +
+#                            epics-phase-2.md line 70 ("Phase 2 marker classes
+#                            land with PATCH or MINOR bumps only, no MAJOR") + the
+#                            Story 14.5 / 15.2 / 16.2 new-Phase-2-class precedent.
+#                            The runtime emitter lands in this story
+#                            (`parallel_dispatch._emit_infra_failure` appends
+#                            `PARALLEL_DISPATCH_INFRA_FAILED_MARKER` to the
+#                            epic-run-state `active_markers`) — NOT a flip-the-
+#                            switch deferral.
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
 # schema MINOR bump for Story 15.1 optional `lifetime` field (transient/durable axis; default durable) — additive optional field per the documented bump rule
 # schema PATCH bump for Story 15.2 epic-budget-exhausted new top-level class (precedent: epics-phase-2.md line 70 + line 411 + Story 14.3/14.5)
 # schema PATCH bump for Story 16.2 sprint-escalation-rate-exceeded new top-level class (precedent: epics-phase-2.md line 70 + line 149 marker-additions)
-schema_version: "1.11"
+# schema MINOR bump for Story 24.1 parallel-dispatch-infra-failed new top-level class (closed-set 33 → 34; precedent: epics-phase-2.md line 70 + Story 14.5/15.2/16.2)
+schema_version: "1.12"
 
 markers:
 
@@ -754,3 +783,43 @@ markers:
       risk profile.
     pointer_context_fields: [sprint_id, run_id, escalated_stories, stories_completed, threshold]
     sub_classifications: []
+
+  # ---- Story 24.1 — Epic 24 parallel-dispatch admission/seed infra loud-fail --
+
+  - marker_class: parallel-dispatch-infra-failed
+    diagnostic_pointer: |
+      FR-P2-4 / Epic 24 Story 24.1 — an infrastructure exception in the parallel
+      dispatcher's admission arm (`claim_provider`, port/claim acquisition before
+      a unit is admitted) or seed arm (`seed_carrier` → `pre_seed_parallel_env`,
+      the deferred per-worktree carrier write) was caught and routed through
+      fold-then-surface: every already-completed in-flight story terminal was
+      folded into `epic-run-state.yaml` FIRST (status + per-epic retry-budget
+      `consumed` + per-epic cost partition), THEN the epic paused on
+      `epic-paused-on-escalation` with this durable marker. Detection-time:
+      parallel-dispatch RUNTIME (Epic 18/24 altitude — NOT init-time, NOT
+      SessionStart). Severity: loud-fail / practitioner-blocking — the substrate
+      does NOT auto-resolve, retry, or interrupt any in-flight story
+      (sensor-not-advisor); it surfaces so the practitioner inspects the failing
+      arm and decides remediation. The fold-BEFORE-surface ordering exists so a
+      `claim_provider`/`seed_carrier` failure can never silently destroy
+      completed work via `ThreadPoolExecutor` shutdown-drop, and so Epic 17's
+      auto-merge gate — which reads exactly these folded budget + marker
+      terminals — never makes a merge decision against a state that lost a
+      completed fold with no surfaced marker. Distinct from
+      `parallel-story-state-pollution` (cross-story shared-surface write
+      collision between two concurrent worktrees — a conflict, not an infra
+      exception) and from `worktree-stale-lock` (single-story filesystem-lock
+      remnant from one crashed worktree). Scoped to the two named arms only via a
+      typed exception boundary: every OTHER worker exception (`create_worktree` /
+      `story_file_lock` / the per-story `runner`) keeps the accepted
+      loud-fail-by-exception path and re-raises after its batch siblings fold.
+      Infra failure for story `{story_id}` (epic `{epic_id}`, run `{run_id}`) on
+      arm `{failing_arm}`. Remediation (the human decides): inspect the named arm
+      (a stuck/mis-stubbed allocator for `claim-provider-failed`; an `OSError`
+      from the carrier write for `seed-carrier-failed`), resolve the underlying
+      infrastructure fault, then re-dispatch the undispatched stories — the
+      completed siblings already folded into the epic aggregate are preserved.
+    pointer_context_fields: [epic_id, run_id, story_id, failing_arm]
+    sub_classifications:
+      - claim-provider-failed
+      - seed-carrier-failed

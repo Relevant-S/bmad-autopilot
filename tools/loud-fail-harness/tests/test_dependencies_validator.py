@@ -874,7 +874,15 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # at sprint-loop RUNTIME by `sprint_lifecycle.run_sprint_loop`). Structurally
     # an orphan exactly like `epic-budget-exhausted`; the orphan-count increment
     # 24 → 25 is the load-bearing witness that the Story 16.2 taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 25 orphan marker class(es)" in text
+    #
+    # Post-Story-24.1 review: marker `parallel-dispatch-infra-failed` newly
+    # enumerated via MINOR bump 1.11 → 1.12; zero `dependencies.yaml` /
+    # `escalation-bundles/*.yaml` / `orchestrator-event.yaml` reference (emitted
+    # at parallel-dispatch RUNTIME by `parallel_dispatch._emit_infra_failure`).
+    # Structurally an orphan exactly like `epic-budget-exhausted` /
+    # `parallel-story-state-pollution`; the orphan-count increment 25 → 26 is the
+    # load-bearing witness that the Story 24.1 taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 26 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
