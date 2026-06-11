@@ -45,17 +45,49 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_13(taxonomy_data: dict) -> None:
-    """Story 19.2 bumps schema_version from ``"1.12"`` to ``"1.13"`` for the
-    four new exploratory ``heuristic-skipped`` sub_classifications
-    (``rate-limit-boundary`` / ``locale-i18n-edge`` / ``large-input-boundary`` /
-    ``permission-boundary``; ADR-010 / FR-P2-5). PATCH bump per the documented
-    sub_classification rule + the Story 9.5 (1.4 → 1.5) / 13.6 (1.5 → 1.6)
-    ``heuristic-skipped`` precedent; the top-level 34-class closed-set is
-    PRESERVED (NO new marker class). Prior Story 24.1 bumped 1.11 → 1.12 for the
-    new top-level ``parallel-dispatch-infra-failed`` class (closed-set 33 → 34).
+def test_taxonomy_schema_version_is_1_14(taxonomy_data: dict) -> None:
+    """Story 19.3 bumps schema_version from ``"1.13"`` to ``"1.14"`` for the
+    three new top-level a11y-audit evidence marker classes
+    (``a11y-baseline-stale`` / ``a11y-delta-exceeded`` /
+    ``a11y-delta-mode-unstable``; ADR-011 / FR-P2-6). MINOR bump per the
+    documented new-top-level-class rule + epics-phase-2.md line 70 + the Story
+    24.1 (1.11 → 1.12) new-Phase-2-class-as-MINOR precedent; the top-level
+    closed-set grows 34 → 37. Prior Story 19.2 bumped 1.12 → 1.13 (PATCH) for
+    the four new exploratory ``heuristic-skipped`` sub_classifications.
     """
-    assert taxonomy_data.get("schema_version") == "1.13"
+    assert taxonomy_data.get("schema_version") == "1.14"
+
+
+def test_a11y_marker_classes_enumerated(taxonomy_data: dict) -> None:
+    """Story 19.3 AC-4 / AC-8b: the three a11y-audit evidence marker classes are
+    enumerated as top-level classes with non-empty ``diagnostic_pointer``, the
+    exact ``pointer_context_fields`` shapes (``[ac_id]`` / ``[ac_id]`` / ``[]``),
+    empty ``sub_classifications``, and (by omission) the durable default lifetime
+    so they survive the Story 15.1 transient write-back filter. The closed-set is
+    exactly 37. Runtime emission is Story 19.4's (NO emitter lands here).
+    """
+    by_class = {entry["marker_class"]: entry for entry in taxonomy_data["markers"]}
+    expected_pointer_fields = {
+        "a11y-baseline-stale": ["ac_id"],
+        "a11y-delta-exceeded": ["ac_id"],
+        "a11y-delta-mode-unstable": [],
+    }
+    for marker_class, fields in expected_pointer_fields.items():
+        assert marker_class in by_class, f"taxonomy missing {marker_class}"
+        entry = by_class[marker_class]
+        assert entry["diagnostic_pointer"].strip(), (
+            f"{marker_class}: diagnostic_pointer must be non-empty"
+        )
+        assert entry["pointer_context_fields"] == fields, (
+            f"{marker_class}: pointer_context_fields drifted"
+        )
+        assert entry["sub_classifications"] == [], (
+            f"{marker_class}: sub_classifications must be empty"
+        )
+        assert "lifetime" not in entry, (
+            f"{marker_class}: must inherit the durable default (no lifetime field)"
+        )
+    assert len(taxonomy_data["markers"]) == 37
 
 
 def test_worktree_stale_lock_declares_transient_lifetime(

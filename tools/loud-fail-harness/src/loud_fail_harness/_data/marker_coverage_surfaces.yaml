@@ -3662,3 +3662,353 @@ verdicts:
       24.1); the Review-BMAD specialist wrapper has no code path that produces
       it.
     audit_date: "2026-06-10"
+
+  # ---- Story 19.3 — Epic 19 a11y-audit evidence markers (ADR-011, FR-P2-6) ----
+  # QA-side web-only opt-in markers; runtime emission lands in Story 19.4
+  # (scheduled-by-story at specialist-wrapper-qa). axe-core is injected in-page
+  # via the existing Playwright MCP browser surface — no new MCP server.
+  - marker_class: a11y-baseline-stale
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the cost-telemetry pipeline has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the SessionStart hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Stop hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the SubagentStop hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator dispatch wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator lifecycle-transition steps has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator run-state helpers has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator state machine has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the fixture-driven reconciliation gate has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the runtime reconciliation gate has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: specialist-wrapper-qa
+    verdict: scheduled-by-story
+    rationale: |-
+      The a11y audit (axe-core `axe.min.js` injected in-page via the existing
+      Playwright MCP browser surface — no new MCP server) emits this evidence
+      marker from the QA specialist wrapper. Story 19.3 enumerates the class +
+      activates the `axe-core` opt-in-skip dependency; the runtime emission
+      code path is not yet landed.
+    discharging_story: "19.4"
+    audit_date: "2026-06-11"
+  - marker_class: a11y-baseline-stale
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the cost-telemetry pipeline has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the SessionStart hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Stop hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the SubagentStop hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator dispatch wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator lifecycle-transition steps has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator run-state helpers has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator state machine has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the fixture-driven reconciliation gate has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the runtime reconciliation gate has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: specialist-wrapper-qa
+    verdict: scheduled-by-story
+    rationale: |-
+      The a11y audit (axe-core `axe.min.js` injected in-page via the existing
+      Playwright MCP browser surface — no new MCP server) emits this evidence
+      marker from the QA specialist wrapper. Story 19.3 enumerates the class +
+      activates the `axe-core` opt-in-skip dependency; the runtime emission
+      code path is not yet landed.
+    discharging_story: "19.4"
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-exceeded
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the cost-telemetry pipeline has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the SessionStart hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Stop hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the SubagentStop hook has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator dispatch wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator lifecycle-transition steps has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator run-state helpers has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the orchestrator state machine has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the fixture-driven reconciliation gate has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the runtime reconciliation gate has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: specialist-wrapper-qa
+    verdict: scheduled-by-story
+    rationale: |-
+      The a11y audit (axe-core `axe.min.js` injected in-page via the existing
+      Playwright MCP browser surface — no new MCP server) emits this evidence
+      marker from the QA specialist wrapper. Story 19.3 enumerates the class +
+      activates the `axe-core` opt-in-skip dependency; the runtime emission
+      code path is not yet landed.
+    discharging_story: "19.4"
+    audit_date: "2026-06-11"
+  - marker_class: a11y-delta-mode-unstable
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
+      ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime
+      emission lands in Story 19.4 (flip-the-switch property).
+    audit_date: "2026-06-11"

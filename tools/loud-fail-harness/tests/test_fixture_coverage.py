@@ -635,16 +635,17 @@ def test_coverage_result_is_frozen() -> None:
 
 
 def test_canonical_corpus_validates() -> None:
-    """The on-disk canonical 34-fixture corpus + canonical taxonomy → exit 0
+    """The on-disk canonical 37-fixture corpus + canonical taxonomy → exit 0
     (story 2.3 added 2 markers + 2 fixtures, taking the count from 27 → 29;
     story 14.3 added 1 marker + 1 fixture, taking the count from 29 → 30;
     story 14.5 added 1 marker + 1 fixture, taking the count from 30 → 31;
     story 15.2 added 1 marker + 1 fixture, taking the count from 31 → 32;
     story 16.2 added 1 marker + 1 fixture, taking the count from 32 → 33;
-    story 24.1 added 1 marker + 1 fixture, taking the count from 33 → 34)."""
+    story 24.1 added 1 marker + 1 fixture, taking the count from 33 → 34;
+    story 19.3 added 3 markers + 3 fixtures, taking the count from 34 → 37)."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "34 passing marker class(es)" in out
+    assert "37 passing marker class(es)" in out
     assert "0 uncovered marker class(es)" in out
     assert "0 dangling fixture(s)" in out
     assert "0 shape-violation finding(s)" in out

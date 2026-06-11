@@ -595,26 +595,22 @@ def test_load_dependencies_sdn001_failure_propagates_unchanged(
 
 def test_schema_version_bumps_non_regression() -> None:
     """AC-9 case 15: the on-disk canonical schemas at HEAD parse with
-    schema_version "1.5" (dependencies.yaml — Story 14.1 bumped 1.4 → 1.5
-    for the ``git`` MVP dependency entry addition per ADR-009 worktree-vs-
-    branch boundary decision; lineage 1.0 (Story 1.6 base) → 1.1 (Story 7.3)
+    schema_version "1.6" (dependencies.yaml — Story 19.3 bumped 1.5 → 1.6
+    for the ``axe-core`` Phase-2 a11y-audit dependency entry addition per
+    ADR-011 / FR-P2-6; lineage 1.0 (Story 1.6 base) → 1.1 (Story 7.3)
     → 1.2 (Story 9.1 mobile-mcp activation) → 1.3 (Story 9.5 mobile-mcp
     sub_classification fields) → 1.4 (Story 10.1 lad activation) → 1.5
-    (Story 14.1 git entry addition)) AND "1.6" (marker-taxonomy.yaml
-    — Story 13.6 bumped 1.5 → 1.6 for the ``flow-branch`` sub_classification
-    under ``heuristic-skipped`` per the FR22c within-AC flow-branch contract;
-    prior Story 9.5 bumped 1.4 → 1.5 for the two new
-    ``mobile-blocked.sub_classifications`` [init-unavailable,
-    mid-run-unavailable] per Story 9.5 AC-1; Story 9.3 had bumped 1.3 → 1.4
-    for the ``mobile-mcp-init-unreachable`` sub-classification addition;
-    Story 10.1 introduces no marker-taxonomy bump per AC-9 closed-set
-    discipline; Story 14.1 introduces no marker-taxonomy bump per AC-10
-    closed-set discipline — the ``worktree-stale-lock`` marker landed in
-    Story 14.3 (1.6 → 1.7) and ``parallel-story-state-pollution`` landed in
-    Story 14.5 (1.7 → 1.8), the two markers ADR-009 named as forward-
-    pointers). Verifies the Story 7.3 + Story 9.3
-    + Story 9.5 + Story 13.6 schema bumps, the Story 9.1 + Story 10.1
-    activation bumps + Story 14.1 git-entry bump landed AND the existing
+    (Story 14.1 git entry addition) → 1.6 (Story 19.3 axe-core entry
+    addition)) AND "1.14" (marker-taxonomy.yaml — Story 19.3 bumped 1.13 →
+    1.14 for three new top-level a11y-audit evidence marker classes per
+    ADR-011 / FR-P2-6 (closed-set 34 → 37; MINOR); prior Story 19.2 bumped
+    1.12 → 1.13 (four new ``heuristic-skipped`` sub_classifications; PATCH);
+    Story 24.1 bumped 1.11 → 1.12 (``parallel-dispatch-infra-failed``; MINOR);
+    Stories 16.2/15.2/15.1/14.5/14.3/13.6 bumped 1.10/1.9/1.8/1.7/1.6;
+    Story 9.5 bumped 1.4 → 1.5; Story 9.3 bumped 1.3 → 1.4). Verifies the
+    Story 7.3 + Story 9.3 + Story 9.5 + Story 13.6 schema bumps, the Story
+    9.1 + Story 10.1 activation bumps + Story 14.1 git-entry bump + Story
+    19.3 axe-core entry + a11y taxonomy bump landed AND the existing
     enumeration_check substrate-component-4 gate continues to pass.
     """
     import subprocess
@@ -623,7 +619,9 @@ def test_schema_version_bumps_non_regression() -> None:
     from loud_fail_harness.reconciler import load_marker_taxonomy
 
     raw = load_dependencies()
-    assert raw["schema_version"] == "1.5"
+    # Story 19.3 bumped 1.5 → 1.6 (axe-core Phase-2 a11y-audit dependency entry
+    # per ADR-011 / FR-P2-6; new dependency entry = MINOR).
+    assert raw["schema_version"] == "1.6"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field
@@ -658,7 +656,10 @@ def test_schema_version_bumps_non_regression() -> None:
     # Story 19.2 bumped 1.12 → 1.13 (additive: four new exploratory
     # `heuristic-skipped` sub_classifications; 34-class closed-set PRESERVED;
     # PATCH bump per the sub_classification rule + Story 9.5/13.6 precedent).
-    assert taxonomy_data["schema_version"] == "1.13"
+    # Story 19.3 bumped 1.13 → 1.14 (additive: three new top-level a11y-audit
+    # evidence marker classes; closed-set 34 → 37; MINOR bump per the new-top-
+    # level-class rule + Story 24.1 precedent; ADR-011 / FR-P2-6).
+    assert taxonomy_data["schema_version"] == "1.14"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`
@@ -784,8 +785,9 @@ def test_project_type_parametrized_over_three_types(
             marker_registry=runtime_marker_registry,
             run_state=_make_run_state(),
         )
-        # Always the same seven top-level deps (declaration order).
-        # Story 14.1 added `git` as the first MVP entry per ADR-009.
+        # Always the same eight top-level deps (declaration order).
+        # Story 14.1 added `git` as the first MVP entry per ADR-009;
+        # Story 19.3 added `axe-core` as the last (Phase-2) entry per ADR-011.
         deps = [r.dependency for r in run.results]
         assert deps == [
             "git",
@@ -795,6 +797,7 @@ def test_project_type_parametrized_over_three_types(
             "playwright-mcp",
             "mobile-mcp",
             "lad",
+            "axe-core",
         ]
 
 

@@ -51,7 +51,7 @@ Contract test (AC-1 / AC-8 — reconciled at Story 19.2):
     [x] HeuristicKind == FROZEN_HEURISTIC_NAMES (== 7)          → test_contract_heuristic_kind_equals_frozen_seven
 
 Landed invariants (AC-8 — the 19.1 seam guards, flipped by 19.2):
-    [x] marker-taxonomy schema_version is "1.13"               → test_marker_taxonomy_version_is_1_13
+    [x] marker-taxonomy schema_version is "1.14"               → test_marker_taxonomy_version_is_1_14
     [x] heuristic-skipped sub_classifications are the 8-value set → test_heuristic_skipped_subclassifications_are_eight
     [x] HeuristicKind has exactly 7 values                     → test_heuristic_kind_has_seven_values
 """
@@ -428,8 +428,8 @@ def _marker_taxonomy() -> dict:
     return raw
 
 
-def test_marker_taxonomy_version_is_1_13() -> None:
-    assert _marker_taxonomy()["schema_version"] == "1.13"
+def test_marker_taxonomy_version_is_1_14() -> None:
+    assert _marker_taxonomy()["schema_version"] == "1.14"
 
 
 def test_heuristic_skipped_subclassifications_are_eight() -> None:

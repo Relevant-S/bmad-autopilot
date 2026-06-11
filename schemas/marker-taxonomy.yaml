@@ -302,6 +302,34 @@
 #                            sub_classifications). No runtime emitter lands here —
 #                            `surface_heuristic_skipped` (Story 4.9) widens
 #                            automatically with the `HeuristicKind` Literal.
+#   1.13 → 1.14 (Story 19.3) — additive: appended THREE new top-level marker
+#                            classes for the Phase-2 a11y-audit opt-in
+#                            (`a11y-baseline-stale` / `a11y-delta-exceeded` /
+#                            `a11y-delta-mode-unstable`) per ADR-011 / FR-P2-6.
+#                            All three are QA-runtime EVIDENCE markers emitted by
+#                            the Story 19.4 wrapper (the a11y audit runs in-page
+#                            via the existing Playwright MCP browser surface —
+#                            axe-core `axe.min.js` injection, NO new MCP server),
+#                            NOT dependency-availability markers — so they carry
+#                            NO `marker_class` in the `axe-core` dependency
+#                            profile and are enumeration-check ORPHANS (tolerated
+#                            exactly as `LAD-skipped` / `heuristic-skipped` /
+#                            `epic-budget-exhausted`; `main` returns
+#                            `1 if missing else 0`). Default `durable` lifetime by
+#                            omission (survives the Story 15.1 transient write-
+#                            back filter — marker-permanence, Story 1.4).
+#                            `pointer_context_fields`: `[ac_id]` /  `[ac_id]` /
+#                            `[]`; `sub_classifications: []` on each. The top-
+#                            level 34-class closed-set becomes 37 — the new
+#                            invariant. Treated as MINOR per the documented bump
+#                            rule (new top-level classes) + epics-phase-2.md
+#                            line 70 ("Phase 2 marker classes land with PATCH or
+#                            MINOR bumps only, no MAJOR") + the Story 24.1
+#                            new-Phase-2-class-as-MINOR precedent. NO runtime
+#                            emitter lands here — Story 19.4 wires emission
+#                            (flip-the-switch property). orchestrator-event.yaml
+#                            stays at "1.2" (co-versioned ≠ co-bumped; a11y
+#                            markers are QA-evidence, not orchestrator events).
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
@@ -310,7 +338,8 @@
 # schema PATCH bump for Story 16.2 sprint-escalation-rate-exceeded new top-level class (precedent: epics-phase-2.md line 70 + line 149 marker-additions)
 # schema MINOR bump for Story 24.1 parallel-dispatch-infra-failed new top-level class (closed-set 33 → 34; precedent: epics-phase-2.md line 70 + Story 14.5/15.2/16.2)
 # schema PATCH bump for Story 19.2 heuristic-skipped +4 exploratory sub_classifications (34-class closed-set preserved; flow-branch unchanged; precedent: Story 9.5/13.6 sub_classification PATCH)
-schema_version: "1.13"
+# schema MINOR bump for Story 19.3 a11y-baseline-stale / a11y-delta-exceeded / a11y-delta-mode-unstable new top-level evidence classes (closed-set 34 → 37; ADR-011 / FR-P2-6; orphans; no runtime emitter — Story 19.4 wires emission)
+schema_version: "1.14"
 
 markers:
 
@@ -859,3 +888,71 @@ markers:
     sub_classifications:
       - claim-provider-failed
       - seed-carrier-failed
+
+  # ---- Story 19.3 — Epic 19 a11y-audit evidence markers (FR-P2-6, ADR-011) ---
+
+  - marker_class: a11y-baseline-stale
+    diagnostic_pointer: |
+      FR-P2-6 / Epic 19 Story 19.3 (ADR-011) — informational a11y-baseline
+      signal for AC `{ac_id}`: the accessibility audit either created a NEW
+      baseline (no prior baseline existed for this AC's audited surface) or is
+      treating an existing stored baseline as the comparison anchor for the
+      self-computed violation delta. NOT a failure (sensor-not-advisor): the
+      audit proceeds; the marker records that this run's delta is measured
+      against a freshly-anchored baseline, so a downstream `a11y-delta-exceeded`
+      on the SAME run is measuring against this new anchor, not a historical
+      one. The a11y audit runs in-page via the existing Playwright MCP browser
+      surface (axe-core `axe.min.js` injection; NO new MCP server) and is
+      opt-in-skip / web-only — silent unless `qa-runbook.a11y.enabled: true`.
+      Runtime emission + the baseline-storage location land in Story 19.4 (this
+      story enumerates the class only — flip-the-switch property). Remediation
+      (the human decides): none required for a genuinely new baseline; if the
+      anchor is unexpectedly new, confirm the prior baseline artifact was not
+      lost or relocated before trusting this run's delta.
+    pointer_context_fields: [ac_id]
+    sub_classifications: []
+
+  - marker_class: a11y-delta-exceeded
+    diagnostic_pointer: |
+      FR-P2-6 / Epic 19 Story 19.3 (ADR-011) — the self-computed accessibility
+      violation delta for AC `{ac_id}` (set-difference on axe-core
+      `violations[]` keys between the stored baseline and this run) exceeded the
+      configurable a11y delta threshold. axe-core ships no native baseline-delta
+      — the Automator computes the delta over axe-core's deterministic
+      `violations[]` JSON — so this marker reports a regression the Automator
+      measured, not an axe-core verdict. Detection-time: web QA RUNTIME (the
+      a11y audit runs in-page via the existing Playwright MCP browser surface;
+      axe-core `axe.min.js` injection, NO new MCP server). Severity: loud-fail /
+      practitioner-blocking surfaced as evidence — the substrate does NOT
+      auto-resolve or fail the AC (sensor-not-advisor); it surfaces so the human
+      inspects the new violations. opt-in-skip / web-only — silent unless
+      `qa-runbook.a11y.enabled: true`. The delta evidence artifact + threshold
+      config surface land in Story 19.4 (this story enumerates the class only —
+      flip-the-switch property). Remediation (the human decides): open the delta
+      evidence artifact, triage the newly-introduced violations against the
+      baseline, then fix the regression or re-anchor the baseline intentionally.
+    pointer_context_fields: [ac_id]
+    sub_classifications: []
+
+  - marker_class: a11y-delta-mode-unstable
+    diagnostic_pointer: |
+      FR-P2-6 / Epic 19 Story 19.3 (ADR-011) — FALLBACK: the self-computed
+      accessibility baseline-delta could not be produced reliably (the
+      Automator-side set-difference over axe-core's `violations[]` JSON proved
+      non-deterministic for this run), so the a11y audit shipped FULL-REPORT
+      mode (no delta) rather than a possibly-wrong regression verdict. NOT a
+      failure of the audit itself (sensor-not-advisor): the full axe-core
+      violation report is still captured as evidence; only the delta layer is
+      withheld. This is the loud-fail escape valve named in ADR-011 — the delta
+      is the Automator's to compute, not axe-core's, so the unstable-delta
+      condition is surfaced rather than silently swallowing a bad diff.
+      Detection-time: web QA RUNTIME (axe-core `axe.min.js` injected in-page via
+      the existing Playwright MCP browser surface; NO new MCP server).
+      opt-in-skip / web-only — silent unless `qa-runbook.a11y.enabled: true`.
+      Runtime emission + the full-report-no-delta path land in Story 19.4 (this
+      story enumerates the class only — flip-the-switch property). Remediation
+      (the human decides): read the full a11y report directly; if the unstable
+      delta recurs across Phase-2 reference runs, ADR-011's revisit condition
+      fires (make full-report the default).
+    pointer_context_fields: []
+    sub_classifications: []

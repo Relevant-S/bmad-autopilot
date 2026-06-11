@@ -909,6 +909,34 @@ def test_main_with_no_flags_resolves_canonical_schemas() -> None:
     assert "Cross-schema enumeration check (substrate component 4)" in out.getvalue()
 
 
+def test_a11y_marker_classes_are_tolerated_orphans() -> None:
+    """Story 19.3 AC-5 / AC-8c: the three new a11y-audit evidence marker classes
+    (`a11y-baseline-stale` / `a11y-delta-exceeded` / `a11y-delta-mode-unstable`)
+    are referenced by NO schema file, so they are enumeration-check ORPHANS —
+    tolerated (`main` returns `1 if missing else 0`). The canonical no-flags run
+    therefore still exits 0, the three classes surface in the orphan section, and
+    orchestrator-event.yaml is unchanged at schema_version "1.2" (a marker-only
+    bump; co-versioned ≠ co-bumped)."""
+    out, err = io.StringIO(), io.StringIO()
+    with redirect_stdout(out), redirect_stderr(err):
+        rc = main([])
+    assert rc == 0
+    stdout = out.getvalue()
+    for marker_class in (
+        "a11y-baseline-stale",
+        "a11y-delta-exceeded",
+        "a11y-delta-mode-unstable",
+    ):
+        assert marker_class in stdout, (
+            f"{marker_class} should appear as a tolerated orphan in the output"
+        )
+
+    event_schema = yaml.safe_load(
+        CANONICAL_EVENT_SCHEMA_PATH.read_text(encoding="utf-8")
+    )
+    assert event_schema["schema_version"] == "1.2"
+
+
 def test_main_yaml_error_on_taxonomy_returns_two(tmp_path: pathlib.Path) -> None:
     """A taxonomy file with malformed YAML triggers
     ``yaml.YAMLError`` inside ``load_marker_taxonomy`` — main() returns 2

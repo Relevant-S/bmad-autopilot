@@ -26,10 +26,10 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9; Story 15.2 — 31→32 entries, schema_version 1.9→1.10; Story 16.2 — 32→33 entries, schema_version 1.10→1.11; Story 24.1 — 33→34 entries, schema_version 1.11→1.12; Story 19.2 — 34 entries unchanged, +4 heuristic-skipped sub_classifications, schema_version 1.12→1.13):
-    [x] all 34 expected marker_class identifiers present         → test_taxonomy_has_34_canonical_markers
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9; Story 15.2 — 31→32 entries, schema_version 1.9→1.10; Story 16.2 — 32→33 entries, schema_version 1.10→1.11; Story 24.1 — 33→34 entries, schema_version 1.11→1.12; Story 19.2 — 34 entries unchanged, +4 heuristic-skipped sub_classifications, schema_version 1.12→1.13; Story 19.3 — 34→37 entries (a11y-baseline-stale / a11y-delta-exceeded / a11y-delta-mode-unstable), schema_version 1.13→1.14):
+    [x] all 37 expected marker_class identifiers present         → test_taxonomy_has_37_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.13" at top level                      → test_taxonomy_declares_schema_version_1_13
+    [x] schema_version: "1.14" at top level                      → test_taxonomy_declares_schema_version_1_14
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -140,6 +140,10 @@ CANONICAL_MARKER_CLASSES = [
     "sprint-escalation-rate-exceeded",
     # Story 24.1 — Epic 24 parallel-dispatch admission/seed infra loud-fail.
     "parallel-dispatch-infra-failed",
+    # Story 19.3 — Epic 19 a11y-audit evidence markers (ADR-011 / FR-P2-6).
+    "a11y-baseline-stale",
+    "a11y-delta-exceeded",
+    "a11y-delta-mode-unstable",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -378,9 +382,9 @@ def test_determinism_under_shuffle() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_taxonomy_has_34_canonical_markers(taxonomy_data: dict) -> None:
+def test_taxonomy_has_37_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 34
+    assert len(names) == 37
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
         "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
@@ -388,7 +392,9 @@ def test_taxonomy_has_34_canonical_markers(taxonomy_data: dict) -> None:
         "Story 14.5 appended entry 31: parallel-story-state-pollution; "
         "Story 15.2 appended entry 32: epic-budget-exhausted; "
         "Story 16.2 appended entry 33: sprint-escalation-rate-exceeded; "
-        "Story 24.1 appended entry 34: parallel-dispatch-infra-failed)"
+        "Story 24.1 appended entry 34: parallel-dispatch-infra-failed; "
+        "Story 19.3 appended entries 35-37: a11y-baseline-stale / "
+        "a11y-delta-exceeded / a11y-delta-mode-unstable)"
     )
 
 
@@ -401,7 +407,7 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_13(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_14(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
@@ -437,7 +443,12 @@ def test_taxonomy_declares_schema_version_1_13(taxonomy_data: dict) -> None:
     # locale-i18n-edge / large-input-boundary / permission-boundary; the 34-class
     # closed-set is PRESERVED; PATCH bump per the sub_classification rule + the
     # Story 9.5/13.6 heuristic-skipped precedent).
-    assert taxonomy_data.get("schema_version") == "1.13"
+    # Story 19.3 bumps 1.13 → 1.14 (additive: three new top-level a11y-audit
+    # evidence marker classes — a11y-baseline-stale / a11y-delta-exceeded /
+    # a11y-delta-mode-unstable; closed-set 34 → 37; MINOR bump per the new-top-
+    # level-class rule + epics-phase-2.md line 70 + the Story 24.1 precedent;
+    # ADR-011 / FR-P2-6; no runtime emitter — Story 19.4 wires emission).
+    assert taxonomy_data.get("schema_version") == "1.14"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -506,7 +517,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 34  # Story 24.1 appended parallel-dispatch-infra-failed
+    assert len(ids) == 37  # Story 19.3 appended the three a11y-audit markers
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

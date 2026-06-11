@@ -4,8 +4,8 @@ Two layers: (1) the gate runs CLEAN against the real governed tree (the
 integration witness that Rules A/B/C all pass post-implementation); (2) synthetic
 tmp-tree fixtures exercise each rule's positive + negative path in isolation,
 plus byte-stable ordering, registry rot, the allowlist, and the boundary-
-discipline witnesses (FOUR specialists / THREE hooks / marker closed-set 34 /
-schema_version "1.13" / no runtime marker emission).
+discipline witnesses (FOUR specialists / THREE hooks / marker closed-set 37 /
+schema_version "1.14" / no runtime marker emission).
 """
 
 from __future__ import annotations
@@ -359,8 +359,8 @@ def test_boundary_marker_taxonomy_unchanged() -> None:
     raw = yaml.safe_load(
         (repo_root / "schemas" / "marker-taxonomy.yaml").read_text(encoding="utf-8")
     )
-    assert raw["schema_version"] == "1.13"
-    assert len(raw["markers"]) == 34
+    assert raw["schema_version"] == "1.14"
+    assert len(raw["markers"]) == 37
 
 
 def test_gate_emits_no_runtime_marker() -> None:

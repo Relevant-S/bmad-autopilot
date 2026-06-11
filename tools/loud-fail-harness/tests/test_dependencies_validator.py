@@ -882,7 +882,18 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # Structurally an orphan exactly like `epic-budget-exhausted` /
     # `parallel-story-state-pollution`; the orphan-count increment 25 → 26 is the
     # load-bearing witness that the Story 24.1 taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 26 orphan marker class(es)" in text
+    #
+    # Post-Story-19.3 review: THREE new a11y-audit evidence markers
+    # (`a11y-baseline-stale` / `a11y-delta-exceeded` / `a11y-delta-mode-unstable`)
+    # newly enumerated via MINOR bump 1.13 → 1.14; each has ZERO `dependencies.yaml`
+    # reference (the activated `axe-core` entry carries NO `marker_class` — the
+    # markers are QA-wrapper-emitted evidence markers, not dependency-availability
+    # markers), zero `escalation-bundles/*.yaml` / `orchestrator-event.yaml`
+    # reference (runtime emission lands in Story 19.4). The `axe-core` dependency
+    # entry adds NO passing reference (passing stays 14); the three markers join
+    # the orphan bucket → orphan-count increment 26 → 29 is the load-bearing
+    # witness that the Story 19.3 taxonomy + dependency edits landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 29 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
@@ -944,7 +955,7 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.5"
+    assert raw["schema_version"] == "1.6"
     deps = raw["dependencies"]
     # Story 14.1 AC-6: git entry present with version_floor "2.5";
     # both init + runtime profiles total-block; operator-actionable
@@ -979,6 +990,24 @@ def test_load_dependencies_returns_dict() -> None:
     assert lad_init_sc == [{"condition": "unconfigured", "silent": True}]
     lad_runtime_sc = deps["lad"]["profiles"]["runtime"]["sub_classifications"]
     assert lad_runtime_sc == [{"condition": "unconfigured", "silent": True}]
+    # Story 19.3 AC-2 / AC-8a: axe-core activated — Phase-2 a11y-audit dependency
+    # entry (opt-in-skip on both init + runtime; version_floor "4.12" pinned per
+    # ADR-011 / FR-P2-6; no `phase` field — Phase 2 is current shipping scope).
+    # The entry references NO marker_class (the three a11y markers are wrapper-
+    # emitted evidence markers / taxonomy orphans, not availability markers).
+    assert "axe-core" in deps
+    assert deps["axe-core"]["version_floor"] == "4.12"
+    assert "phase" not in deps["axe-core"]
+    assert deps["axe-core"]["profiles"]["init"]["profile"] == "opt-in-skip"
+    assert deps["axe-core"]["profiles"]["runtime"]["profile"] == "opt-in-skip"
+    assert deps["axe-core"]["profiles"]["init"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert deps["axe-core"]["profiles"]["runtime"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert "marker_class" not in deps["axe-core"]["profiles"]["init"]
+    assert "marker_class" not in deps["axe-core"]["profiles"]["runtime"]
     # Per AC-4: per-lifecycle-phase variance verifiable on playwright-mcp + mobile-mcp.
     assert (
         deps["playwright-mcp"]["by_project_type"]["web"]["profiles"]["init"]["profile"]
@@ -1007,14 +1036,15 @@ def test_load_dependencies_returns_dict() -> None:
 
 
 def test_extended_fixture_git_entry_state() -> None:
-    """Story 14.1 AC-7 — git-entry fixture witness (ADR-009 activation).
+    """Story 14.1 AC-7 / Story 19.3 AC-7 — extended-fixture witness (ADR-009 + ADR-011 activation).
 
-    Loads the Story 7.3 extended fixture (which now includes a Story 14.1
-    git MVP-dependency entry) and verifies the activated shape: version_floor
-    "2.5", both init + runtime profiles total-block, operator-actionable
-    `git --version` diagnostic at init. Substrate component 5 (fixture-
-    coverage) exercises the new MVP-dependency row's structural validity;
-    the validator returns zero findings on the fixture.
+    Loads the Story 7.3 extended fixture and verifies the activated shapes:
+    Story 14.1 (git, version_floor "2.5", total-block on both profiles,
+    ``git --version`` diagnostic) and Story 19.3 (axe-core, version_floor
+    "4.12", opt-in-skip on both profiles, unconfigured/silent
+    sub_classifications). Substrate component 5 (fixture-coverage) exercises
+    both activated entries' structural validity; the validator returns zero
+    findings on the fixture.
     """
     fixture_path = (
         pathlib.Path(__file__).resolve().parent
@@ -1024,12 +1054,28 @@ def test_extended_fixture_git_entry_state() -> None:
     )
     raw = load_dependencies(fixture_path)
     assert validate_dependencies(raw, str(fixture_path)) == []
+    assert raw["schema_version"] == "1.6"
     deps = raw["dependencies"]
     assert "git" in deps
     assert deps["git"]["version_floor"] == "2.5"
     assert deps["git"]["profiles"]["init"]["profile"] == "total-block"
     assert deps["git"]["profiles"]["runtime"]["profile"] == "total-block"
     assert "git --version" in deps["git"]["profiles"]["init"]["diagnostic"]
+    # Story 19.3 AC-7: axe-core fixture-coverage — the activated a11y-audit
+    # dependency entry rides the extended fixture (byte-identical opt-in-skip
+    # shape to the live dependencies.yaml entry); the validator returns zero
+    # findings on the fixture (asserted above).
+    assert "axe-core" in deps
+    assert deps["axe-core"]["version_floor"] == "4.12"
+    assert "phase" not in deps["axe-core"]
+    assert deps["axe-core"]["profiles"]["init"]["profile"] == "opt-in-skip"
+    assert deps["axe-core"]["profiles"]["runtime"]["profile"] == "opt-in-skip"
+    assert deps["axe-core"]["profiles"]["init"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert deps["axe-core"]["profiles"]["runtime"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
 
 
 def test_extended_fixture_mobile_mcp_activated_state() -> None:

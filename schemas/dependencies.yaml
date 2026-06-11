@@ -62,9 +62,9 @@
 # Canonical entry order (preserve verbatim — re-ordering loses architectural
 # narrative semantics): MVP-required dependencies first (git, claude-code,
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
-# (mobile-mcp, lad).
+# (mobile-mcp, lad), then Phase-2 dependencies (axe-core).
 
-schema_version: "1.5"
+schema_version: "1.6"
 # schema_version 1.1 → 1.2: mobile-mcp activated from phase: "1.5" gate;
 # version_floor pinned to 0.0.54 per ADR-007 (Story 9.1, 2026-05-11).
 # schema_version 1.2 → 1.3: mobile-mcp init + runtime profiles declare
@@ -91,6 +91,12 @@ schema_version: "1.5"
 #                           worktree-vs-branch boundary decision. Phase-2 worktree-
 #                           lifecycle substrate (Stories 14.2–14.6) depends on
 #                           git ≥ 2.5 worktree primitive. Story 14.1, 2026-05-25.
+# schema_version 1.5 → 1.6: axe-core added as Phase-2 a11y-audit dependency
+#                           entry (opt-in-skip; version_floor "4.12") per
+#                           ADR-011 (FR-P2-6). Web-only-meaningful, silent
+#                           unless qa-runbook.a11y.enabled; runtime emission +
+#                           the three a11y evidence markers land in Story 19.4.
+#                           Story 19.3.
 
 dependencies:
   git:
@@ -195,6 +201,20 @@ dependencies:
 
   lad:
     version_floor: "bb47e9e"
+    profiles:
+      init:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: unconfigured
+            silent: true
+      runtime:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: unconfigured
+            silent: true
+
+  axe-core:
+    version_floor: "4.12"
     profiles:
       init:
         profile: opt-in-skip
