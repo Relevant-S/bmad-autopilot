@@ -161,7 +161,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from typing import Literal, cast
+from typing import Literal, cast, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -202,8 +202,19 @@ SemanticVerificationRequirement = Literal[
 FlowBranchDisposition = Literal["must-visit", "intentionally-skipped"]
 
 #: Allowed values for ``QABehavioralPlanEntry.heuristic_applicability`` list
-#: elements (verbatim per epics.md line 497).
-HeuristicApplicability = Literal["empty-state", "error-state", "auth-boundary"]
+#: elements. Byte-identical mirror of
+#: ``qa_exploratory_heuristics.HeuristicKind`` (the heuristic-kind single
+#: source of truth); expanded 3 → 7 at Story 19.2 (ADR-010 / FR-P2-5), the
+#: byte-equality contract test guards the duplication.
+HeuristicApplicability = Literal[
+    "empty-state",
+    "error-state",
+    "auth-boundary",
+    "rate-limit-boundary",
+    "locale-i18n-edge",
+    "large-input-boundary",
+    "permission-boundary",
+]
 
 #: Allowed values for the header-level ``plan_status`` field.
 #: ``"generated"`` is the initial first-run state per epics.md line 1822;
@@ -678,7 +689,7 @@ def _parse_heuristic_list(
     if not inner:
         return ()
     items = [item.strip() for item in inner.split(",") if item.strip()]
-    valid: set[str] = {"empty-state", "error-state", "auth-boundary"}
+    valid: frozenset[str] = frozenset(get_args(HeuristicApplicability))
     for item in items:
         if item not in valid:
             raise ValueError(f"unknown heuristic: {item!r}")

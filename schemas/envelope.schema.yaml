@@ -21,10 +21,12 @@
 #     enforced — evidence_refs items are {path, tier} objects with tier ∈
 #     {tier-1-mechanical, tier-2-outcome, tier-3-semantic}; semantic_verification
 #     tightens to closed enum {verified, not_configured, not_applicable})
-#   - FR22 (Story 4.9: three exploratory heuristics — empty-state /
-#     error-state / auth-boundary — with `verification_mode: exploratory-heuristic`
-#     discriminator field added to $defs/finding; sibling of the `meta` field
-#     precedent from Story 3.3, single-responsibility per discriminator)
+#   - FR22 / FR-P2-5 (Story 4.9 MVP trio + Story 19.2 ADR-010 expansion to
+#     seven: empty-state / error-state / auth-boundary / rate-limit-boundary /
+#     locale-i18n-edge / large-input-boundary / permission-boundary — with
+#     `verification_mode: exploratory-heuristic` discriminator field added to
+#     $defs/finding; sibling of the `meta` field precedent from Story 3.3,
+#     single-responsibility per discriminator)
 #   - ADR-008 (Story 10.3: LAD MCP server selection — `Shelpuk-AI-Technology-Consulting/lad_mcp_server`,
 #     version_floor `bb47e9e`; Phase-1.5 activation of Review-LAD as the 4th
 #     specialist envelope source — uniform FR51 four-field shape, findings
@@ -313,13 +315,16 @@ $defs:
         pattern: "^[0-9a-f]{64}$"
 
   heuristic_skipped_emission:
-    # QA-specific (FR22 + Story 4.9) per-heuristic-skipped emission record.
-    # Mirrors `qa_exploratory_heuristics.HeuristicSkippedEmissionRecord`
-    # Pydantic model byte-for-byte. The `sub_classification` enum mirrors
-    # the bumped marker-taxonomy.yaml `heuristic-skipped.sub_classifications`
-    # at AC-5 byte-for-byte AND `qa_behavioral_plan.HeuristicApplicability`
-    # at line 164 byte-for-byte (single source of truth: the heuristic-kind
-    # enumeration).
+    # QA-specific (FR22 + Story 4.9; expanded to 7 at Story 19.2 / ADR-010 /
+    # FR-P2-5) per-heuristic-skipped emission record. Mirrors
+    # `qa_exploratory_heuristics.HeuristicSkippedEmissionRecord` Pydantic model
+    # byte-for-byte. The `sub_classification` enum mirrors the EXPLORATORY
+    # SUBSET of marker-taxonomy.yaml `heuristic-skipped.sub_classifications` —
+    # the eight values MINUS `flow-branch` (FR22c, which routes to the
+    # `AcFlowBranchCoverage` surface, NOT here) — AND
+    # `qa_exploratory_heuristics.HeuristicKind` /
+    # `qa_behavioral_plan.HeuristicApplicability` at line 206 byte-for-byte
+    # (single source of truth: the heuristic-kind enumeration).
     type: object
     required:
       - marker_class
@@ -332,7 +337,7 @@ $defs:
         enum: [heuristic-skipped]
       sub_classification:
         type: string
-        enum: [empty-state, error-state, auth-boundary]
+        enum: [empty-state, error-state, auth-boundary, rate-limit-boundary, locale-i18n-edge, large-input-boundary, permission-boundary]
       story_id:
         type: string
         minLength: 1

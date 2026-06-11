@@ -1153,7 +1153,16 @@ def test_format_errors_renames_verification_mode_enum_violation(schema: dict) ->
 
 
 @pytest.mark.parametrize(
-    "sub_classification", ["empty-state", "error-state", "auth-boundary"]
+    "sub_classification",
+    [
+        "empty-state",
+        "error-state",
+        "auth-boundary",
+        "rate-limit-boundary",
+        "locale-i18n-edge",
+        "large-input-boundary",
+        "permission-boundary",
+    ],
 )
 def test_heuristic_skipped_emissions_array_with_valid_entry_accepted(
     schema: dict, sub_classification: str
@@ -1169,14 +1178,19 @@ def test_heuristic_skipped_emissions_array_with_valid_entry_accepted(
     assert validate_envelope(envelope, schema) == []
 
 
+@pytest.mark.parametrize("sub_classification", ["flow-branch", "form-validation"])
 def test_heuristic_skipped_emissions_unknown_sub_classification_rejected(
-    schema: dict,
+    schema: dict, sub_classification: str
 ) -> None:
+    """The envelope ``heuristic_skipped_emissions`` enum is the EXPLORATORY
+    subset (the seven ``HeuristicKind`` values). ``flow-branch`` (FR22c) is NOT
+    among them — it routes to the ``AcFlowBranchCoverage`` surface, not here — so
+    it is rejected at the envelope seam exactly like a fabricated name."""
     envelope = _minimal_valid_envelope()
     envelope["heuristic_skipped_emissions"] = [
         {
             "marker_class": "heuristic-skipped",
-            "sub_classification": "form-validation",
+            "sub_classification": sub_classification,
             "story_id": "auto-001",
         }
     ]

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Encode the LLM-runtime binding contract for driving the three MVP-parity exploratory heuristics (`empty-state` / `error-state` / `auth-boundary`) against the running mobile app at step-8 dispatch time for `mobile` project types per FR22 (`_bmad-output/planning-artifacts/prd.md` line 836) + FR-P1.5-2 (`prd.md` line 928) + ADR-007 (mobile-mcp v0.0.54 server selection). The Python substrate at `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/mobile_heuristic_spec.py` is pure DATA — the closed three-entry `MOBILE_HEURISTIC_SPECS` table re-binds mobile-specific scenarios (empty-list state / network-error state / session-expiry boundary) to Story 4.9's `HeuristicKind` Literal AS-IS. THIS prose IS the binding contract that documents the per-kind mobile driving procedure the QA wrapper composes at AC-iteration-completion time AGAINST Story 9.3's ten-method `MobileDriver` Protocol surface.
+Encode the LLM-runtime binding contract for driving the mobile-applicable exploratory heuristics against the running mobile app at step-8 dispatch time for `mobile` project types per FR22 (`_bmad-output/planning-artifacts/prd.md` line 836) + FR-P1.5-2 (`prd.md` line 928) + FR-P2-5 / ADR-010 (the seven-heuristic sweep; Story 19.2) + ADR-007 (mobile-mcp v0.0.54 server selection). Mobile drives **six of the seven** heuristics — `empty-state` / `error-state` / `auth-boundary` (the Story 4.9 MVP trio) + `large-input-boundary` / `locale-i18n-edge` / `permission-boundary` (the Story 19.2 additions) — with `rate-limit-boundary` EXCLUDED per the ADR-010 matrix (silent exclusion, no marker). The Python substrate at `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/mobile_heuristic_spec.py` is pure DATA — the closed six-entry `MOBILE_HEURISTIC_SPECS` table re-binds mobile-specific scenarios to `HeuristicKind` AS-IS. THIS prose IS the binding contract that documents the per-kind mobile driving procedure the QA wrapper composes at AC-iteration-completion time AGAINST Story 9.3's ten-method `MobileDriver` Protocol surface.
 
 This sub-step file is composed BY the QA wrapper (Story 4.13 + Story 9.3 + Story 9.4 thickening) AT step-8 dispatch time AFTER the per-AC `iterate_acs` loop (step 6) has completed AND the per-AC tier-decision (step 7) has been emitted. Heuristics fire ONLY when the plan declares them applicable per `evaluate_heuristic_applicability` from Story 4.9; the structurally-inapplicable branch surfaces `heuristic-skipped: <kind>` via `surface_heuristic_skipped` AS-IS — the substrate is project-type-agnostic by Story 4.9 design.
 
@@ -17,13 +17,18 @@ The QA wrapper has dispatched through `agents/qa.md` step 6's mobile branch (Sto
 
 ## Procedure — HeuristicKind ↔ mobile scenario mappings
 
-The three-row mapping table the QA wrapper consumes at step-8 dispatch time. BYTE-IDENTICAL with the `mobile_heuristic_spec.MOBILE_HEURISTIC_SPECS` constant per the Story 9.4 AC-5 drift-prevention rule (mirroring Story 9.3 AC-2's ten-method ↔ MCP-tool mapping byte-identicality).
+The six-row mapping table (six of seven — `rate-limit-boundary` excluded on mobile per ADR-010) the QA wrapper consumes at step-8 dispatch time. BYTE-IDENTICAL with the `mobile_heuristic_spec.MOBILE_HEURISTIC_SPECS` constant per the Story 9.4 AC-5 drift-prevention rule (extended at Story 19.2; mirroring Story 9.3 AC-2's ten-method ↔ MCP-tool mapping byte-identicality).
 
 | HeuristicKind | mobile scenario label | driver methods used |
 |---|---|---|
 | `auth-boundary` | session-expiry boundary | `launch_app`, `press_button`, `screenshot`, `assert_element_present` |
 | `empty-state` | empty-list state | `launch_app`, `tap_at_coordinates`, `list_elements_on_screen`, `assert_element_present` |
 | `error-state` | network-error state | `launch_app`, `tap_at_coordinates`, `screenshot`, `assert_element_present` |
+| `large-input-boundary` | large-input boundary state | `launch_app`, `tap_at_coordinates`, `type_text`, `screenshot`, `assert_element_present` |
+| `locale-i18n-edge` | locale/i18n edge state | `launch_app`, `tap_at_coordinates`, `screenshot`, `assert_element_present` |
+| `permission-boundary` | permission-denied boundary | `launch_app`, `tap_at_coordinates`, `screenshot`, `assert_element_present` |
+
+`rate-limit-boundary` is the seventh exploratory heuristic (ADR-010 / FR-P2-5); it is **EXCLUDED on mobile** per the ADR-010 applicability matrix — rapid-request driving is impractical through the mobile-MCP v0.0.54 UI verb surface (no rapid-request primitive in the ten-method `MobileDriver` Protocol). The exclusion is a SILENT matrix exclusion (NO `heuristic-skipped` emission), so `MOBILE_HEURISTIC_SPECS` carries six entries (six of seven), not seven.
 
 The `auth-boundary` row binds to **session-expiry** rather than **biometric-auth-boundary** because mobile-mcp v0.0.54's ten-method verb set (Story 9.3 AC-2) does not expose a biometric-prompt verb (Touch ID / Face ID / Android Biometric prompts require simulator-specific commands outside the mobile-mcp tool surface). Session-expiry is observable via the `screenshot` + `assert_element_present` pair AND is a higher-empirical-value coverage target per the web-research notes at story-create time 2026-05-11. The decision is recorded in the `mobile_heuristic_spec.py` module docstring's "Heuristic-binding rationale" sub-section.
 
@@ -45,9 +50,25 @@ Launch the app via launch_app to a route requiring an authenticated session; for
 
 The session-TTL is configured by the practitioner in the runbook-or-app-config; the wrapper does NOT discover or alter the TTL — heuristic driving observes the post-TTL UI state via the `screenshot` + `assert_element_present` pair. The re-foregrounding step composes the same `launch_app` method to bring the app back to foreground AFTER the configured TTL has elapsed.
 
+### Large-input boundary state
+
+Launch the app via launch_app to a screen bearing a free-text input; focus the field via tap_at_coordinates and enter a very large input string via type_text that exceeds the field's expected bound; capture the post-entry screenshot via screenshot and verify the large-input-boundary handling UI (length-cap or validation affordance) accessible label is present via assert_element_present.
+
+### Locale/i18n edge state
+
+Launch the app via launch_app after the practitioner sets a non-default device locale out-of-band (see qa-mobile-heuristics.md); navigate to a locale-sensitive screen via tap_at_coordinates; capture the localized-layout screenshot via screenshot and verify the locale/i18n edge UI (translated string or RTL mirroring) accessible label is present via assert_element_present.
+
+The non-default locale is set out-of-band because the mobile-mcp v0.0.54 verb set does NOT expose a locale-switching analog. The practitioner sets the device/simulator locale via OS-level controls (Settings → General → Language & Region on iOS; `adb shell am broadcast … com.android.intent.action.SET_LOCALE` / Settings on Android) BEFORE the wrapper invokes the heuristic.
+
+### Permission-denied boundary
+
+Launch the app via launch_app to a screen whose primary action requires a runtime OS permission the practitioner has denied out-of-band (see qa-mobile-heuristics.md); invoke the permission-gated action via tap_at_coordinates; capture the post-denial screenshot via screenshot and verify the permission-denied fallback UI's accessible label is present via assert_element_present.
+
+The permission grant/denial is set out-of-band because the mobile-mcp v0.0.54 verb set does NOT expose a permission-toggling analog. The practitioner denies the relevant runtime permission via OS-level controls (Settings → Privacy on iOS; `adb shell pm revoke <pkg> <permission>` on Android) BEFORE the wrapper invokes the heuristic.
+
 ## Procedure — applicability gating + skip emission
 
-For each `HeuristicKind` ∈ `{empty-state, error-state, auth-boundary}`, the wrapper calls `evaluate_heuristic_applicability(plan, kind)` from `loud_fail_harness.qa_exploratory_heuristics` (Story 4.9). The function reads ONLY `plan.entries[*].heuristic_applicability` — same logic for web/api/mobile per FR16 invariant; mobile dispatch does NOT alter the decision semantics.
+For each mobile-applicable `HeuristicKind` ∈ `{empty-state, error-state, auth-boundary, large-input-boundary, locale-i18n-edge, permission-boundary}` (the six of seven mobile drives — `rate-limit-boundary` is matrix-excluded per ADR-010, a SILENT exclusion with NO `heuristic-skipped` emission), the wrapper calls `evaluate_heuristic_applicability(plan, kind)` from `loud_fail_harness.qa_exploratory_heuristics` (Story 4.9). The function reads ONLY `plan.entries[*].heuristic_applicability` — same logic for web/api/mobile per FR16 invariant; mobile dispatch does NOT alter the decision semantics.
 
 On the structurally-inapplicable branch (return `False`), the wrapper calls `surface_heuristic_skipped(story_id, heuristic_kind, registry)` from Story 4.9's `qa_exploratory_heuristics.py` — the same Pattern-5 atomic-on-failure helper produces a `HeuristicSkippedEmission` carrying the marker record (canonical marker class `"heuristic-skipped"` + `sub_classification` matching the kind label) + diagnostic context (`story_id` + `heuristic_kind`). The emission rides on the envelope's `heuristic_skipped_emissions` array per `agents/qa.md`'s envelope contract. NO mobile-specific emission helper exists — the substrate is project-type-agnostic by Story 4.9 design (the mobile-scenario rebinding is documented in `MobileHeuristicSpec.mobile_scenario_label`, NOT in the marker sub-classification taxonomy).
 
@@ -99,5 +120,5 @@ THIS step's procedure is invoked AFTER `iterate_acs` returns from step 6 — i.e
 ## Forward consumers
 
 - **Story 9.5 (LANDED) — init-time + mid-run `mobile-blocked` paths.** Consumes the `MobileMcpUnavailableEmission` surfaced when a heuristic's driver invocation fails mid-run (the emission carries `sub_cause="mid-run-unavailable"` per the marker-taxonomy 1.5 closed-set). The diagnostic-pointer destination at `docs/mobile-mcp-setup.md` is now landed.
-- **Story 9.6 — reference mobile-project fixture end-to-end run.** Composes against THIS step's three-heuristic protocol end-to-end on a real reference mobile project; exercises the full per-kind driving procedure against the running app.
+- **Story 9.6 — reference mobile-project fixture end-to-end run.** Composes against THIS step's six-heuristic mobile protocol end-to-end on a real reference mobile project; exercises the full per-kind driving procedure against the running app.
 - **Epic 11 — Phase 1.5 completion evidence.** References THIS step as the FR-P1.5-2 + FR22 mobile-extension evidence in `phase-1.5-completion-evidence.md` (Story 11.1's deliverable).

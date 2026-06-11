@@ -5,7 +5,7 @@ integration witness that Rules A/B/C all pass post-implementation); (2) syntheti
 tmp-tree fixtures exercise each rule's positive + negative path in isolation,
 plus byte-stable ordering, registry rot, the allowlist, and the boundary-
 discipline witnesses (FOUR specialists / THREE hooks / marker closed-set 34 /
-schema_version "1.12" / no runtime marker emission).
+schema_version "1.13" / no runtime marker emission).
 """
 
 from __future__ import annotations
@@ -359,7 +359,7 @@ def test_boundary_marker_taxonomy_unchanged() -> None:
     raw = yaml.safe_load(
         (repo_root / "schemas" / "marker-taxonomy.yaml").read_text(encoding="utf-8")
     )
-    assert raw["schema_version"] == "1.12"
+    assert raw["schema_version"] == "1.13"
     assert len(raw["markers"]) == 34
 
 

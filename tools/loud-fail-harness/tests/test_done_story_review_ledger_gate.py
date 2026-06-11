@@ -270,7 +270,7 @@ def test_run_gate_orchestrates_read_enumerate_evaluate(
 def test_new_modules_emit_no_runtime_marker() -> None:
     # Build-time gate (contrast 24.1's runtime marker): the two new modules
     # must not touch the active_markers surface, name a marker class, or load
-    # the marker taxonomy. Keeps the closed-set at 34 / schema_version "1.12".
+    # the marker taxonomy. Keeps the closed-set at 34 / schema_version "1.13".
     src = (
         pathlib.Path(__file__).resolve().parents[1]
         / "src"

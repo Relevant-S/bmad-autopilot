@@ -26,10 +26,10 @@ story_id matching (AC-4 algorithm rule):
 Determinism (AC-5):
     [x] shuffled-equivalent inputs → byte-identical output       → test_determinism_under_shuffle
 
-Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9; Story 15.2 — 31→32 entries, schema_version 1.9→1.10; Story 16.2 — 32→33 entries, schema_version 1.10→1.11; Story 24.1 — 33→34 entries, schema_version 1.11→1.12):
+Taxonomy file shape (AC-1, AC-2, AC-3, AC-6; extended by Story 2.3 — 27→29 entries; schema_version 1.0→1.6; Story 14.3 — 29→30; Story 14.5 — 30→31; schema_version 1.6→1.8; Story 15.1 — optional `lifetime` field, 31 entries unchanged, schema_version 1.8→1.9; Story 15.2 — 31→32 entries, schema_version 1.9→1.10; Story 16.2 — 32→33 entries, schema_version 1.10→1.11; Story 24.1 — 33→34 entries, schema_version 1.11→1.12; Story 19.2 — 34 entries unchanged, +4 heuristic-skipped sub_classifications, schema_version 1.12→1.13):
     [x] all 34 expected marker_class identifiers present         → test_taxonomy_has_34_canonical_markers
     [x] every entry has non-empty diagnostic_pointer             → test_taxonomy_entries_have_non_empty_diagnostic_pointer
-    [x] schema_version: "1.12" at top level                      → test_taxonomy_declares_schema_version_1_12
+    [x] schema_version: "1.13" at top level                      → test_taxonomy_declares_schema_version_1_13
     [x] no duplicate marker_class identifiers (collision test)   → test_taxonomy_has_no_duplicate_marker_classes
     [x] every entry carries sub_classifications field            → test_taxonomy_entries_have_sub_classifications_field
 
@@ -401,7 +401,7 @@ def test_taxonomy_entries_have_non_empty_diagnostic_pointer(
         assert pointer.strip(), entry["marker_class"]
 
 
-def test_taxonomy_declares_schema_version_1_12(taxonomy_data: dict) -> None:
+def test_taxonomy_declares_schema_version_1_13(taxonomy_data: dict) -> None:
     # Story 9.3 bumped 1.3 → 1.4 (additive sub_classification per ADR-007).
     # Story 9.5 bumped 1.4 → 1.5 (additive: two new sub_classifications under
     # mobile-blocked — init-unavailable + mid-run-unavailable).
@@ -432,7 +432,12 @@ def test_taxonomy_declares_schema_version_1_12(taxonomy_data: dict) -> None:
     # seed infra loud-fail surface; closed-set 33 → 34; MINOR bump per the
     # documented new-top-level-class rule + epics-phase-2.md line 70 + the
     # Story 14.5/15.2/16.2 precedent).
-    assert taxonomy_data.get("schema_version") == "1.12"
+    # Story 19.2 bumps 1.12 → 1.13 (additive: four new exploratory
+    # ``heuristic-skipped`` sub_classifications — rate-limit-boundary /
+    # locale-i18n-edge / large-input-boundary / permission-boundary; the 34-class
+    # closed-set is PRESERVED; PATCH bump per the sub_classification rule + the
+    # Story 9.5/13.6 heuristic-skipped precedent).
+    assert taxonomy_data.get("schema_version") == "1.13"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:

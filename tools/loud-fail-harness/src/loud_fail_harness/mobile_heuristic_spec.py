@@ -1,14 +1,21 @@
 """Story 9.4 — Mobile exploratory-heuristic specification table.
 
-The pure-library substrate module owning the closed three-spec mobile-
-heuristic specification (FR22 mobile-parity extension + FR-P1.5-2). Each
-spec re-binds a mobile-specific scenario (empty-list state / network-
-error state / session-expiry boundary) to one of the three canonical
+The pure-library substrate module owning the closed six-spec mobile-
+heuristic specification (FR22 mobile-parity extension + FR-P1.5-2;
+expanded 3 → 6 at Story 19.2 per the ADR-010 / FR-P2-5 applicability
+matrix). Each spec re-binds a mobile-specific scenario to one of the
 :data:`loud_fail_harness.qa_exploratory_heuristics.HeuristicKind` Literal
-values from Story 4.9 — taxonomy v1 closed-set preservation per
-``_bmad-output/planning-artifacts/epics-phase-1.5.md`` line 120.
+values. Mobile drives SIX of the seven heuristics:
+``rate-limit-boundary`` is EXCLUDED on mobile per the ADR-010 matrix —
+rapid-request driving is impractical through the mobile-MCP v0.0.54 UI
+verb surface (there is no rapid-request primitive in the ten-method
+:class:`MobileDriver` Protocol), so its omission is a SILENT matrix
+exclusion (NO ``heuristic-skipped`` emission), NOT a structural skip.
+The marker-taxonomy ``heuristic-skipped.sub_classifications`` PATCH-bumps
+1.12 → 1.13 for the four additions (Story 19.2); the top-level marker-
+class closed-set is preserved.
 
-The spec is *data*: an immutable three-entry table consumed by the QA
+The spec is *data*: an immutable six-entry table consumed by the QA
 wrapper at AC-iteration time per the LLM-runtime binding contract at
 ``skills/bmad-automation/steps/qa-mobile-heuristics.md``. Verb-level
 heuristic driving (clicking the empty-state UI, forcing the
@@ -78,16 +85,19 @@ Heuristic-binding rationale:
        (simulator quirks; device-specific behavior).
 
     The :data:`HeuristicKind` Literal is reused BYTE-FOR-BYTE — the
-    same three kind labels (``empty-state`` / ``error-state`` /
-    ``auth-boundary``) name the mobile scenarios via the closed three-
-    entry :data:`MOBILE_HEURISTIC_SPECS` table; marker taxonomy v1's
-    ``heuristic-skipped.sub_classifications`` enumeration is
-    unchanged. Single-responsibility convention: the
-    ``heuristic-skipped`` marker's three sub-classifications name the
-    conceptual heuristic kinds (empty-state observability surface,
-    error-state observability surface, auth-boundary observability
-    surface); the per-project-type rendition is documented in the
-    step file's mapping table + the
+    same six mobile-applicable kind labels (``empty-state`` /
+    ``error-state`` / ``auth-boundary`` MVP trio + ``large-input-boundary``
+    / ``locale-i18n-edge`` / ``permission-boundary`` Story 19.2 additions)
+    name the mobile scenarios via the closed six-entry
+    :data:`MOBILE_HEURISTIC_SPECS` table; ``rate-limit-boundary`` is
+    EXCLUDED on mobile per the ADR-010 matrix (silent exclusion — no
+    ``heuristic-skipped`` emission). The marker-taxonomy
+    ``heuristic-skipped.sub_classifications`` was PATCH-bumped 1.12 →
+    1.13 (Story 19.2) for the four additions; the top-level marker-class
+    closed-set is preserved. Single-responsibility convention: the
+    ``heuristic-skipped`` marker's exploratory sub-classifications name
+    the conceptual heuristic kinds; the per-project-type rendition is
+    documented in the step file's mapping table + the
     :attr:`MobileHeuristicSpec.mobile_scenario_label` field.
 
 Substrate-component closure: THIS module is a substrate-library NOT a
@@ -144,10 +154,10 @@ class MobileHeuristicSpec(BaseModel):
     :data:`HeuristicKind` value.
 
     Field semantics:
-        * ``heuristic_kind`` — the canonical Story 4.9 kind label
-          (``empty-state`` / ``error-state`` / ``auth-boundary``); the
-          spec re-binds the mobile-specific scenario to one of these
-          three values.
+        * ``heuristic_kind`` — the canonical :data:`HeuristicKind` label;
+          the spec re-binds the mobile-specific scenario to one of the
+          six mobile-applicable values (every kind except
+          ``rate-limit-boundary``, ADR-010 matrix-excluded on mobile).
         * ``mobile_scenario_label`` — the mobile-specific scenario name
           (e.g., ``"empty-list state"`` / ``"network-error state"`` /
           ``"session-expiry boundary"``); appears in diagnostic prose
@@ -203,19 +213,28 @@ class MobileHeuristicSpec(BaseModel):
 
 
 # --------------------------------------------------------------------------- #
-# Closed three-spec table                                                     #
+# Closed six-spec table                                                       #
 # --------------------------------------------------------------------------- #
 
-#: The closed three-spec mobile-heuristic specification. Declaration
-#: order load-bearing — alphabetical by ``heuristic_kind`` for byte-
-#: stable diffs. The table is BYTE-IDENTICAL with the step file's
+#: The closed six-spec mobile-heuristic specification (Story 19.2 — six
+#: of seven; ``rate-limit-boundary`` matrix-excluded on mobile per
+#: ADR-010). Declaration order load-bearing — alphabetical by
+#: ``heuristic_kind`` for byte-stable diffs. The table is BYTE-IDENTICAL
+#: with the step file's
 #: ``## Procedure — HeuristicKind ↔ mobile scenario mappings`` table at
 #: ``skills/bmad-automation/steps/qa-mobile-heuristics.md``; a parity
 #: test at ``tests/test_mobile_heuristic_spec.py`` asserts byte-equality
 #: (drift catcher — maintainers updating one must update the other in
 #: the same commit, OR the test fails and CI rejects the commit).
 MOBILE_HEURISTIC_SPECS: Final[
-    tuple[MobileHeuristicSpec, MobileHeuristicSpec, MobileHeuristicSpec]
+    tuple[
+        MobileHeuristicSpec,
+        MobileHeuristicSpec,
+        MobileHeuristicSpec,
+        MobileHeuristicSpec,
+        MobileHeuristicSpec,
+        MobileHeuristicSpec,
+    ]
 ] = (
     MobileHeuristicSpec(
         heuristic_kind="auth-boundary",
@@ -270,6 +289,62 @@ MOBILE_HEURISTIC_SPECS: Final[
             "assert_element_present",
         ),
     ),
+    MobileHeuristicSpec(
+        heuristic_kind="large-input-boundary",
+        mobile_scenario_label="large-input boundary state",
+        procedural_outline=(
+            "Launch the app via launch_app to a screen bearing a free-text "
+            "input; focus the field via tap_at_coordinates and enter a very "
+            "large input string via type_text that exceeds the field's expected "
+            "bound; capture the post-entry screenshot via screenshot and verify "
+            "the large-input-boundary handling UI (length-cap or validation "
+            "affordance) accessible label is present via assert_element_present."
+        ),
+        driver_methods_used=(
+            "launch_app",
+            "tap_at_coordinates",
+            "type_text",
+            "screenshot",
+            "assert_element_present",
+        ),
+    ),
+    MobileHeuristicSpec(
+        heuristic_kind="locale-i18n-edge",
+        mobile_scenario_label="locale/i18n edge state",
+        procedural_outline=(
+            "Launch the app via launch_app after the practitioner sets a "
+            "non-default device locale out-of-band (see qa-mobile-heuristics.md); "
+            "navigate to a locale-sensitive screen via tap_at_coordinates; "
+            "capture the localized-layout screenshot via screenshot and verify "
+            "the locale/i18n edge UI (translated string or RTL mirroring) "
+            "accessible label is present via assert_element_present."
+        ),
+        driver_methods_used=(
+            "launch_app",
+            "tap_at_coordinates",
+            "screenshot",
+            "assert_element_present",
+        ),
+    ),
+    MobileHeuristicSpec(
+        heuristic_kind="permission-boundary",
+        mobile_scenario_label="permission-denied boundary",
+        procedural_outline=(
+            "Launch the app via launch_app to a screen whose primary action "
+            "requires a runtime OS permission the practitioner has denied "
+            "out-of-band (see qa-mobile-heuristics.md); invoke the "
+            "permission-gated action via tap_at_coordinates; capture the "
+            "post-denial screenshot via screenshot and verify the "
+            "permission-denied fallback UI's accessible label is present via "
+            "assert_element_present."
+        ),
+        driver_methods_used=(
+            "launch_app",
+            "tap_at_coordinates",
+            "screenshot",
+            "assert_element_present",
+        ),
+    ),
 )
 
 
@@ -289,15 +364,18 @@ def get_mobile_heuristic_spec(heuristic_kind: HeuristicKind) -> MobileHeuristicS
     defense-in-depth witness.
 
     Args:
-        heuristic_kind: One of ``empty-state`` / ``error-state`` /
-            ``auth-boundary``.
+        heuristic_kind: One of the six mobile-applicable
+            :data:`HeuristicKind` values (every kind except
+            ``rate-limit-boundary``, which is matrix-excluded on mobile
+            per ADR-010).
 
     Returns:
         The matching :class:`MobileHeuristicSpec`.
 
     Raises:
         :exc:`KeyError`: ``heuristic_kind`` is not in the closed
-            three-entry table.
+            six-entry table (notably ``rate-limit-boundary``, which has
+            no mobile spec by the ADR-010 matrix).
     """
     for spec in MOBILE_HEURISTIC_SPECS:
         if spec.heuristic_kind == heuristic_kind:

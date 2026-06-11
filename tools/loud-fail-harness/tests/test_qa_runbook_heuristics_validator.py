@@ -47,13 +47,13 @@ Frozen-model + formatting:
     [x] format_findings renders pointer + remediation           → test_format_findings_renders
     [x] format_findings zero-findings renders OK                → test_format_findings_zero_ok
 
-Contract test (AC-2):
-    [x] HeuristicKind ⊆ FROZEN_HEURISTIC_NAMES + len == 7       → test_contract_mvp3_subset_of_frozen_seven
+Contract test (AC-1 / AC-8 — reconciled at Story 19.2):
+    [x] HeuristicKind == FROZEN_HEURISTIC_NAMES (== 7)          → test_contract_heuristic_kind_equals_frozen_seven
 
-Seam guard (AC-8):
-    [x] marker-taxonomy schema_version unchanged ("1.12")       → test_seam_marker_taxonomy_version_unchanged
-    [x] heuristic-skipped sub_classifications unchanged         → test_seam_heuristic_skipped_subclassifications_unchanged
-    [x] HeuristicKind still has exactly 3 values               → test_seam_heuristic_kind_still_three
+Landed invariants (AC-8 — the 19.1 seam guards, flipped by 19.2):
+    [x] marker-taxonomy schema_version is "1.13"               → test_marker_taxonomy_version_is_1_13
+    [x] heuristic-skipped sub_classifications are the 8-value set → test_heuristic_skipped_subclassifications_are_eight
+    [x] HeuristicKind has exactly 7 values                     → test_heuristic_kind_has_seven_values
 """
 
 from __future__ import annotations
@@ -395,28 +395,29 @@ def test_format_findings_zero_ok() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Contract test (AC-2)                                                         #
+# Contract test (AC-1 / AC-8 — reconciled at Story 19.2)                       #
 # --------------------------------------------------------------------------- #
 
 
-def test_contract_mvp3_subset_of_frozen_seven() -> None:
-    """The MVP-3 driving Literal MUST be a subset of the frozen 7-set, and the
-    frozen set MUST contain exactly 7 names. This is the seam tie that keeps the
-    schema-level 7-set and the runtime 3-set from silently contradicting before
-    Story 19.2 reconciles them."""
+def test_contract_heuristic_kind_equals_frozen_seven() -> None:
+    """Story 19.2 reconciled the seam: ``HeuristicKind`` now EQUALS the frozen
+    7-set (was a strict subset at 19.1). The subset assertion still holds (now
+    satisfied BY equality); the equality assertion is the new invariant tying
+    the driving Literal to the single source of truth."""
     assert set(get_args(HeuristicKind)).issubset(FROZEN_HEURISTIC_NAMES)
+    assert set(get_args(HeuristicKind)) == FROZEN_HEURISTIC_NAMES
     assert len(FROZEN_HEURISTIC_NAMES) == 7
-    # The four ADR-010 additions are present.
+    # The four ADR-010 additions are now present in the driving Literal too.
     assert {
         "rate-limit-boundary",
         "locale-i18n-edge",
         "large-input-boundary",
         "permission-boundary",
-    }.issubset(FROZEN_HEURISTIC_NAMES)
+    }.issubset(set(get_args(HeuristicKind)))
 
 
 # --------------------------------------------------------------------------- #
-# Seam guard (AC-8) — fail loudly if 19.2's scope leaks into 19.1             #
+# Landed invariants (AC-8) — the 19.1 seam guards, flipped by Story 19.2       #
 # --------------------------------------------------------------------------- #
 
 
@@ -427,11 +428,11 @@ def _marker_taxonomy() -> dict:
     return raw
 
 
-def test_seam_marker_taxonomy_version_unchanged() -> None:
-    assert _marker_taxonomy()["schema_version"] == "1.12"
+def test_marker_taxonomy_version_is_1_13() -> None:
+    assert _marker_taxonomy()["schema_version"] == "1.13"
 
 
-def test_seam_heuristic_skipped_subclassifications_unchanged() -> None:
+def test_heuristic_skipped_subclassifications_are_eight() -> None:
     markers = _marker_taxonomy()["markers"]
     heuristic_skipped = next(
         m for m in markers if m["marker_class"] == "heuristic-skipped"
@@ -440,14 +441,14 @@ def test_seam_heuristic_skipped_subclassifications_unchanged() -> None:
         "empty-state",
         "error-state",
         "auth-boundary",
+        "rate-limit-boundary",
+        "locale-i18n-edge",
+        "large-input-boundary",
+        "permission-boundary",
         "flow-branch",
     ]
 
 
-def test_seam_heuristic_kind_still_three() -> None:
-    assert len(get_args(HeuristicKind)) == 3
-    assert set(get_args(HeuristicKind)) == {
-        "empty-state",
-        "error-state",
-        "auth-boundary",
-    }
+def test_heuristic_kind_has_seven_values() -> None:
+    assert len(get_args(HeuristicKind)) == 7
+    assert set(get_args(HeuristicKind)) == FROZEN_HEURISTIC_NAMES

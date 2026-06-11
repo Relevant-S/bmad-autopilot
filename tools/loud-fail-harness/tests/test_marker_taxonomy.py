@@ -45,18 +45,17 @@ def _placeholders_in(text: str) -> set[str]:
     return set(re.findall(r"\{(\w+)\}", text))
 
 
-def test_taxonomy_schema_version_is_1_12(taxonomy_data: dict) -> None:
-    """Story 24.1 bumps schema_version from ``"1.11"`` to ``"1.12"`` for the
-    new top-level marker class ``parallel-dispatch-infra-failed`` (the
-    parallel-dispatcher admission-arm / seed-arm infra loud-fail surface;
-    FR-P2-4 / Epic 24). MINOR bump per the documented new-top-level-class rule +
-    epics-phase-2.md line 70 + the Story 14.5 / 15.2 / 16.2 new-Phase-2-class
-    precedent; the closed-set grows 33 → 34 (the authoritative count is the
-    ``CANONICAL_MARKER_CLASSES`` list in ``test_reconciler.py``). Prior
-    Story 16.2 bumped 1.10 → 1.11 for the ``sprint-escalation-rate-exceeded``
-    entry.
+def test_taxonomy_schema_version_is_1_13(taxonomy_data: dict) -> None:
+    """Story 19.2 bumps schema_version from ``"1.12"`` to ``"1.13"`` for the
+    four new exploratory ``heuristic-skipped`` sub_classifications
+    (``rate-limit-boundary`` / ``locale-i18n-edge`` / ``large-input-boundary`` /
+    ``permission-boundary``; ADR-010 / FR-P2-5). PATCH bump per the documented
+    sub_classification rule + the Story 9.5 (1.4 → 1.5) / 13.6 (1.5 → 1.6)
+    ``heuristic-skipped`` precedent; the top-level 34-class closed-set is
+    PRESERVED (NO new marker class). Prior Story 24.1 bumped 1.11 → 1.12 for the
+    new top-level ``parallel-dispatch-infra-failed`` class (closed-set 33 → 34).
     """
-    assert taxonomy_data.get("schema_version") == "1.12"
+    assert taxonomy_data.get("schema_version") == "1.13"
 
 
 def test_worktree_stale_lock_declares_transient_lifetime(
@@ -118,14 +117,16 @@ def test_epic_budget_exhausted_entry_shape(taxonomy_data: dict) -> None:
 def test_heuristic_skipped_declares_flow_branch_sub_classification(
     taxonomy_data: dict,
 ) -> None:
-    """FR22c / Story 13.6: the ``heuristic-skipped`` marker class declares
-    the ``flow-branch`` sub_classification, appended after the three
-    pre-existing exploratory heuristics (``empty-state`` / ``error-state``
-    / ``auth-boundary``) with their order preserved. This is the regression
-    witness for Story 13.3's blocking-prerequisite gate (13.3 AC-10 /
-    Task 0.2 HALTs unless ``flow-branch`` is present here); the full-list
-    assertion pins both the addition and the append-only, no-reorder
-    discipline of Story 13.6 AC-2.
+    """FR22c / Story 13.6 + ADR-010 / Story 19.2: the ``heuristic-skipped``
+    marker class declares the 8-value sub_classification set — the seven
+    exploratory ``HeuristicKind`` values (``empty-state`` / ``error-state`` /
+    ``auth-boundary`` MVP trio + the four Story 19.2 additions
+    ``rate-limit-boundary`` / ``locale-i18n-edge`` / ``large-input-boundary`` /
+    ``permission-boundary``, inserted after ``auth-boundary``) followed by the
+    unchanged ``flow-branch`` (FR22c, kept LAST). This pins both the Story 13.6
+    ``flow-branch`` addition and the Story 19.2 expansion, plus the
+    insert-before-flow-branch, no-reorder discipline (the seven exploratory
+    values stay contiguous and ``flow-branch`` stays terminal).
     """
     by_class = {
         entry["marker_class"]: entry for entry in taxonomy_data["markers"]
@@ -137,6 +138,10 @@ def test_heuristic_skipped_declares_flow_branch_sub_classification(
         "empty-state",
         "error-state",
         "auth-boundary",
+        "rate-limit-boundary",
+        "locale-i18n-edge",
+        "large-input-boundary",
+        "permission-boundary",
         "flow-branch",
     ]
 

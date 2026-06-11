@@ -1,9 +1,10 @@
-"""Story 4.9 — Three exploratory heuristics + verification_mode discriminator.
+"""Story 4.9 — Exploratory heuristics + verification_mode discriminator.
 
-The pure-library substrate component owning the three MVP exploratory
-heuristic primitives (FR22) AND the ``heuristic-skipped`` marker
-emission helper. Composed by Story 4.13's wrapper-thickening procedure
-into the QA envelope projection; consumed by the bumped
+The pure-library substrate component owning the exploratory heuristic
+primitives (FR22 MVP trio; expanded to the closed seven at Story 19.2
+per ADR-010 / FR-P2-5) AND the ``heuristic-skipped`` marker emission
+helper. Composed by Story 4.13's wrapper-thickening procedure into the
+QA envelope projection; consumed by the bumped
 ``$defs/finding.properties.verification_mode`` discriminator field +
 the new ``$defs/heuristic_skipped_emission`` envelope shape from
 ``schemas/envelope.schema.yaml`` (cell-1 architectural core per
@@ -12,8 +13,9 @@ ADR-002).
 Sources:
     * Verbatim epic AC at ``_bmad-output/planning-artifacts/epics.md``
       lines 2053-2083.
-    * PRD FR22 (line 836) — three MVP exploratory heuristics
-      (empty-state / error-state / auth-boundary).
+    * PRD FR22 (line 836) / FR-P2-5 — seven exploratory heuristics
+      (``empty-state`` / ``error-state`` / ``auth-boundary`` MVP trio +
+      four Story 19.2 additions per ADR-010).
     * ADR-002 (architecture.md lines 99-204) — cell-1 architectural
       core; this module is the substrate-side declaration of the
       verification-mode discriminator + heuristic-skipped emission
@@ -81,13 +83,23 @@ EXPLORATORY_HEURISTIC_VERIFICATION_MODE: Final[Literal["exploratory-heuristic"]]
 # Type aliases                                                                #
 # --------------------------------------------------------------------------- #
 
-#: The closed three-heuristic enumeration. Mirrors
-#: ``qa_behavioral_plan.HeuristicApplicability`` at line 164
-#: byte-for-byte (intentional duplication to avoid cross-module
-#: coupling per the Stories 4.6 / 4.8 cross-story-coupling-avoidance
-#: posture; a contract test asserts byte-equality of the literal value
-#: sets).
-HeuristicKind = Literal["empty-state", "error-state", "auth-boundary"]
+#: The closed seven-heuristic enumeration (ADR-010 / FR-P2-5; Story
+#: 19.2 expanded the Story 4.9 MVP trio with the four ratified
+#: additions). Mirrors ``qa_behavioral_plan.HeuristicApplicability``
+#: at line 206 byte-for-byte (intentional duplication to avoid
+#: cross-module coupling per the Stories 4.6 / 4.8 cross-story-
+#: coupling-avoidance posture; a contract test asserts byte-equality of
+#: the literal value sets) AND equals ``FROZEN_HEURISTIC_NAMES``
+#: (Story 19.1's single source of truth) by the equality contract test.
+HeuristicKind = Literal[
+    "empty-state",
+    "error-state",
+    "auth-boundary",
+    "rate-limit-boundary",
+    "locale-i18n-edge",
+    "large-input-boundary",
+    "permission-boundary",
+]
 
 #: The closed enum mirroring the schema's
 #: ``$defs/finding.properties.verification_mode.enum`` byte-for-byte.
@@ -107,8 +119,7 @@ class HeuristicSkippedDiagnosticContext(BaseModel):
         * ``story_id`` — the BMAD story identifier the dispatch is
           scoped to.
         * ``heuristic_kind`` — names the structurally-skipped
-          heuristic (one of ``empty-state | error-state |
-          auth-boundary``).
+          heuristic (one of the seven :data:`HeuristicKind` values).
 
     Frozen for hashability + determinism. Field declaration order is
     load-bearing for byte-stable ``model_dump_json()`` output.

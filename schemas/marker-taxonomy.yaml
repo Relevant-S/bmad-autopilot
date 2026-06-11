@@ -277,6 +277,31 @@
 #                            `PARALLEL_DISPATCH_INFRA_FAILED_MARKER` to the
 #                            epic-run-state `active_markers`) — NOT a flip-the-
 #                            switch deferral.
+#   1.12 → 1.13 (Story 19.2) — additive: appended four new exploratory
+#                            sub_classifications under `heuristic-skipped`
+#                            (`rate-limit-boundary` / `locale-i18n-edge` /
+#                            `large-input-boundary` / `permission-boundary`),
+#                            completing the ADR-010 / FR-P2-5 seven-heuristic
+#                            cross-AC sweep. Inserted after `auth-boundary` and
+#                            BEFORE the unchanged `flow-branch` (FR22c) so the
+#                            seven exploratory values stay contiguous; the
+#                            `heuristic-skipped.sub_classifications` set becomes
+#                            the 8-value `{empty-state, error-state,
+#                            auth-boundary, rate-limit-boundary, locale-i18n-edge,
+#                            large-input-boundary, permission-boundary,
+#                            flow-branch}` (7 exploratory + 1 within-AC). The
+#                            top-level 34-class closed-set is preserved (NO new
+#                            marker class) — PATCH per the file's documented
+#                            bump rule + the Story 9.5 (1.4 → 1.5) and Story 13.6
+#                            (1.5 → 1.6) `heuristic-skipped` sub_classification
+#                            precedent + epics-phase-2.md line 70 / line 93. The
+#                            `flow-branch` sub_classification (FR22c) is NOT
+#                            altered; non-subsumption holds. ADR-003 substrate-
+#                            component-4 enumeration-equivalence is unperturbed
+#                            (it audits marker_class membership, not
+#                            sub_classifications). No runtime emitter lands here —
+#                            `surface_heuristic_skipped` (Story 4.9) widens
+#                            automatically with the `HeuristicKind` Literal.
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
@@ -284,7 +309,8 @@
 # schema PATCH bump for Story 15.2 epic-budget-exhausted new top-level class (precedent: epics-phase-2.md line 70 + line 411 + Story 14.3/14.5)
 # schema PATCH bump for Story 16.2 sprint-escalation-rate-exceeded new top-level class (precedent: epics-phase-2.md line 70 + line 149 marker-additions)
 # schema MINOR bump for Story 24.1 parallel-dispatch-infra-failed new top-level class (closed-set 33 → 34; precedent: epics-phase-2.md line 70 + Story 14.5/15.2/16.2)
-schema_version: "1.12"
+# schema PATCH bump for Story 19.2 heuristic-skipped +4 exploratory sub_classifications (34-class closed-set preserved; flow-branch unchanged; precedent: Story 9.5/13.6 sub_classification PATCH)
+schema_version: "1.13"
 
 markers:
 
@@ -314,10 +340,16 @@ markers:
       The `heuristic-skipped` class spans two distinct skip families; read the
       marker's `sub_classification` to tell which. NOT a failure — both are
       structural-bound cases.
-      (1) Cross-AC exploratory heuristics (`empty-state` / `error-state` /
-      `auth-boundary`): an exploratory heuristic does not apply to an AC's
-      input or UI surface. The QA Behavioral Plan's `verification_mode` field
-      documents which heuristic was skipped.
+      (1) Cross-AC exploratory heuristics — the seven `HeuristicKind` values
+      (`empty-state` / `error-state` / `auth-boundary` / `rate-limit-boundary` /
+      `locale-i18n-edge` / `large-input-boundary` / `permission-boundary`;
+      ADR-010 / FR-P2-5, Story 19.2 expanded the Story 4.9 MVP trio): an
+      exploratory heuristic does not apply to an AC's input or UI surface. The
+      QA Behavioral Plan's `verification_mode` field documents which heuristic
+      was skipped. (A heuristic that is `disabled` in the runbook, opted-out
+      per-AC, or excluded by the ADR-010 project-type matrix is a SILENT skip —
+      it does NOT emit this marker; the marker is for structural inapplicability
+      only.)
       (2) Within-AC `flow-branch` (FR22c): emitted as
       `heuristic-skipped: flow-branch-<branch-id>` when an enumerated
       `intentionally-skipped` flow branch (a `flow_branches[]` per-AC entry of
@@ -333,6 +365,10 @@ markers:
       - empty-state
       - error-state
       - auth-boundary
+      - rate-limit-boundary
+      - locale-i18n-edge
+      - large-input-boundary
+      - permission-boundary
       - flow-branch
 
   - marker_class: mobile-blocked

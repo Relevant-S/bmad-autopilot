@@ -24,8 +24,8 @@ _MOBILE_DRIVER_METHOD_NAMES drift catcher:
     8.  test_method_names_frozenset_matches_mobile_driver_protocol
 
 MOBILE_HEURISTIC_SPECS closed-table contract:
-    9.  test_specs_table_has_exactly_three_entries
-    10. test_specs_table_covers_every_heuristic_kind
+    9.  test_specs_table_has_exactly_six_entries
+    10. test_specs_table_covers_mobile_applicable_kinds_only
     11. test_specs_table_alphabetical_by_heuristic_kind
 
 get_mobile_heuristic_spec lookup:
@@ -89,6 +89,15 @@ STEP_FILE_PATH = (
 )
 MARKER_TAXONOMY_PATH = REPO_ROOT / "schemas" / "marker-taxonomy.yaml"
 ENVELOPE_SCHEMA_PATH = REPO_ROOT / "schemas" / "envelope.schema.yaml"
+
+#: Story 19.2 — mobile drives SIX of the seven ``HeuristicKind`` values;
+#: ``rate-limit-boundary`` is matrix-excluded on mobile per ADR-010. This is the
+#: single test-side mirror of that exclusion (used to invert the Story 9.4
+#: coverage invariant from "every kind" to "every kind except rate-limit-boundary").
+_RATE_LIMIT_BOUNDARY = "rate-limit-boundary"
+_MOBILE_APPLICABLE_KINDS: tuple[str, ...] = tuple(
+    k for k in get_args(HeuristicKind) if k != _RATE_LIMIT_BOUNDARY
+)
 
 
 def _make_spec(**overrides: object) -> dict[str, object]:
@@ -180,15 +189,19 @@ def test_method_names_frozenset_matches_mobile_driver_protocol() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_specs_table_has_exactly_three_entries() -> None:
-    assert len(MOBILE_HEURISTIC_SPECS) == 3
+def test_specs_table_has_exactly_six_entries() -> None:
+    assert len(MOBILE_HEURISTIC_SPECS) == 6
 
 
-def test_specs_table_covers_every_heuristic_kind() -> None:
-    """Spec set covers every kind exactly once (NO duplication, NO
-    missing kind)."""
+def test_specs_table_covers_mobile_applicable_kinds_only() -> None:
+    """Story 19.2 inverts the Story 9.4 coverage invariant: the mobile spec set
+    covers every ``HeuristicKind`` EXCEPT ``rate-limit-boundary`` (matrix-excluded
+    on mobile per ADR-010), each exactly once (NO duplication, NO missing kind,
+    and NOT every kind)."""
     spec_kinds = {spec.heuristic_kind for spec in MOBILE_HEURISTIC_SPECS}
-    assert spec_kinds == set(get_args(HeuristicKind))
+    assert spec_kinds == set(_MOBILE_APPLICABLE_KINDS)
+    assert spec_kinds == set(get_args(HeuristicKind)) - {_RATE_LIMIT_BOUNDARY}
+    assert _RATE_LIMIT_BOUNDARY not in spec_kinds
 
 
 def test_specs_table_alphabetical_by_heuristic_kind() -> None:
@@ -202,10 +215,12 @@ def test_specs_table_alphabetical_by_heuristic_kind() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    "kind", ["empty-state", "error-state", "auth-boundary"]
-)
+@pytest.mark.parametrize("kind", _MOBILE_APPLICABLE_KINDS)
 def test_get_spec_returns_matching_entry(kind: HeuristicKind) -> None:
+    # Resolves deferred-work.md (the 9.4 review item): parametrize over the
+    # live mobile-applicable subset (`get_args(HeuristicKind)` minus
+    # `rate-limit-boundary`) instead of a hardcoded kind list, so a future
+    # kind-set change is covered automatically.
     spec = get_mobile_heuristic_spec(kind)
     assert spec.heuristic_kind == kind
 
@@ -213,9 +228,9 @@ def test_get_spec_returns_matching_entry(kind: HeuristicKind) -> None:
 def test_get_spec_returns_distinct_scenario_labels() -> None:
     labels = {
         get_mobile_heuristic_spec(kind).mobile_scenario_label
-        for kind in get_args(HeuristicKind)
+        for kind in _MOBILE_APPLICABLE_KINDS
     }
-    assert len(labels) == 3
+    assert len(labels) == 6
 
 
 def test_get_spec_raises_key_error_for_unknown_kind() -> None:
@@ -268,7 +283,7 @@ def test_step_file_table_matches_specs_table() -> None:
     (mobile_scenario_label + driver_methods_used) per AC-5."""
     step_text = STEP_FILE_PATH.read_text(encoding="utf-8")
     parsed = _parse_step_file_mapping_table(step_text)
-    assert set(parsed.keys()) == set(get_args(HeuristicKind))
+    assert set(parsed.keys()) == set(_MOBILE_APPLICABLE_KINDS)
     for spec in MOBILE_HEURISTIC_SPECS:
         label, methods = parsed[spec.heuristic_kind]
         assert label == spec.mobile_scenario_label, (

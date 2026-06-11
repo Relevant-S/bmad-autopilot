@@ -1,5 +1,6 @@
-"""Contract-coverage matrix for the three exploratory heuristics
-substrate (Story 4.9).
+"""Contract-coverage matrix for the exploratory-heuristics substrate
+(Story 4.9 MVP trio; expanded to the closed seven at Story 19.2 —
+ADR-010 / FR-P2-5).
 
 Mirrors the test-file shape established by ``test_qa_evidence_tier.py``
 (Story 4.8) and ``test_qa_ac_iteration.py`` (Story 4.6) for the
@@ -158,7 +159,15 @@ def test_heuristic_kind_literal_value_set_byte_equals_qa_behavioral_plan() -> No
     ``qa_behavioral_plan.HeuristicApplicability`` (cross-module
     duplication contract)."""
     assert get_args(HeuristicKind) == get_args(HeuristicApplicability)
-    assert get_args(HeuristicKind) == ("empty-state", "error-state", "auth-boundary")
+    assert get_args(HeuristicKind) == (
+        "empty-state",
+        "error-state",
+        "auth-boundary",
+        "rate-limit-boundary",
+        "locale-i18n-edge",
+        "large-input-boundary",
+        "permission-boundary",
+    )
 
 
 def test_verification_mode_literal_value_set_byte_equals_schema_enum() -> None:
@@ -235,9 +244,7 @@ def test_diagnostic_context_heuristic_kind_enum_enforced() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "kind", ["empty-state", "error-state", "auth-boundary"]
-)
+@pytest.mark.parametrize("kind", list(get_args(HeuristicKind)))
 def test_emission_record_sub_classification_matches_heuristic_kind(
     kind: HeuristicKind,
 ) -> None:
@@ -281,9 +288,7 @@ def test_surface_heuristic_skipped_atomic_on_failure() -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "kind", ["empty-state", "error-state", "auth-boundary"]
-)
+@pytest.mark.parametrize("kind", list(get_args(HeuristicKind)))
 def test_surface_heuristic_skipped_happy_path(kind: HeuristicKind) -> None:
     registry = _make_registry()
     emission = surface_heuristic_skipped(
@@ -355,8 +360,8 @@ def test_tag_heuristic_finding_double_tagging_precondition_assert() -> None:
 
 def test_evaluate_applicability_empty_plan() -> None:
     plan = _make_plan([])
-    for kind in ("empty-state", "error-state", "auth-boundary"):
-        assert evaluate_heuristic_applicability(plan, kind) is False  # type: ignore[arg-type]
+    for kind in get_args(HeuristicKind):
+        assert evaluate_heuristic_applicability(plan, kind) is False
 
 
 def test_evaluate_applicability_single_entry_one_kind() -> None:
@@ -375,8 +380,8 @@ def test_evaluate_applicability_multi_entry_distinct_kinds() -> None:
 
 def test_evaluate_applicability_all_empty_tuples() -> None:
     plan = _make_plan([(), (), ()])
-    for kind in ("empty-state", "error-state", "auth-boundary"):
-        assert evaluate_heuristic_applicability(plan, kind) is False  # type: ignore[arg-type]
+    for kind in get_args(HeuristicKind):
+        assert evaluate_heuristic_applicability(plan, kind) is False
 
 
 # --------------------------------------------------------------------------- #

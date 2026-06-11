@@ -655,7 +655,10 @@ def test_schema_version_bumps_non_regression() -> None:
     # `parallel-dispatch-infra-failed`; closed-set 33 → 34; MINOR bump per the
     # new-top-level-class rule + epics-phase-2.md line 70 + the Story
     # 14.5/15.2/16.2 precedent).
-    assert taxonomy_data["schema_version"] == "1.12"
+    # Story 19.2 bumped 1.12 → 1.13 (additive: four new exploratory
+    # `heuristic-skipped` sub_classifications; 34-class closed-set PRESERVED;
+    # PATCH bump per the sub_classification rule + Story 9.5/13.6 precedent).
+    assert taxonomy_data["schema_version"] == "1.13"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`
