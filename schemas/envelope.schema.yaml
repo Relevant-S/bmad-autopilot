@@ -149,6 +149,12 @@ properties:
     items:
       $ref: "#/$defs/a11y_emission"
 
+  visual_regression_emissions:
+    type: array
+    description: "QA-specific (FR-P2-10 + Story 19.5 + ADR-012). Per-visual-regression evidence emission records carried on the QA envelope on the web-AND-mobile opt-in path (screenshots captured via the existing Playwright MCP `browser_take_screenshot` (web) / mobile-mcp `mobile_take_screenshot` (mobile) surfaces; the pixelmatch diff runs over the saved PNGs; `qa-runbook.visual_regression.enabled: true` gated). Optional non-null shape: the field is absent on the api project type (no UI to capture), on `visual_regression.enabled: false`, and on the unconfigured default (the opt-in-skip / default-defer posture — absence is NOT a marker); present-and-array-conforming-to-$defs/visual_regression_emission on web/mobile opt-in runs that surfaced ≥ 1 visual-regression evidence marker. Sibling of `a11y_emissions` (the typed-emission-array precedent). The visual delta is story-level evidence, NOT an AC gate — these records do not flip `ac_results` (sensor-not-advisor). Recorded in `docs/extension-audit.md` per the no-introductions principle."
+    items:
+      $ref: "#/$defs/visual_regression_emission"
+
 $defs:
   finding:
     type: object
@@ -384,6 +390,31 @@ $defs:
       marker_class:
         type: string
         enum: [a11y-baseline-stale, a11y-delta-exceeded, a11y-delta-mode-unstable]
+      ac_id:
+        type: string
+        minLength: 1
+
+  visual_regression_emission:
+    # QA-specific (FR-P2-10 + Story 19.5 + ADR-012) per-visual-regression evidence
+    # emission record. Mirrors `qa_visual_regression.py`'s emission-record Pydantic
+    # models byte-for-byte (the `a11y_emission`↔`A11y*EmissionRecord` mirror
+    # precedent). `marker_class` is the closed two-value enum 19.5 enumerated in
+    # `marker-taxonomy.yaml` (`1.15`); `ac_id` is UNCONDITIONALLY required because
+    # BOTH classes are AC-scoped (`pointer_context_fields: [ac_id]` / `[ac_id]`) —
+    # so this $def is FLAT (`required: [marker_class, ac_id]`, no `allOf`/`if`/`then`),
+    # simpler than `a11y_emission` (which needed the conditional only because
+    # `a11y-delta-mode-unstable` forbade `ac_id`). The `additionalProperties: false`
+    # closed-by-default invariant + the top-level `not.anyOf` sensor-not-advisor
+    # clause are preserved (no `next_action` / `recommendation` here).
+    type: object
+    required:
+      - marker_class
+      - ac_id
+    additionalProperties: false
+    properties:
+      marker_class:
+        type: string
+        enum: [visual-regression-delta-exceeded, visual-regression-baseline-missing]
       ac_id:
         type: string
         minLength: 1

@@ -55,7 +55,7 @@ def test_taxonomy_schema_version_is_1_14(taxonomy_data: dict) -> None:
     closed-set grows 34 → 37. Prior Story 19.2 bumped 1.12 → 1.13 (PATCH) for
     the four new exploratory ``heuristic-skipped`` sub_classifications.
     """
-    assert taxonomy_data.get("schema_version") == "1.14"
+    assert taxonomy_data.get("schema_version") == "1.15"
 
 
 def test_a11y_marker_classes_enumerated(taxonomy_data: dict) -> None:
@@ -87,7 +87,42 @@ def test_a11y_marker_classes_enumerated(taxonomy_data: dict) -> None:
         assert "lifetime" not in entry, (
             f"{marker_class}: must inherit the durable default (no lifetime field)"
         )
-    assert len(taxonomy_data["markers"]) == 37
+    assert len(taxonomy_data["markers"]) == 39
+
+
+def test_visual_regression_marker_classes_enumerated(taxonomy_data: dict) -> None:
+    """Story 19.5 AC-3: the two visual-regression evidence marker classes are
+    enumerated as top-level classes with non-empty ``diagnostic_pointer``, both
+    AC-scoped (``pointer_context_fields: [ac_id]``), empty ``sub_classifications``,
+    and (by omission) the durable default lifetime. The closed-set is exactly 39,
+    schema_version is ``1.15``. Unlike a11y (19.3 enumerate → 19.4 emit), runtime
+    emission lands in THIS story — no flip-the-switch split — and there is NO
+    third ``-mode-unstable`` class (pixel-diff is deterministic).
+    """
+    assert taxonomy_data["schema_version"] == "1.15"
+    by_class = {entry["marker_class"]: entry for entry in taxonomy_data["markers"]}
+    for marker_class in (
+        "visual-regression-delta-exceeded",
+        "visual-regression-baseline-missing",
+    ):
+        assert marker_class in by_class, f"taxonomy missing {marker_class}"
+        entry = by_class[marker_class]
+        assert entry["diagnostic_pointer"].strip(), (
+            f"{marker_class}: diagnostic_pointer must be non-empty"
+        )
+        assert entry["pointer_context_fields"] == ["ac_id"], (
+            f"{marker_class}: must be AC-scoped ([ac_id])"
+        )
+        assert entry["sub_classifications"] == [], (
+            f"{marker_class}: sub_classifications must be empty"
+        )
+        assert "lifetime" not in entry, (
+            f"{marker_class}: must inherit the durable default (no lifetime field)"
+        )
+    # No third -mode-unstable class (pixel-diff is deterministic; dimension
+    # mismatch folds into delta-exceeded).
+    assert "visual-regression-mode-unstable" not in by_class
+    assert len(taxonomy_data["markers"]) == 39
 
 
 def test_worktree_stale_lock_declares_transient_lifetime(

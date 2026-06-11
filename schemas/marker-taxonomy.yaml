@@ -330,6 +330,40 @@
 #                            (flip-the-switch property). orchestrator-event.yaml
 #                            stays at "1.2" (co-versioned ≠ co-bumped; a11y
 #                            markers are QA-evidence, not orchestrator events).
+#   1.14 → 1.15 (Story 19.5) — additive: appended TWO new top-level marker
+#                            classes for the Phase-2 visual-regression opt-in
+#                            (`visual-regression-delta-exceeded` /
+#                            `visual-regression-baseline-missing`) per ADR-012 /
+#                            FR-P2-10. Both are QA-runtime EVIDENCE markers
+#                            emitted by the Story 19.5 wrapper (screenshots
+#                            captured via the EXISTING Playwright MCP
+#                            `browser_take_screenshot` (web) / mobile-mcp
+#                            `mobile_take_screenshot` (mobile) surfaces; the
+#                            pixelmatch diff runs over the saved PNGs — NO new MCP
+#                            server), NOT dependency-availability markers — so
+#                            they carry NO `marker_class` in the `pixelmatch`
+#                            dependency profile and are enumeration-check ORPHANS
+#                            (tolerated exactly as `a11y-*` / `LAD-skipped` /
+#                            `heuristic-skipped` / `epic-budget-exhausted`; `main`
+#                            returns `1 if missing else 0`). Default `durable`
+#                            lifetime by omission (survives the Story 15.1
+#                            transient write-back filter). `pointer_context_fields`:
+#                            `[ac_id]` / `[ac_id]` (BOTH AC-scoped);
+#                            `sub_classifications: []` on each. The top-level
+#                            37-class closed-set becomes 39 — the new invariant.
+#                            Treated as MINOR per the documented bump rule (new
+#                            top-level classes) + epics-phase-2.md line 70 + the
+#                            Story 24.1 / 19.3 new-Phase-2-class-as-MINOR
+#                            precedent. Unlike a11y (19.3 enumerate → 19.4 emit),
+#                            this is a COMBINED story — runtime emission lands in
+#                            THIS story (no flip-the-switch split). There is NO
+#                            `-mode-unstable` third class: pixel-diff over two
+#                            equal-dimension PNGs is deterministic, and the
+#                            dimension-mismatch edge folds into
+#                            `visual-regression-delta-exceeded`.
+#                            orchestrator-event.yaml stays at "1.2"
+#                            (co-versioned ≠ co-bumped; visual-regression markers
+#                            are QA-evidence, not orchestrator events).
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
@@ -339,7 +373,8 @@
 # schema MINOR bump for Story 24.1 parallel-dispatch-infra-failed new top-level class (closed-set 33 → 34; precedent: epics-phase-2.md line 70 + Story 14.5/15.2/16.2)
 # schema PATCH bump for Story 19.2 heuristic-skipped +4 exploratory sub_classifications (34-class closed-set preserved; flow-branch unchanged; precedent: Story 9.5/13.6 sub_classification PATCH)
 # schema MINOR bump for Story 19.3 a11y-baseline-stale / a11y-delta-exceeded / a11y-delta-mode-unstable new top-level evidence classes (closed-set 34 → 37; ADR-011 / FR-P2-6; orphans; no runtime emitter — Story 19.4 wires emission)
-schema_version: "1.14"
+# schema MINOR bump for Story 19.5 visual-regression-delta-exceeded / visual-regression-baseline-missing new top-level evidence classes (closed-set 37 → 39; ADR-012 / FR-P2-10; both [ac_id]; orphans; runtime emission lands in THIS story — no split; no -mode-unstable class, dimension-mismatch folds into delta-exceeded)
+schema_version: "1.15"
 
 markers:
 
@@ -955,4 +990,55 @@ markers:
       delta recurs across Phase-2 reference runs, ADR-011's revisit condition
       fires (make full-report the default).
     pointer_context_fields: []
+    sub_classifications: []
+
+  # ---- Story 19.5 — Epic 19 visual-regression evidence markers (FR-P2-10, ADR-012) ---
+
+  - marker_class: visual-regression-delta-exceeded
+    diagnostic_pointer: |
+      FR-P2-10 / Epic 19 Story 19.5 (ADR-012) — the self-computed visual delta
+      (the mismatched-pixel ratio from pixelmatch) for AC `{ac_id}` exceeded the
+      configurable visual delta threshold
+      (`qa-runbook.visual_regression.delta_threshold`). pixelmatch ships NO
+      baseline lifecycle — the Automator computes the mismatched-pixel ratio
+      (`mismatched_pixels / total_pixels`) over the deterministic count — so this
+      marker reports a regression the Automator measured, not a pixelmatch
+      verdict. The dimension-mismatch edge folds here: a changed render size
+      (baseline vs current dimensions differ, so pixelmatch cannot run over
+      unequal dimensions) IS a visual regression, recorded with the dimension
+      change in the diff artifact. Detection-time: web-AND-mobile QA RUNTIME —
+      screenshots captured via the EXISTING Playwright MCP `browser_take_screenshot`
+      (web) / mobile-mcp `mobile_take_screenshot` (mobile) surfaces; the
+      pixelmatch diff runs over the two saved PNGs; NO new MCP server. Severity:
+      loud-fail / practitioner-blocking surfaced as evidence — the substrate does
+      NOT auto-resolve or fail the AC (sensor-not-advisor); it surfaces so the
+      human triages the changed region. opt-in-skip / web-AND-mobile (api does
+      NOT invoke — no UI to capture) — silent unless
+      `qa-runbook.visual_regression.enabled: true`. Remediation (the human
+      decides): open the diff evidence artifact (the diff PNG + the
+      ratio/counts/dimensions), triage the changed region, then fix the
+      regression or re-anchor the baseline intentionally.
+    pointer_context_fields: [ac_id]
+    sub_classifications: []
+
+  - marker_class: visual-regression-baseline-missing
+    diagnostic_pointer: |
+      FR-P2-10 / Epic 19 Story 19.5 (ADR-012) — informational visual-regression
+      signal for AC `{ac_id}`: no stored baseline existed for this AC's captured
+      surface, so the audit created a NEW baseline from this run's screenshot and
+      has nothing to compare against yet. NOT a failure (sensor-not-advisor): the
+      audit proceeds; the marker records that this run anchored a fresh baseline.
+      Distinct from `visual-regression-delta-exceeded` — different remediation
+      (regenerate/confirm vs. investigate-change). Covers BOTH a genuine first
+      run AND a subsequent run whose baseline was deleted/relocated (the substrate
+      cannot distinguish them — the operator reads the marker and decides whether
+      the fresh anchor is expected). Detection-time: web-AND-mobile QA RUNTIME
+      (screenshots captured via the EXISTING Playwright MCP `browser_take_screenshot`
+      / mobile-mcp `mobile_take_screenshot` surfaces; NO new MCP server).
+      opt-in-skip / web-AND-mobile (api does NOT invoke) — silent unless
+      `qa-runbook.visual_regression.enabled: true`. Remediation (the human
+      decides): none required for a genuinely new baseline; if the anchor is
+      unexpectedly new, confirm the prior baseline artifact was not lost or
+      relocated before trusting subsequent deltas.
+    pointer_context_fields: [ac_id]
     sub_classifications: []

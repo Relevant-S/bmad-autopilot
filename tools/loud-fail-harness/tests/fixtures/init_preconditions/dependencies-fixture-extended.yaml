@@ -5,7 +5,7 @@
 #   * `by_project_type` with a missing project-type key (per AC-7 — the
 #     dispatcher records `outcome="silent"` rather than crashing).
 
-schema_version: "1.6"
+schema_version: "1.7"
 
 dependencies:
   # Story 14.1: git MVP dependency entry — version_floor "2.5" pinned per
@@ -136,6 +136,27 @@ dependencies:
   # (byte-identical shape to the live dependencies.yaml entry).
   axe-core:
     version_floor: "4.12"
+    profiles:
+      init:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: unconfigured
+            silent: true
+      runtime:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: unconfigured
+            silent: true
+
+  # Story 19.5: pixelmatch activated — Phase-2 visual-regression dependency entry
+  # (opt-in-skip; version_floor "7.2") per ADR-012 (FR-P2-10). Web-AND-mobile-
+  # meaningful (api does not invoke), silent unless
+  # qa-runbook.visual_regression.enabled; runtime emission + the two visual-
+  # regression evidence markers land in THIS story (no split). Exercises substrate
+  # component 5 fixture-coverage on the activated visual-regression dependency
+  # (byte-identical shape to the live dependencies.yaml entry).
+  pixelmatch:
+    version_floor: "7.2"
     profiles:
       init:
         profile: opt-in-skip

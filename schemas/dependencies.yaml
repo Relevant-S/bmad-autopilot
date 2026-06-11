@@ -62,9 +62,9 @@
 # Canonical entry order (preserve verbatim — re-ordering loses architectural
 # narrative semantics): MVP-required dependencies first (git, claude-code,
 # bmad-core, tea-module, playwright-mcp), then Phase-1.5 dependencies
-# (mobile-mcp, lad), then Phase-2 dependencies (axe-core).
+# (mobile-mcp, lad), then Phase-2 dependencies (axe-core, pixelmatch).
 
-schema_version: "1.6"
+schema_version: "1.7"
 # schema_version 1.1 → 1.2: mobile-mcp activated from phase: "1.5" gate;
 # version_floor pinned to 0.0.54 per ADR-007 (Story 9.1, 2026-05-11).
 # schema_version 1.2 → 1.3: mobile-mcp init + runtime profiles declare
@@ -97,6 +97,13 @@ schema_version: "1.6"
 #                           unless qa-runbook.a11y.enabled; runtime emission +
 #                           the three a11y evidence markers land in Story 19.4.
 #                           Story 19.3.
+# schema_version 1.6 → 1.7: pixelmatch added as Phase-2 visual-regression
+#                           dependency entry (opt-in-skip; version_floor "7.2")
+#                           per ADR-012 (FR-P2-10). Web-AND-mobile-meaningful
+#                           (api does not invoke), silent unless
+#                           qa-runbook.visual_regression.enabled; runtime
+#                           emission + the two visual-regression evidence markers
+#                           land in THIS story (no split). Story 19.5.
 
 dependencies:
   git:
@@ -215,6 +222,20 @@ dependencies:
 
   axe-core:
     version_floor: "4.12"
+    profiles:
+      init:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: unconfigured
+            silent: true
+      runtime:
+        profile: opt-in-skip
+        sub_classifications:
+          - condition: unconfigured
+            silent: true
+
+  pixelmatch:
+    version_floor: "7.2"
     profiles:
       init:
         profile: opt-in-skip

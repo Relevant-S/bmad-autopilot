@@ -42,6 +42,10 @@ from loud_fail_harness.qa_a11y_audit import (
     A11yRunScopedDiagnosticContext,
     AxeViolationKey,
 )
+from loud_fail_harness.qa_visual_regression import (
+    VisualDiffResult,
+    VisualRegressionDiagnosticContext,
+)
 from loud_fail_harness.qa_evidence_persistence import EvidenceTruncatedDiagnosticContext
 from loud_fail_harness.qa_evidence_tier import Tier3NotConfiguredDiagnosticContext
 from loud_fail_harness.qa_exploratory_heuristics import HeuristicSkippedDiagnosticContext
@@ -299,6 +303,17 @@ def _opt_out_entry_kwargs() -> dict[str, object]:
     return dict(story_id="auto-019-001", ac_key="ac_1")
 
 
+def _visual_diff_result_kwargs() -> dict[str, object]:
+    # Numeric-only externally_constructed model — no string hostile-input fields,
+    # so the registry registers it with empty buckets and _corpus_params() yields
+    # no hostile cases; only the valid-baseline construction is exercised here.
+    return dict(mismatched_pixels=5, width=100, height=50)
+
+
+def _visual_regression_diag_kwargs() -> dict[str, object]:
+    return dict(story_id="19-5", ac_id="AC-1")
+
+
 #: qualname -> (model class, valid-baseline-kwargs factory).
 _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] = {
     "epic_run_state.EpicRunState": (EpicRunState, _epic_kwargs),
@@ -339,6 +354,14 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_a11y_audit.A11yRunScopedDiagnosticContext": (
         A11yRunScopedDiagnosticContext,
         _a11y_run_scoped_kwargs,
+    ),
+    "qa_visual_regression.VisualDiffResult": (
+        VisualDiffResult,
+        _visual_diff_result_kwargs,
+    ),
+    "qa_visual_regression.VisualRegressionDiagnosticContext": (
+        VisualRegressionDiagnosticContext,
+        _visual_regression_diag_kwargs,
     ),
     "qa_runbook_heuristics_validator.HeuristicOptOutEntry": (
         HeuristicOptOutEntry,

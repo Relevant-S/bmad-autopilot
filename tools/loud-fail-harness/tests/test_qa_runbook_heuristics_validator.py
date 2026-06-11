@@ -429,7 +429,7 @@ def _marker_taxonomy() -> dict:
 
 
 def test_marker_taxonomy_version_is_1_14() -> None:
-    assert _marker_taxonomy()["schema_version"] == "1.14"
+    assert _marker_taxonomy()["schema_version"] == "1.15"
 
 
 def test_heuristic_skipped_subclassifications_are_eight() -> None:

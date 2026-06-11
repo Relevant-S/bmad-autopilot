@@ -71,6 +71,20 @@ externally_constructed:
     identifier_fields: [story_id, ac_id]
   qa_a11y_audit.A11yRunScopedDiagnosticContext:
     identifier_fields: [story_id]
+  # VisualDiffResult is parsed from the pixelmatch tool output
+  # {mismatched_pixels, width, height} (Story 19.5) — numeric-only, so it carries
+  # NO string hostile-input surface; the fields are range-hardened via
+  # Field(ge=0) / Field(gt=0) + a mismatched_pixels<=total_pixels model_validator
+  # invariant. Rule A classifies it here; Rule B has no string field to route
+  # (empty buckets), and the test_input_hardening _BASELINES corpus carries its
+  # valid-construction baseline.
+  qa_visual_regression.VisualDiffResult: {}
+  qa_visual_regression.VisualRegressionDiagnosticContext:
+    # story_id is the raw external-ingress identifier; ac_id is supplied by the
+    # wrapper from the dispatch ac_list (pre-validated) — both hardened defensively
+    # (Story 19.5). BOTH visual-regression markers are AC-scoped, so one context
+    # (no Ac/Run split, unlike a11y).
+    identifier_fields: [story_id, ac_id]
   qa_runbook_heuristics_validator.HeuristicOptOutEntry:
     # story_id + ac_key are free-text operator-authored qa-runbook.yaml mapping
     # keys (the genuinely hostile-input surface; Story 19.1). The opt-out *values*
@@ -222,6 +236,10 @@ internal_only:
   - qa_plan_drift.PlanDriftEmission
   - qa_plan_drift.PlanDriftEmissionRecord
   - qa_runbook_heuristics_validator.ValidationFinding
+  - qa_visual_regression.VisualRegressionBaselineMissingEmission
+  - qa_visual_regression.VisualRegressionBaselineMissingEmissionRecord
+  - qa_visual_regression.VisualRegressionDeltaExceededEmission
+  - qa_visual_regression.VisualRegressionDeltaExceededEmissionRecord
   - reconciler.ClassificationResult
   - reconciler.Marker
   - reconciler.MatchedPair

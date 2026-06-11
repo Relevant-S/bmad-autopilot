@@ -162,3 +162,52 @@
 #   # single whole-story audit + baseline. Omit for the per-AC default.
 #   scope: per-ac
 # ---
+
+# ---
+# visual_regression — opt-in (default: absent → audit does NOT run; web-AND-mobile)
+# Story 19.5; FR-P2-10 | ADR-012
+# How to enable: uncomment the block below on a `project_type: web` OR
+# `project_type: mobile` project to run the pixelmatch visual-regression audit
+# per AC. pixelmatch (Mapbox, ISC, version_floor 7.2 — the engine Playwright's
+# `toHaveScreenshot` uses internally) + its `pngjs` decode companion install via
+# `npm install pixelmatch pngjs`. Screenshots are captured via the EXISTING
+# Playwright MCP `browser_take_screenshot` (web) / mobile-mcp
+# `mobile_take_screenshot` (mobile) surfaces; the pixelmatch diff runs over the
+# saved PNGs — NO new MCP server. The audit runs ONLY when BOTH gates hold:
+# `project_type ∈ {web, mobile}` AND `visual_regression.enabled: true`. On
+# `project_type: api` (no UI to capture), on `visual_regression.enabled: false`,
+# and on the unconfigured default (this block absent), the audit is a SILENT skip
+# — NO `visual-regression-*` marker fires (the opt-in-skip / default-defer posture
+# of FR-P2-10 + ADR-012, mirroring `masked_selectors` / `heuristics` / `a11y`
+# above; emitting a marker on an inapplicable project-type or a not-enabled audit
+# is the exact noise FR42 warns against). pixelmatch ships NO baseline lifecycle
+# (the load-bearing ADR-012 finding); the Automator self-computes the
+# mismatched-pixel RATIO (`mismatched_pixels / total_pixels`) against a per-AC
+# baseline. ABSENCE of this block is NOT a marker (FR42 user-owned file — absence
+# means "visual-regression audit deferred").
+# Baseline storage: per-AC baselines live under
+# `_bmad-output/qa-visual-baseline/{story-id}/{ac-id}/baseline.png`. GITIGNORED by
+# default (practitioner-local longitudinal signal, the qa-evidence precedent); set
+# `baseline_storage: committed` to curate baselines in-repo (visual baselines are
+# images a team may legitimately want to commit, unlike a11y's JSON key set). To
+# re-anchor a baseline, DELETE the stored `baseline.png` (manual-delete only —
+# there is NO `force_reanchor` field); the next run creates a fresh anchor and
+# emits the informational `visual-regression-baseline-missing` marker.
+# See `docs/visual-regression-setup.md` for the full operator walkthrough.
+# Worked example (uncomment to enable on a web or mobile project):
+# visual_regression:
+#   enabled: true
+#   # delta_threshold — the mismatched-pixel RATIO (0.0–1.0) tolerated before
+#   # `visual-regression-delta-exceeded` fires. Default 0 = "any pixel difference
+#   # beyond pixelmatch's anti-aliasing + color tolerance is a regression" (the
+#   # strictest, most defensible opt-in default).
+#   delta_threshold: 0
+#   # scope — `per-ac` (default): one screenshot + baseline per AC against that
+#   # AC's verified surface. `per-story` collapses to a single whole-story
+#   # snapshot + baseline. Omit for the per-AC default.
+#   scope: per-ac
+#   # baseline_storage — `gitignored` (default; the qa-evidence precedent —
+#   # practitioner-local, not committed history) OR `committed` (maintainer-
+#   # curated in-repo baselines). Omit for the gitignored default.
+#   baseline_storage: gitignored
+# ---

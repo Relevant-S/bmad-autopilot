@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 518
-- Emitted: 48
-- Not-applicable: 470
+- Total intersections: 546
+- Emitted: 50
+- Not-applicable: 496
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -525,6 +525,34 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | undocumented-section-write | specialist-wrapper-dev | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300` | 2026-05-05 |  |
 | undocumented-section-write | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300` | 2026-05-05 |  |
 | undocumented-section-write | specialist-wrapper-review-bmad | emitted | `tools/loud-fail-harness/src/loud_fail_harness/story_doc_validator.py:300` | 2026-05-05 |  |
+| visual-regression-baseline-missing | bundle-assembler | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the PR/escalation/epic bundle assembler has no code path that produces it. |
+| visual-regression-baseline-missing | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the cost-telemetry pipeline has no code path that produces it. |
+| visual-regression-baseline-missing | hook-session-start | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the SessionStart hook has no code path that produces it. |
+| visual-regression-baseline-missing | hook-stop | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the Stop hook has no code path that produces it. |
+| visual-regression-baseline-missing | hook-subagent-stop | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the SubagentStop hook has no code path that produces it. |
+| visual-regression-baseline-missing | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator dispatch wrapper has no code path that produces it. |
+| visual-regression-baseline-missing | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator lifecycle-transition steps has no code path that produces it. |
+| visual-regression-baseline-missing | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator run-state helpers has no code path that produces it. |
+| visual-regression-baseline-missing | orchestrator-state-machine | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator state machine has no code path that produces it. |
+| visual-regression-baseline-missing | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the fixture-driven reconciliation gate has no code path that produces it. |
+| visual-regression-baseline-missing | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the runtime reconciliation gate has no code path that produces it. |
+| visual-regression-baseline-missing | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the Dev specialist wrapper has no code path that produces it. |
+| visual-regression-baseline-missing | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_visual_regression.py:466` | 2026-06-11 |  |
+| visual-regression-baseline-missing | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the Review-BMAD specialist wrapper has no code path that produces it. |
+| visual-regression-delta-exceeded | bundle-assembler | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the PR/escalation/epic bundle assembler has no code path that produces it. |
+| visual-regression-delta-exceeded | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the cost-telemetry pipeline has no code path that produces it. |
+| visual-regression-delta-exceeded | hook-session-start | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the SessionStart hook has no code path that produces it. |
+| visual-regression-delta-exceeded | hook-stop | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the Stop hook has no code path that produces it. |
+| visual-regression-delta-exceeded | hook-subagent-stop | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the SubagentStop hook has no code path that produces it. |
+| visual-regression-delta-exceeded | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator dispatch wrapper has no code path that produces it. |
+| visual-regression-delta-exceeded | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator lifecycle-transition steps has no code path that produces it. |
+| visual-regression-delta-exceeded | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator run-state helpers has no code path that produces it. |
+| visual-regression-delta-exceeded | orchestrator-state-machine | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the orchestrator state machine has no code path that produces it. |
+| visual-regression-delta-exceeded | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the fixture-driven reconciliation gate has no code path that produces it. |
+| visual-regression-delta-exceeded | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the runtime reconciliation gate has no code path that produces it. |
+| visual-regression-delta-exceeded | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the Dev specialist wrapper has no code path that produces it. |
+| visual-regression-delta-exceeded | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_visual_regression.py:432` | 2026-06-11 |  |
+| visual-regression-delta-exceeded | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-11 | The visual-regression audit is a QA-side, web-AND-mobile evidence marker (Story 19.5 / ADR-012, FR-P2-10); the Review-BMAD specialist wrapper has no code path that produces it. |
 | walking-skeleton-bundle | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly.py:171` | 2026-05-06 |  |
 | walking-skeleton-bundle | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |
 | walking-skeleton-bundle | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Bundle-assembler-side marker emitted only at PR-bundle render time; this surface has no code path that produces this skip-event. |

@@ -621,7 +621,7 @@ def test_schema_version_bumps_non_regression() -> None:
     raw = load_dependencies()
     # Story 19.3 bumped 1.5 → 1.6 (axe-core Phase-2 a11y-audit dependency entry
     # per ADR-011 / FR-P2-6; new dependency entry = MINOR).
-    assert raw["schema_version"] == "1.6"
+    assert raw["schema_version"] == "1.7"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field
@@ -659,7 +659,7 @@ def test_schema_version_bumps_non_regression() -> None:
     # Story 19.3 bumped 1.13 → 1.14 (additive: three new top-level a11y-audit
     # evidence marker classes; closed-set 34 → 37; MINOR bump per the new-top-
     # level-class rule + Story 24.1 precedent; ADR-011 / FR-P2-6).
-    assert taxonomy_data["schema_version"] == "1.14"
+    assert taxonomy_data["schema_version"] == "1.15"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`
@@ -785,9 +785,10 @@ def test_project_type_parametrized_over_three_types(
             marker_registry=runtime_marker_registry,
             run_state=_make_run_state(),
         )
-        # Always the same eight top-level deps (declaration order).
+        # Always the same nine top-level deps (declaration order).
         # Story 14.1 added `git` as the first MVP entry per ADR-009;
-        # Story 19.3 added `axe-core` as the last (Phase-2) entry per ADR-011.
+        # Story 19.3 added `axe-core` per ADR-011; Story 19.5 added
+        # `pixelmatch` as the last (Phase-2) entry per ADR-012.
         deps = [r.dependency for r in run.results]
         assert deps == [
             "git",
@@ -798,6 +799,7 @@ def test_project_type_parametrized_over_three_types(
             "mobile-mcp",
             "lad",
             "axe-core",
+            "pixelmatch",
         ]
 
 

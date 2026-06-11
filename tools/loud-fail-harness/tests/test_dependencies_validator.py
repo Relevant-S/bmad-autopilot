@@ -893,7 +893,7 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # entry adds NO passing reference (passing stays 14); the three markers join
     # the orphan bucket → orphan-count increment 26 → 29 is the load-bearing
     # witness that the Story 19.3 taxonomy + dependency edits landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 29 orphan marker class(es)" in text
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 31 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
@@ -955,7 +955,7 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.6"
+    assert raw["schema_version"] == "1.7"
     deps = raw["dependencies"]
     # Story 14.1 AC-6: git entry present with version_floor "2.5";
     # both init + runtime profiles total-block; operator-actionable
@@ -1035,6 +1035,33 @@ def test_load_dependencies_returns_dict() -> None:
     )
 
 
+def test_pixelmatch_dependency_entry() -> None:
+    """Story 19.5 AC-2: the `pixelmatch` Phase-2 visual-regression dependency
+    entry is present with the opt-in-skip shape (version_floor "7.2", no `phase`,
+    no `marker_class` — the wrapper-emitted-evidence-marker precedent), both init
+    + runtime profiles `opt-in-skip` with `unconfigured`/`silent: true`; the live
+    schema_version is "1.7" and the validator finds zero issues."""
+    repo_root = find_repo_root()
+    deps_path = repo_root / "schemas" / "dependencies.yaml"
+    raw = load_dependencies(deps_path)
+    assert raw["schema_version"] == "1.7"
+    assert validate_dependencies(raw, str(deps_path)) == []
+    deps = raw["dependencies"]
+    assert "pixelmatch" in deps
+    assert deps["pixelmatch"]["version_floor"] == "7.2"
+    assert "phase" not in deps["pixelmatch"]
+    assert deps["pixelmatch"]["profiles"]["init"]["profile"] == "opt-in-skip"
+    assert deps["pixelmatch"]["profiles"]["runtime"]["profile"] == "opt-in-skip"
+    assert deps["pixelmatch"]["profiles"]["init"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert deps["pixelmatch"]["profiles"]["runtime"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert "marker_class" not in deps["pixelmatch"]["profiles"]["init"]
+    assert "marker_class" not in deps["pixelmatch"]["profiles"]["runtime"]
+
+
 def test_extended_fixture_git_entry_state() -> None:
     """Story 14.1 AC-7 / Story 19.3 AC-7 — extended-fixture witness (ADR-009 + ADR-011 activation).
 
@@ -1054,7 +1081,7 @@ def test_extended_fixture_git_entry_state() -> None:
     )
     raw = load_dependencies(fixture_path)
     assert validate_dependencies(raw, str(fixture_path)) == []
-    assert raw["schema_version"] == "1.6"
+    assert raw["schema_version"] == "1.7"
     deps = raw["dependencies"]
     assert "git" in deps
     assert deps["git"]["version_floor"] == "2.5"

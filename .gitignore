@@ -17,6 +17,12 @@ _bmad-output/qa-evidence/
 # practitioner-local longitudinal signal, not committed history — qa-evidence precedent)
 _bmad-output/qa-a11y-baseline/
 
+# Visual-regression baselines (Story 19.5 / FR-P2-10 — _bmad-output/qa-visual-baseline/
+# {story-id}/{ac-id}/baseline.png; gitignored BY DEFAULT — practitioner-local
+# longitudinal signal, qa-evidence precedent. A maintainer may opt INTO committing
+# curated baselines via qa-runbook.visual_regression.baseline_storage: committed.)
+_bmad-output/qa-visual-baseline/
+
 # Retry history (FR13/NFR-R5 — _bmad-output/retry-history/{story-id}/{round-id}/)
 _bmad-output/retry-history/
 
