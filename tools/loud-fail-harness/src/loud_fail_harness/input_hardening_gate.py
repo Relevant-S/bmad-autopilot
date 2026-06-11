@@ -137,7 +137,14 @@ _RULE_C_CAUGHT_NAMES: Final[frozenset[str]] = frozenset({"ValueError", "KeyError
 #: rationale``. A site listed here is a deliberate exemption (the broad catch is
 #: intended; e.g. the handler re-raises a domain error elsewhere or the swallow
 #: is the documented contract). Every entry MUST carry a one-line rationale.
-_RULE_C_ALLOWLIST: Final[dict[str, str]] = {}
+_RULE_C_ALLOWLIST: Final[dict[str, str]] = {
+    "qa_a11y_audit:339": (
+        "Intentional: hostile axe-core selector that fails AxeViolationKey "
+        "construction marks the normalization run as unstable (stable=False) "
+        "rather than crashing — unstable runs emit a11y-delta-mode-unstable "
+        "instead of a partial delta that would cause false-positive regressions."
+    ),
+}
 
 
 _RULE_A_UNCLASSIFIED_REMEDIATION: str = (

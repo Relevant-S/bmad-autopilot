@@ -1318,3 +1318,94 @@ def test_cli_lad_fail_shape_envelope_exits_one() -> None:
     assert rc == 1, (
         f"expected exit 1 on review-lad-fail-shape.yaml; got {rc}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# Negative + positive path — a11y_emissions field + $defs/a11y_emission       #
+# (FR-P2-6; Story 19.4 / ADR-011)                                             #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "emission",
+    [
+        {"marker_class": "a11y-baseline-stale", "ac_id": "AC-1"},
+        {"marker_class": "a11y-delta-exceeded", "ac_id": "AC-2"},
+        {"marker_class": "a11y-delta-mode-unstable"},  # envelope-scoped: no ac_id
+    ],
+)
+def test_a11y_emissions_valid_entry_accepted(schema: dict, emission: dict) -> None:
+    envelope = _minimal_valid_envelope() | {"a11y_emissions": [emission]}
+    assert validate_envelope(envelope, schema) == []
+
+
+def test_a11y_emissions_field_absent_accepted(schema: dict) -> None:
+    envelope = _minimal_valid_envelope()
+    assert "a11y_emissions" not in envelope
+    assert validate_envelope(envelope, schema) == []
+
+
+@pytest.mark.parametrize(
+    "marker_class", ["a11y-baseline-stale", "a11y-delta-exceeded"]
+)
+def test_a11y_emissions_ac_scoped_missing_ac_id_rejected(
+    schema: dict, marker_class: str
+) -> None:
+    """The two AC-scoped classes REQUIRE ac_id (the 19.3 pointer_context_fields
+    `[ac_id]` / `[ac_id]`); omitting it fails the conditional `required: [ac_id]`."""
+    envelope = _minimal_valid_envelope() | {
+        "a11y_emissions": [{"marker_class": marker_class}]
+    }
+    errors = validate_envelope(envelope, schema)
+    required_errors = [e for e in errors if e.validator == "required"]
+    assert required_errors, errors
+
+
+def test_a11y_emissions_envelope_scoped_with_ac_id_rejected(schema: dict) -> None:
+    """`a11y-delta-mode-unstable` is envelope-scoped (pointer_context_fields `[]`);
+    carrying an ac_id is FORBIDDEN (the conditional `properties: {ac_id: false}`)."""
+    envelope = _minimal_valid_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": "a11y-delta-mode-unstable", "ac_id": "AC-1"}
+        ]
+    }
+    errors = validate_envelope(envelope, schema)
+    assert errors, "envelope-scoped class with ac_id must be rejected"
+
+
+def test_a11y_emissions_unknown_marker_class_rejected(schema: dict) -> None:
+    envelope = _minimal_valid_envelope() | {
+        "a11y_emissions": [{"marker_class": "a11y-fabricated", "ac_id": "AC-1"}]
+    }
+    errors = validate_envelope(envelope, schema)
+    enum_errors = [
+        e
+        for e in errors
+        if e.validator == "enum"
+        and list(e.absolute_path) == ["a11y_emissions", 0, "marker_class"]
+    ]
+    assert len(enum_errors) == 1, errors
+
+
+def test_a11y_emissions_extra_property_rejected(schema: dict) -> None:
+    envelope = _minimal_valid_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": "a11y-baseline-stale", "ac_id": "AC-1", "extra": "x"}
+        ]
+    }
+    errors = validate_envelope(envelope, schema)
+    extra_errors = [e for e in errors if e.validator == "additionalProperties"]
+    assert extra_errors, errors
+
+
+def test_a11y_emissions_does_not_relax_forbidden_flow_policy_fields(
+    schema: dict,
+) -> None:
+    """Defense-in-depth: an a11y_emissions-carrying envelope still rejects the
+    sensor-not-advisor forbidden fields (the `not.anyOf` clause is untouched)."""
+    envelope = _minimal_valid_envelope() | {
+        "a11y_emissions": [{"marker_class": "a11y-baseline-stale", "ac_id": "AC-1"}],
+        "next_action": "retry",
+    }
+    output = format_errors(validate_envelope(envelope, schema))
+    assert "forbidden flow-policy field: next_action" in output

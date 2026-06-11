@@ -3765,14 +3765,8 @@ verdicts:
     audit_date: "2026-06-11"
   - marker_class: a11y-baseline-stale
     surface_name: specialist-wrapper-qa
-    verdict: scheduled-by-story
-    rationale: |-
-      The a11y audit (axe-core `axe.min.js` injected in-page via the existing
-      Playwright MCP browser surface — no new MCP server) emits this evidence
-      marker from the QA specialist wrapper. Story 19.3 enumerates the class +
-      activates the `axe-core` opt-in-skip dependency; the runtime emission
-      code path is not yet landed.
-    discharging_story: "19.4"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:498
     audit_date: "2026-06-11"
   - marker_class: a11y-baseline-stale
     surface_name: specialist-wrapper-review-bmad
@@ -3880,14 +3874,8 @@ verdicts:
     audit_date: "2026-06-11"
   - marker_class: a11y-delta-exceeded
     surface_name: specialist-wrapper-qa
-    verdict: scheduled-by-story
-    rationale: |-
-      The a11y audit (axe-core `axe.min.js` injected in-page via the existing
-      Playwright MCP browser surface — no new MCP server) emits this evidence
-      marker from the QA specialist wrapper. Story 19.3 enumerates the class +
-      activates the `axe-core` opt-in-skip dependency; the runtime emission
-      code path is not yet landed.
-    discharging_story: "19.4"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:523
     audit_date: "2026-06-11"
   - marker_class: a11y-delta-exceeded
     surface_name: specialist-wrapper-review-bmad
@@ -3995,14 +3983,8 @@ verdicts:
     audit_date: "2026-06-11"
   - marker_class: a11y-delta-mode-unstable
     surface_name: specialist-wrapper-qa
-    verdict: scheduled-by-story
-    rationale: |-
-      The a11y audit (axe-core `axe.min.js` injected in-page via the existing
-      Playwright MCP browser surface — no new MCP server) emits this evidence
-      marker from the QA specialist wrapper. Story 19.3 enumerates the class +
-      activates the `axe-core` opt-in-skip dependency; the runtime emission
-      code path is not yet landed.
-    discharging_story: "19.4"
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:549
     audit_date: "2026-06-11"
   - marker_class: a11y-delta-mode-unstable
     surface_name: specialist-wrapper-review-bmad

@@ -26,9 +26,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 ## Coverage summary
 
 - Total intersections: 518
-- Emitted: 45
+- Emitted: 48
 - Not-applicable: 470
-- Scheduled-by-story: 3
+- Scheduled-by-story: 0
 - Gaps: 0
 
 ## Coverage matrix
@@ -75,7 +75,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | a11y-baseline-stale | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the fixture-driven reconciliation gate has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-baseline-stale | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the runtime reconciliation gate has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-baseline-stale | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
-| a11y-baseline-stale | specialist-wrapper-qa | scheduled-by-story | `n/a` | 2026-06-11 | discharging-story: 19.4 — The a11y audit (axe-core `axe.min.js` injected in-page via the existing Playwright MCP browser surface — no new MCP server) emits this evidence marker from the QA specialist wrapper. Story 19.3 enumerates the class + activates the `axe-core` opt-in-skip dependency; the runtime emission code path is not yet landed. |
+| a11y-baseline-stale | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:498` | 2026-06-11 |  |
 | a11y-baseline-stale | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-exceeded | bundle-assembler | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-exceeded | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the cost-telemetry pipeline has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
@@ -89,7 +89,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | a11y-delta-exceeded | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the fixture-driven reconciliation gate has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-exceeded | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the runtime reconciliation gate has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-exceeded | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
-| a11y-delta-exceeded | specialist-wrapper-qa | scheduled-by-story | `n/a` | 2026-06-11 | discharging-story: 19.4 — The a11y audit (axe-core `axe.min.js` injected in-page via the existing Playwright MCP browser surface — no new MCP server) emits this evidence marker from the QA specialist wrapper. Story 19.3 enumerates the class + activates the `axe-core` opt-in-skip dependency; the runtime emission code path is not yet landed. |
+| a11y-delta-exceeded | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:523` | 2026-06-11 |  |
 | a11y-delta-exceeded | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-mode-unstable | bundle-assembler | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-mode-unstable | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the cost-telemetry pipeline has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
@@ -103,7 +103,7 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | a11y-delta-mode-unstable | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the fixture-driven reconciliation gate has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-mode-unstable | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the runtime reconciliation gate has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-mode-unstable | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
-| a11y-delta-mode-unstable | specialist-wrapper-qa | scheduled-by-story | `n/a` | 2026-06-11 | discharging-story: 19.4 — The a11y audit (axe-core `axe.min.js` injected in-page via the existing Playwright MCP browser surface — no new MCP server) emits this evidence marker from the QA specialist wrapper. Story 19.3 enumerates the class + activates the `axe-core` opt-in-skip dependency; the runtime emission code path is not yet landed. |
+| a11y-delta-mode-unstable | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:549` | 2026-06-11 |  |
 | a11y-delta-mode-unstable | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | bundle-assembly-failed | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_failure.py:354` | 2026-05-07 |  |
 | bundle-assembly-failed | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |

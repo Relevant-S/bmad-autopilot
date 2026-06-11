@@ -125,3 +125,40 @@
 #     large-input-boundary: enabled
 #     permission-boundary: enabled
 # ---
+
+# ---
+# a11y — opt-in (default: absent → a11y audit does NOT run; web-only)
+# Story 19.4; FR-P2-6 | ADR-011
+# How to enable: uncomment the block below on a `project_type: web` project to
+# run the axe-core accessibility audit per AC. axe-core (Deque, MPL-2.0,
+# version_floor 4.12) is injected in-page via the EXISTING Playwright MCP browser
+# surface (`axe.min.js` + `axe.run()`) — NO new MCP server. The audit runs ONLY
+# when BOTH gates hold: `project_type == web` AND `a11y.enabled: true`. On
+# `project_type: api|mobile`, on `a11y.enabled: false`, and on the unconfigured
+# default (this block absent), the audit is a SILENT skip — NO `a11y-*` marker
+# fires (the opt-in-skip / default-defer posture of FR-P2-6 + ADR-011, mirroring
+# `masked_selectors` / `heuristics` above; emitting a marker on inapplicable
+# project-type or not-enabled would be the exact noise FR42 / ADR-010 warn
+# against). axe-core ships NO native baseline-delta (the load-bearing ADR-011
+# finding); the Automator self-computes the delta over the `violations[]` JSON
+# (set-difference of `(rule-id, target-selector)` keys) against a per-AC baseline.
+# ABSENCE of this block is NOT a marker (FR42 user-owned file — absence means
+# "a11y audit deferred").
+# Baseline storage: per-AC baselines live under
+# `_bmad-output/qa-a11y-baseline/{story-id}/{ac-id}/baseline.json` (gitignored —
+# practitioner-local longitudinal signal, the qa-evidence precedent). To
+# re-anchor a baseline, delete the stored `baseline.json`; the next run creates a
+# fresh anchor and emits the informational `a11y-baseline-stale` marker.
+# See `docs/a11y-setup.md` for the full operator walkthrough.
+# Worked example (uncomment to enable on a web project):
+# a11y:
+#   enabled: true
+#   # delta_threshold — the count of NEWLY-introduced violation keys (beyond the
+#   # baseline) tolerated before `a11y-delta-exceeded` fires. Default 0 = "any new
+#   # violation is a regression" (the strictest, most defensible opt-in default).
+#   delta_threshold: 0
+#   # scope — `per-ac` (default): one `axe.run()` per AC against that AC's
+#   # verified surface, one baseline per (story, ac). `per-story` collapses to a
+#   # single whole-story audit + baseline. Omit for the per-AC default.
+#   scope: per-ac
+# ---

@@ -13,6 +13,10 @@ build/
 # QA evidence (FR49 — _bmad-output/qa-evidence/{story-id}/{run-id}/)
 _bmad-output/qa-evidence/
 
+# A11y baselines (Story 19.4 / FR-P2-6 — _bmad-output/qa-a11y-baseline/{story-id}/{ac-id}/;
+# practitioner-local longitudinal signal, not committed history — qa-evidence precedent)
+_bmad-output/qa-a11y-baseline/
+
 # Retry history (FR13/NFR-R5 — _bmad-output/retry-history/{story-id}/{round-id}/)
 _bmad-output/retry-history/
 

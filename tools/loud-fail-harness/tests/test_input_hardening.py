@@ -37,6 +37,11 @@ from loud_fail_harness.qa_ac_iteration import (
     SmokeFirstAbortDiagnosticContext,
 )
 from loud_fail_harness.qa_behavioral_plan import FlowBranch
+from loud_fail_harness.qa_a11y_audit import (
+    A11yAcScopedDiagnosticContext,
+    A11yRunScopedDiagnosticContext,
+    AxeViolationKey,
+)
 from loud_fail_harness.qa_evidence_persistence import EvidenceTruncatedDiagnosticContext
 from loud_fail_harness.qa_evidence_tier import Tier3NotConfiguredDiagnosticContext
 from loud_fail_harness.qa_exploratory_heuristics import HeuristicSkippedDiagnosticContext
@@ -278,6 +283,18 @@ def _heuristic_skipped_kwargs() -> dict[str, object]:
     return dict(story_id="auto-001", heuristic_kind="empty-state")
 
 
+def _axe_violation_key_kwargs() -> dict[str, object]:
+    return dict(rule_id="color-contrast", target_selector="#nav button")
+
+
+def _a11y_ac_scoped_kwargs() -> dict[str, object]:
+    return dict(story_id="19-4", ac_id="AC-1")
+
+
+def _a11y_run_scoped_kwargs() -> dict[str, object]:
+    return dict(story_id="19-4")
+
+
 def _opt_out_entry_kwargs() -> dict[str, object]:
     return dict(story_id="auto-019-001", ac_key="ac_1")
 
@@ -313,6 +330,15 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_exploratory_heuristics.HeuristicSkippedDiagnosticContext": (
         HeuristicSkippedDiagnosticContext,
         _heuristic_skipped_kwargs,
+    ),
+    "qa_a11y_audit.AxeViolationKey": (AxeViolationKey, _axe_violation_key_kwargs),
+    "qa_a11y_audit.A11yAcScopedDiagnosticContext": (
+        A11yAcScopedDiagnosticContext,
+        _a11y_ac_scoped_kwargs,
+    ),
+    "qa_a11y_audit.A11yRunScopedDiagnosticContext": (
+        A11yRunScopedDiagnosticContext,
+        _a11y_run_scoped_kwargs,
     ),
     "qa_runbook_heuristics_validator.HeuristicOptOutEntry": (
         HeuristicOptOutEntry,

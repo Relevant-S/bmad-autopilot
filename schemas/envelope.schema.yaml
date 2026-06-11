@@ -143,6 +143,12 @@ properties:
     items:
       $ref: "#/$defs/heuristic_skipped_emission"
 
+  a11y_emissions:
+    type: array
+    description: "QA-specific (FR-P2-6 + Story 19.4 + ADR-011). Per-a11y-audit evidence emission records carried on the QA envelope on the web opt-in path (axe-core injected in-page via the existing Playwright MCP browser surface; `qa-runbook.a11y.enabled: true` gated). Optional non-null shape: the field is absent on api/mobile project types, on `a11y.enabled: false`, and on the unconfigured default (the opt-in-skip / default-defer posture — absence is NOT a marker); present-and-array-conforming-to-$defs/a11y_emission on web opt-in runs that surfaced ≥ 1 a11y evidence marker. Sibling of `heuristic_skipped_emissions` (the typed-emission-array precedent). The a11y delta is story-level evidence, NOT an AC gate — these records do not flip `ac_results` (sensor-not-advisor). Recorded in `docs/extension-audit.md` per the no-introductions principle."
+    items:
+      $ref: "#/$defs/a11y_emission"
+
 $defs:
   finding:
     type: object
@@ -339,5 +345,45 @@ $defs:
         type: string
         enum: [empty-state, error-state, auth-boundary, rate-limit-boundary, locale-i18n-edge, large-input-boundary, permission-boundary]
       story_id:
+        type: string
+        minLength: 1
+
+  a11y_emission:
+    # QA-specific (FR-P2-6 + Story 19.4 + ADR-011) per-a11y-audit evidence
+    # emission record. Mirrors `qa_a11y_audit.py`'s emission-record Pydantic
+    # models byte-for-byte (the `heuristic_skipped_emission`↔
+    # `HeuristicSkippedEmissionRecord` mirror precedent). `marker_class` is the
+    # closed three-value enum 19.3 enumerated in `marker-taxonomy.yaml` (`1.14`);
+    # `ac_id` is REQUIRED for the two AC-scoped classes (`a11y-baseline-stale` /
+    # `a11y-delta-exceeded`) and FORBIDDEN for the envelope-scoped
+    # `a11y-delta-mode-unstable` — modelling 19.3's `pointer_context_fields`:
+    # `[ac_id]` / `[ac_id]` / `[]`. The `additionalProperties: false`
+    # closed-by-default invariant + the top-level `not.anyOf` sensor-not-advisor
+    # clause are preserved (no `next_action` / `recommendation` here).
+    type: object
+    required:
+      - marker_class
+    additionalProperties: false
+    allOf:
+      - if:
+          properties:
+            marker_class:
+              enum: [a11y-baseline-stale, a11y-delta-exceeded]
+          required: [marker_class]
+        then:
+          required: [ac_id]
+      - if:
+          properties:
+            marker_class:
+              const: a11y-delta-mode-unstable
+          required: [marker_class]
+        then:
+          properties:
+            ac_id: false
+    properties:
+      marker_class:
+        type: string
+        enum: [a11y-baseline-stale, a11y-delta-exceeded, a11y-delta-mode-unstable]
+      ac_id:
         type: string
         minLength: 1
