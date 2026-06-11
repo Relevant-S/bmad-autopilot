@@ -180,6 +180,7 @@ from __future__ import annotations
 import pathlib
 import re
 import subprocess
+import threading
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
@@ -203,6 +204,16 @@ from loud_fail_harness.run_state import DEFAULT_RUN_STATE_PATH
 #: deliverable (per ADR-009 Consequence 5); the in-code string
 #: reference is the contract-pair anchor.
 _MARKER_WORKTREE_STALE_LOCK: str = "worktree-stale-lock"
+
+
+# git's .git/worktrees/ admin tree is shared across all per-story worktrees;
+# concurrent `git worktree add`/`remove` race on a sibling's half-written
+# commondir (errno-0 read failure under parallel dispatch). Serialize the
+# mutating check-then-act sections — the dispatcher is single-process
+# (ThreadPoolExecutor), so an in-process lock is sufficient. The git ops are
+# fast and the story loops run after the lock releases, so story-level
+# parallelism is unaffected.
+_WORKTREE_ADMIN_LOCK = threading.Lock()
 
 
 #: Canonical escalation-terminal ``current_state`` value (per the
@@ -809,48 +820,49 @@ def create_worktree(
 
     worktree_path = worktrees_root / story_id
 
-    existing_records = _list_porcelain(repo_root, worktrees_root)
-    target_resolved = _safe_resolve(worktree_path)
-    for record in existing_records:
-        record_resolved = _safe_resolve(record.worktree_path)
-        if record_resolved == target_resolved:
-            if record.is_prunable:
-                raise WorktreeStalePartialState(
+    with _WORKTREE_ADMIN_LOCK:
+        existing_records = _list_porcelain(repo_root, worktrees_root)
+        target_resolved = _safe_resolve(worktree_path)
+        for record in existing_records:
+            record_resolved = _safe_resolve(record.worktree_path)
+            if record_resolved == target_resolved:
+                if record.is_prunable:
+                    raise WorktreeStalePartialState(
+                        attempted_story_id=story_id,
+                        attempted_worktree_path=worktree_path,
+                        stale_record=record,
+                    )
+                raise WorktreeAlreadyExistsForStory(
                     attempted_story_id=story_id,
                     attempted_worktree_path=worktree_path,
-                    stale_record=record,
+                    attempted_branch_name=branch_name,
+                    existing_record=record,
                 )
-            raise WorktreeAlreadyExistsForStory(
-                attempted_story_id=story_id,
-                attempted_worktree_path=worktree_path,
-                attempted_branch_name=branch_name,
-                existing_record=record,
-            )
-        if record.branch == branch_name:
-            raise WorktreeAlreadyExistsForStory(
-                attempted_story_id=story_id,
-                attempted_worktree_path=worktree_path,
-                attempted_branch_name=branch_name,
-                existing_record=record,
-            )
+            if record.branch == branch_name:
+                raise WorktreeAlreadyExistsForStory(
+                    attempted_story_id=story_id,
+                    attempted_worktree_path=worktree_path,
+                    attempted_branch_name=branch_name,
+                    existing_record=record,
+                )
 
-    worktrees_root.mkdir(parents=True, exist_ok=True)
+        worktrees_root.mkdir(parents=True, exist_ok=True)
 
-    subprocess.run(
-        [
-            "git",
-            "worktree",
-            "add",
-            "-b",
-            branch_name,
-            str(worktree_path),
-            base_ref,
-        ],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+        subprocess.run(
+            [
+                "git",
+                "worktree",
+                "add",
+                "-b",
+                branch_name,
+                str(worktree_path),
+                base_ref,
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
     return WorktreeLifecycleResult(
         story_id=story_id,
@@ -946,66 +958,70 @@ def cleanup_worktree(
 
     worktree_path = worktrees_root / story_id
 
-    records = _list_porcelain(repo_root, worktrees_root)
-    target_resolved = _safe_resolve(worktree_path)
-    matched: WorktreeInspectionResult | None = None
-    for record in records:
-        if _safe_resolve(record.worktree_path) == target_resolved:
-            matched = record
-            break
+    with _WORKTREE_ADMIN_LOCK:
+        records = _list_porcelain(repo_root, worktrees_root)
+        target_resolved = _safe_resolve(worktree_path)
+        matched: WorktreeInspectionResult | None = None
+        for record in records:
+            if _safe_resolve(record.worktree_path) == target_resolved:
+                matched = record
+                break
 
-    if matched is None:
-        return WorktreeCleanupResult(
-            story_id=story_id,
-            worktree_path=worktree_path,
-            removed=False,
-            preserved_for_escalation=False,
-            repo_root=repo_root,
-        )
-
-    if matched.is_prunable:
-        return WorktreeCleanupResult(
-            story_id=story_id,
-            worktree_path=worktree_path,
-            removed=False,
-            preserved_for_escalation=False,
-            repo_root=repo_root,
-        )
-
-    if preserve_on_escalation:
-        current_state = _read_current_state(repo_root)
-        if current_state in _ESCALATION_TERMINAL_STATES:
+        if matched is None:
             return WorktreeCleanupResult(
                 story_id=story_id,
                 worktree_path=worktree_path,
                 removed=False,
-                preserved_for_escalation=True,
+                preserved_for_escalation=False,
                 repo_root=repo_root,
             )
 
-    result = subprocess.run(
-        ["git", "worktree", "remove", str(worktree_path)],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        stderr_lower = (result.stderr or "").lower()
-        if "contains modified" in stderr_lower or "contains untracked" in stderr_lower:
-            raise WorktreeRemoveRefused(
-                attempted_story_id=story_id,
-                attempted_worktree_path=worktree_path,
+        if matched.is_prunable:
+            return WorktreeCleanupResult(
+                story_id=story_id,
+                worktree_path=worktree_path,
+                removed=False,
+                preserved_for_escalation=False,
+                repo_root=repo_root,
+            )
+
+        if preserve_on_escalation:
+            current_state = _read_current_state(repo_root)
+            if current_state in _ESCALATION_TERMINAL_STATES:
+                return WorktreeCleanupResult(
+                    story_id=story_id,
+                    worktree_path=worktree_path,
+                    removed=False,
+                    preserved_for_escalation=True,
+                    repo_root=repo_root,
+                )
+
+        result = subprocess.run(
+            ["git", "worktree", "remove", str(worktree_path)],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            stderr_lower = (result.stderr or "").lower()
+            if (
+                "contains modified" in stderr_lower
+                or "contains untracked" in stderr_lower
+            ):
+                raise WorktreeRemoveRefused(
+                    attempted_story_id=story_id,
+                    attempted_worktree_path=worktree_path,
+                    stderr=result.stderr,
+                )
+            # Other non-zero exits propagate per sensor-not-advisor — the
+            # caller decides escalation.
+            raise subprocess.CalledProcessError(
+                returncode=result.returncode,
+                cmd=result.args,
+                output=result.stdout,
                 stderr=result.stderr,
             )
-        # Other non-zero exits propagate per sensor-not-advisor — the
-        # caller decides escalation.
-        raise subprocess.CalledProcessError(
-            returncode=result.returncode,
-            cmd=result.args,
-            output=result.stdout,
-            stderr=result.stderr,
-        )
 
     return WorktreeCleanupResult(
         story_id=story_id,
