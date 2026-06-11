@@ -1,0 +1,5 @@
+# AC-5(d): heuristic_opt_out entry not in FROZEN_HEURISTIC_NAMES.
+behavioral_plan_overrides:
+  auto-019-001:
+    ac_1:
+      heuristic_opt_out: [not-a-real-heuristic]

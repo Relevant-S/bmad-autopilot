@@ -1,0 +1,40 @@
+# Valid qa-runbook.yaml heuristics fixture (Story 19.1).
+# All three project types, mixed enabled/disabled, one per-AC opt-out, plus an
+# unrelated key the validator must leave untouched.
+
+masked_selectors:
+  - "input[type=password]"
+
+heuristics:
+  web:
+    empty-state: enabled
+    error-state: enabled
+    auth-boundary: enabled
+    rate-limit-boundary: enabled
+    locale-i18n-edge: enabled
+    large-input-boundary: enabled
+    permission-boundary: enabled
+  api:
+    empty-state: enabled
+    error-state: enabled
+    auth-boundary: disabled
+    rate-limit-boundary: enabled
+    locale-i18n-edge: disabled
+    large-input-boundary: enabled
+    permission-boundary: enabled
+  mobile:
+    empty-state: enabled
+    error-state: enabled
+    auth-boundary: enabled
+    rate-limit-boundary: disabled
+    locale-i18n-edge: enabled
+    large-input-boundary: enabled
+    permission-boundary: enabled
+
+behavioral_plan_overrides:
+  auto-019-001:
+    ac_1:
+      expected_evidence_tier: tier-2-outcome
+      heuristic_opt_out: [rate-limit-boundary, large-input-boundary]
+    ac_2:
+      semantic_verification_requirement: not_applicable

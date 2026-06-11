@@ -1,0 +1,5 @@
+# AC-5(a): unknown heuristic name under heuristics.web.
+heuristics:
+  web:
+    empty-state: enabled
+    timing-attack-boundary: enabled

@@ -60,6 +60,11 @@ externally_constructed:
     identifier_fields: [story_id]
   qa_exploratory_heuristics.HeuristicSkippedDiagnosticContext:
     identifier_fields: [story_id]
+  qa_runbook_heuristics_validator.HeuristicOptOutEntry:
+    # story_id + ac_key are free-text operator-authored qa-runbook.yaml mapping
+    # keys (the genuinely hostile-input surface; Story 19.1). The opt-out *values*
+    # are closed-set-checked against FROZEN_HEURISTIC_NAMES in the findings walk.
+    identifier_fields: [story_id, ac_key]
 
 # parse_functions: registered free functions that RETURN an externally_constructed
 # model (Rule C treats a call to one inside a try-body like a direct construction).
@@ -199,6 +204,7 @@ internal_only:
   - qa_exploratory_heuristics.HeuristicSkippedEmissionRecord
   - qa_plan_drift.PlanDriftEmission
   - qa_plan_drift.PlanDriftEmissionRecord
+  - qa_runbook_heuristics_validator.ValidationFinding
   - reconciler.ClassificationResult
   - reconciler.Marker
   - reconciler.MatchedPair

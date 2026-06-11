@@ -1,0 +1,4 @@
+# AC-5(b): enablement value outside {enabled, disabled}.
+heuristics:
+  api:
+    empty-state: on

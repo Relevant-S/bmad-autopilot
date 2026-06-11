@@ -72,4 +72,56 @@
 #     ac_<n>:
 #       expected_evidence_tier: tier-2-outcome
 #       semantic_verification_requirement: not_applicable
+#       # heuristic_opt_out — opt-in per-AC escape valve (Story 19.1; FR-P2-5 / ADR-010)
+#       # List exploratory heuristics to SKIP for this AC. Each value MUST be one of
+#       # the closed 7-set (see the `heuristics` block below). Use when a heuristic is
+#       # structurally inapplicable to this AC's surface; the skip surfaces a
+#       # `heuristic-skipped` marker (Story 19.2), never a silent drop.
+#       heuristic_opt_out: [rate-limit-boundary]
+# ---
+
+# ---
+# heuristics — opt-in (default: absent → ALL ADR-010 defaults active per project type)
+# Story 19.1; FR-P2-5 | ADR-010
+# How to enable: uncomment the block below and set per-project-type, per-heuristic
+# activation. Shape: `heuristics.{web,api,mobile}.<heuristic-name>: enabled | disabled`.
+# The closed 7-heuristic set (FROZEN_HEURISTIC_NAMES; ADR-010) is:
+#   empty-state, error-state, auth-boundary           (the MVP trio, Story 4.9)
+#   rate-limit-boundary, locale-i18n-edge,            (the 4 added in ADR-010)
+#   large-input-boundary, permission-boundary
+# Documented defaults (ADR-010 applicability matrix, ratified 2026-06-10):
+#   web = all 7 enabled; api = all 7 enabled;
+#   mobile = 6 of 7 (rate-limit-boundary EXCLUDED — rapid-request driving is
+#     impractical through the mobile-MCP UI surface and would emit noisy
+#     `heuristic-skipped` markers).
+# ABSENCE of this block is NOT a marker (FR42 user-owned file — absence means
+# "all ADR-010 defaults active"), mirroring `masked_selectors` above. Uncommenting
+# a single project-type/heuristic line is enough to override just that default;
+# unlisted heuristics keep their ADR-010 default.
+# Worked example (uncomment to enable; values shown ARE the ADR-010 defaults):
+# heuristics:
+#   web:
+#     empty-state: enabled
+#     error-state: enabled
+#     auth-boundary: enabled
+#     rate-limit-boundary: enabled
+#     locale-i18n-edge: enabled
+#     large-input-boundary: enabled
+#     permission-boundary: enabled
+#   api:
+#     empty-state: enabled
+#     error-state: enabled
+#     auth-boundary: enabled
+#     rate-limit-boundary: enabled
+#     locale-i18n-edge: enabled
+#     large-input-boundary: enabled
+#     permission-boundary: enabled
+#   mobile:
+#     empty-state: enabled
+#     error-state: enabled
+#     auth-boundary: enabled
+#     rate-limit-boundary: disabled   # excluded on mobile per ADR-010
+#     locale-i18n-edge: enabled
+#     large-input-boundary: enabled
+#     permission-boundary: enabled
 # ---

@@ -41,6 +41,7 @@ from loud_fail_harness.qa_evidence_persistence import EvidenceTruncatedDiagnosti
 from loud_fail_harness.qa_evidence_tier import Tier3NotConfiguredDiagnosticContext
 from loud_fail_harness.qa_exploratory_heuristics import HeuristicSkippedDiagnosticContext
 from loud_fail_harness.qa_plan_drift import PlanDriftDiagnosticContext
+from loud_fail_harness.qa_runbook_heuristics_validator import HeuristicOptOutEntry
 from loud_fail_harness.run_state import CostToDateBySpecialist, RunState
 from loud_fail_harness.story_file_lock import LockRecord
 
@@ -277,6 +278,10 @@ def _heuristic_skipped_kwargs() -> dict[str, object]:
     return dict(story_id="auto-001", heuristic_kind="empty-state")
 
 
+def _opt_out_entry_kwargs() -> dict[str, object]:
+    return dict(story_id="auto-019-001", ac_key="ac_1")
+
+
 #: qualname -> (model class, valid-baseline-kwargs factory).
 _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] = {
     "epic_run_state.EpicRunState": (EpicRunState, _epic_kwargs),
@@ -308,6 +313,10 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_exploratory_heuristics.HeuristicSkippedDiagnosticContext": (
         HeuristicSkippedDiagnosticContext,
         _heuristic_skipped_kwargs,
+    ),
+    "qa_runbook_heuristics_validator.HeuristicOptOutEntry": (
+        HeuristicOptOutEntry,
+        _opt_out_entry_kwargs,
     ),
 }
 

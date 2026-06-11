@@ -216,6 +216,19 @@ input-hardening-gate = "loud_fail_harness.input_hardening_gate:main"
 # Listed LAST because all prior [project.scripts] entries pre-date this story;
 # the position in this table does NOT reflect CI execution order.
 done-story-review-ledger-gate = "loud_fail_harness.done_story_review_ledger_gate:main"
+# qa-runbook-heuristics-validator (Story 19.1; FR-P2-5 / ADR-010) is a
+# library-as-CLI aid exercised via pytest over a fixture corpus, NOT a discrete
+# ci.yml step — same posture + rationale as story-doc-validator (pyproject.toml
+# lines 38-46) and sprint-status-artifact-validator: the qa-runbook.yaml it
+# validates is a RUNTIME artifact written by `init` at a target project's root
+# (Story 7.5), not a committed filesystem surface the harness CI can scan
+# (precedent: Stories 24.3 / 13.5 / 24.2 — fixture-driven gates run via pytest,
+# not a CI step). The no-arg invocation validates the package-bundled
+# qa-runbook.yaml.template. Validates the `heuristics:` block + per-AC
+# `heuristic_opt_out` against FROZEN_HEURISTIC_NAMES (the closed 7-set). Listed
+# LAST because all prior [project.scripts] entries pre-date this story; the
+# position does NOT reflect CI execution order.
+qa-runbook-heuristics-validator = "loud_fail_harness.qa_runbook_heuristics_validator:main"
 
 [dependency-groups]
 dev = [

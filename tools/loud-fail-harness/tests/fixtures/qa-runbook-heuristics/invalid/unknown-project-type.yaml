@@ -1,0 +1,4 @@
+# AC-5(c): unknown project-type key under heuristics.
+heuristics:
+  desktop:
+    empty-state: enabled
