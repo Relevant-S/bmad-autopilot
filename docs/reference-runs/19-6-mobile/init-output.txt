@@ -1,0 +1,64 @@
+$ /bmad-automation init
+
+bmad-automation init: precondition checks (Story 7.3 / FR37 / FR38)
+  ✓ claude-code: available, version 2.1.32 (>=2.0.0 required)
+  ✓ bmad-core: available, version 6.2.2 (>=6.0 required)
+  ✓ tea-module: available (total-block dependency satisfied)
+  ✓ git: available, working tree clean
+  ✓ python: available, 3.12.5 (>=3.12 required)
+  ✓ node: available, 22.4.1 (>=22 required for mobile-mcp)
+  ✓ mobile-mcp: available (probe via mobile_get_screen_size → 393×852)
+  ✓ pixelmatch: NOT a precondition-checked dependency — opt-in-skip in
+      dependencies.yaml (the wrapper decides invocation per qa-runbook
+      enablement; ADR-012). No init-time probe. (No axe-core probe — a11y is
+      web-only, not invoked on mobile per NFR-I3.)
+
+bmad-automation init: project-type detection (Story 9.2 / FR-P1.5-2)
+  ✓ detected project_type=mobile via top-level-only precedence
+    (ios/ + android/ directories present at project root; React Native
+     peer-dep `react-native` declared in package.json — the e-commerce
+     cart/checkout surface reused as the Epic-19 QA-coverage mobile surface
+     per Story 19.6 Dev Notes, the SAME surface as the 19-6-web run rebound
+     to the mobile driver)
+  ✓ wrote project_type: mobile to _bmad/automation/config.yaml
+    (write_detected_project_type via Pattern 4 atomic tempfile+os.replace)
+
+bmad-automation init: scaffolding sample story (Story 7.4 / FR39)
+  ✓ proceed-merge-stable; existing sample-qa-coverage-mobile-001.md detected;
+    canonical fields preserved per Story 7.6 non-destructive guard (FR41).
+
+bmad-automation init: scaffolding config + qa-runbook stubs (Story 7.5 / FR40)
+  ✓ wrote _bmad/automation/config.yaml with documented defaults
+    (review_lad section absent / disabled — mobile + LAD is not a
+     default-on combination; this run matches the 9-6-mobile baseline)
+  ✓ wrote _bmad/automation/qa-runbook.yaml with the Epic-19 opt-in blocks:
+      heuristics:
+        mobile:
+          empty-state: enabled
+          error-state: enabled
+          auth-boundary: enabled
+          large-input-boundary: enabled
+          locale-i18n-edge: enabled
+          permission-boundary: enabled
+          # rate-limit-boundary: NOT listed — matrix-excluded on mobile per
+          # ADR-010 (MOBILE_HEURISTIC_SPECS covers six of seven). Silently
+          # excluded at dispatch — no marker.
+      visual_regression:
+        enabled: true
+        delta_threshold: 0          # any pixel diff beyond AA/color tolerance is a regression
+        scope: per-ac
+        baseline_storage: gitignored
+      # NO a11y: block — a11y is web-only (NFR-I3); mobile does not invoke.
+    + mobile_app_package_name field (Story 9.3 AC-8 — required for mobile;
+      practitioner set value: com.example.bmad.qacoverage)
+  ✓ FR41 non-destructive guard: no existing user config overwritten
+
+bmad-automation init: TEA-boundary first-run orientation (Story 7.8 / FR34)
+  → TEA validates per-AC behavioral plans; the Automator exercises the running
+    product against acceptance criteria. The two are complementary, not
+    redundant. See docs/tea-vs-automator.md for the full boundary contract.
+
+bmad-automation init: complete. Run `/bmad-automation run sample-qa-coverage-mobile-001`
+to exercise your first end-to-end Epic-19-QA-coverage mobile loop
+(Phase 2 / Story 19.6 — 6-of-7 mobile heuristic subset + visual regression;
+ a11y is web-only and not invoked on mobile).

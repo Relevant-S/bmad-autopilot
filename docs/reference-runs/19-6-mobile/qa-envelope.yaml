@@ -1,0 +1,101 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13 → Story 9.3 → Stories 19.2/19.5; FR55).
+# Mobile dispatch branch — driver=mobile per Story 9.3 qa_ac_iteration.py dispatch.
+#
+# Authored to validate against the UNMODIFIED schemas/envelope.schema.yaml
+# (additionalProperties: false; not.anyOf sensor-not-advisor clause) per Story
+# 19.6 AC-7. Exercises TWO of the three Epic-19 QA-coverage surfaces (NO
+# a11y_emissions — a11y is web-only per NFR-I3; mobile does not invoke):
+#   - heuristic_skipped_emissions — the 6-of-7 mobile heuristic subset (Story
+#     19.2 / MOBILE_HEURISTIC_SPECS). Of the six dispatched, five are applicable
+#     (evidence rides the per-AC evidence_refs + top-level artifacts heuristics/
+#     paths) and one (permission-boundary) is structurally inapplicable and
+#     emits a heuristic-skipped marker. rate-limit-boundary is SILENTLY
+#     matrix-excluded on mobile per ADR-010 — it is NOT dispatched and emits NO
+#     marker (a heuristic-skipped marker for a matrix-excluded heuristic would
+#     be a doctrine violation). The one skipped sub_classification
+#     (permission-boundary) is among the four 19.2-added values ∈ the closed
+#     7-value enum at $defs/heuristic_skipped_emission.
+#   - visual_regression_emissions — the mobile visual regression audit (Story
+#     19.5 / FR-P2-10 / ADR-012). First run: no baseline PNG exists, so a
+#     baseline is created per AC (via the mobile-mcp mobile_take_screenshot
+#     surface) and visual-regression-baseline-missing emits (informational).
+#     required: [marker_class, ac_id] per $defs/visual_regression_emission.
+#
+# NO a11y_emissions (web-only; mobile + api do not invoke per NFR-I3 — recorded
+# explicitly in narrative.md). Captured baselines are NOT committed:
+# _bmad-output/qa-visual-baseline/ is gitignored; the records CITE the gitignored
+# path. These emissions are story-level evidence, NOT AC gates — they do not flip
+# ac_results (sensor-not-advisor). Evidence is mobile-mcp-sourced
+# (mobile_list_elements_on_screen a11y-tree JSON = Tier-1; mobile_take_screenshot
+# PNG = Tier-2).
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-1/main-add-to-cart-elements.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-1/main-cart-screen.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-2/main-reject-invalid-card-elements.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-2/main-rejection-screen.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-2/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-3/main-order-confirmation-elements.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-3/main-confirmation-screen.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-3/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/heuristics/empty-state-cart-empty.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/heuristics/error-state-card-declined.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/heuristics/auth-boundary-session-expiry.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/heuristics/large-input-boundary-quantity-overflow.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/heuristics/locale-i18n-edge-eur-rtl.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/visual/ac-1-screenshot.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/visual/ac-2-screenshot.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/visual/ac-3-screenshot.png
+findings: []
+rationale: "All three ACs of the QA-coverage synthetic story sample-qa-coverage-mobile-001 pass via mobile-driver dispatch (Story 9.3) — the SAME e-commerce cart/checkout surface as the 19-6-web run, rebound to the mobile-MCP driver. The 6-of-7 mobile heuristic subset was dispatched (Story 19.2 / MOBILE_HEURISTIC_SPECS): empty-state, error-state, auth-boundary, large-input-boundary, and locale-i18n-edge are applicable and contributed exploratory evidence (no findings); permission-boundary is structurally inapplicable and was loud-failed via a heuristic-skipped marker. rate-limit-boundary is SILENTLY matrix-excluded on mobile per ADR-010 — NOT dispatched, NO marker. The visual-regression audit (Story 19.5) captured a per-AC screenshot via the mobile-mcp mobile_take_screenshot surface: no prior baseline PNG existed, so a baseline was created and visual-regression-baseline-missing emitted per AC (informational first-run anchor). NO a11y audit ran — a11y is web-only (NFR-I3). All emissions are story-level evidence, not AC gates."
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "main flow: a logged-in user adds an item to the cart and the cart line count increments"
+      - "exploratory empty-state (applicable): the empty-cart state renders its zero-items affordance before the first add"
+      - "exploratory large-input-boundary (applicable): a quantity at the per-line ceiling is clamped, not overflowed"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-1/main-add-to-cart-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-1/main-cart-screen.png
+        tier: tier-2-outcome
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "main flow: the checkout form rejects an invalid payment card"
+      - "exploratory error-state (applicable): the card-declined error surface renders an accessible error label"
+      - "exploratory locale-i18n-edge (applicable): the EUR-locale amount formats correctly at the rejection surface"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-2/main-reject-invalid-card-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-2/main-rejection-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-2/main-semantic-verification.json
+        tier: tier-3-semantic
+    semantic_verification: verified
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "main flow: an order confirmation screen renders after a successful purchase"
+      - "exploratory auth-boundary (applicable): a session-expiry mid-checkout redirects to re-auth before confirmation"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-3/main-order-confirmation-elements.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-3/main-confirmation-screen.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-mobile-001/run-001/ac-3/main-semantic-verification.json
+        tier: tier-3-semantic
+    semantic_verification: verified
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: permission-boundary
+    story_id: sample-qa-coverage-mobile-001
+visual_regression_emissions:
+  - marker_class: visual-regression-baseline-missing
+    ac_id: AC-1
+  - marker_class: visual-regression-baseline-missing
+    ac_id: AC-2
+  - marker_class: visual-regression-baseline-missing
+    ac_id: AC-3

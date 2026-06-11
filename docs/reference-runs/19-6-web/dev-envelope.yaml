@@ -1,0 +1,24 @@
+# Dev specialist return envelope (Story 2.8; FR51 + FR54)
+# Schema: bmad-autopilot/schemas/envelope.schema.yaml (Story 1.2)
+# Carries NO Epic-19 net-new field — the three QA-coverage surfaces
+# (heuristic_skipped_emissions / a11y_emissions / visual_regression_emissions)
+# are all on qa-envelope.yaml.
+status: pass
+artifacts:
+  - src/cart/add_to_cart.py
+  - src/checkout/payment_card.py
+  - src/checkout/order_confirmation.py
+  - tests/test_add_to_cart.py
+  - tests/test_payment_card.py
+  - tests/test_order_confirmation.py
+findings: []
+rationale: "AC-1 (add an item to the cart), AC-2 (reject an invalid payment card), and AC-3 (order confirmation page renders) implemented for the e-commerce QA-coverage synthetic surface sample-qa-coverage-001; each AC renders a web DOM surface so the QA specialist's 7-heuristic sweep (FR-P2-5), web-only a11y audit (FR-P2-6), and visual-regression capture (FR-P2-10) have a real surface to exercise."
+proposed_commit_message: |
+  Story sample-qa-coverage-001: cart + checkout + confirmation (Epic-19 QA-coverage surface)
+
+  Implement add-to-cart, invalid-card rejection, and the order-
+  confirmation page as a rendered web surface — the Epic-19 QA-coverage
+  reference run exercises the full 7-heuristic sweep, the web-only
+  a11y audit, and the visual-regression capture against it.
+scope_expanded_to: []
+retry_mode: null

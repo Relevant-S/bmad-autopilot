@@ -1,0 +1,31 @@
+# Dev specialist return envelope (Story 2.8; FR51 + FR54)
+# Schema: bmad-autopilot/schemas/envelope.schema.yaml (Story 1.2)
+# Carries NO Epic-19 net-new field — the QA-coverage surfaces
+# (heuristic_skipped_emissions / visual_regression_emissions) are on
+# qa-envelope.yaml. NO a11y (web-only).
+status: pass
+specialist: dev
+artifacts:
+  - path: src/screens/CartScreen.tsx
+    role: implementation
+  - path: src/screens/CheckoutScreen.tsx
+    role: implementation
+  - path: src/screens/OrderConfirmationScreen.tsx
+    role: implementation
+  - path: src/screens/CartScreen.test.tsx
+    role: test
+  - path: src/screens/CheckoutScreen.test.tsx
+    role: test
+  - path: src/screens/OrderConfirmationScreen.test.tsx
+    role: test
+findings: []
+rationale: "AC-1 (add an item to the cart), AC-2 (reject an invalid payment card), and AC-3 (order confirmation screen renders) implemented as mobile screens for the e-commerce QA-coverage synthetic surface sample-qa-coverage-mobile-001 (the SAME surface as 19-6-web, rebound to the mobile driver); each AC renders a mobile screen so the QA specialist's 6-of-7 mobile heuristic subset (FR-P2-5) and visual-regression capture (FR-P2-10) have a real surface to exercise."
+proposed_commit_message: |
+  Story sample-qa-coverage-mobile-001: cart + checkout + confirmation screens (Epic-19 QA-coverage surface)
+
+  Implement the cart/checkout/confirmation mobile screens — the Epic-19
+  QA-coverage mobile reference run exercises the 6-of-7 mobile heuristic
+  subset + the visual-regression capture against them (a11y is web-only,
+  not invoked on mobile).
+scope_expanded_to: []
+retry_mode: null

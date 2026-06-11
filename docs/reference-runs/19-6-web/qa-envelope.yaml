@@ -1,0 +1,114 @@
+# QA specialist return envelope (Story 2.10 → Story 4.13 → Stories 19.2/19.4/19.5; FR55).
+# Web dispatch branch — driver=playwright per Story 4.4 qa_ac_iteration.py dispatch.
+#
+# Authored to validate against the UNMODIFIED schemas/envelope.schema.yaml
+# (additionalProperties: false; not.anyOf sensor-not-advisor clause) per Story
+# 19.6 AC-7. This is the FIRST reference-run envelope to exercise all three
+# Epic-19 QA-coverage surfaces:
+#   - heuristic_skipped_emissions — the full 7-heuristic sweep (Story 19.2 /
+#     ADR-010 / FR-P2-5). 5 of 7 heuristics are applicable (evidence rides the
+#     per-AC evidence_refs + the top-level artifacts heuristics/ paths); 2 are
+#     structurally inapplicable and emit heuristic-skipped markers. Both skipped
+#     sub_classifications (rate-limit-boundary, permission-boundary) are among
+#     the four 19.2-added values, so the net-new 7-heuristic surface is genuinely
+#     witnessed (not just the MVP trio). Each sub_classification ∈ the closed
+#     7-value enum at $defs/heuristic_skipped_emission.
+#   - a11y_emissions — the web-only a11y audit (Story 19.4 / FR-P2-6 / ADR-011).
+#     First run: no baseline exists, so a baseline is created per applicable AC
+#     and a11y-baseline-stale emits (informational). ac_id REQUIRED for the
+#     AC-scoped class per $defs/a11y_emission.
+#   - visual_regression_emissions — the web+mobile visual regression audit
+#     (Story 19.5 / FR-P2-10 / ADR-012). First run: no baseline PNG exists, so a
+#     baseline is created per AC and visual-regression-baseline-missing emits
+#     (informational). required: [marker_class, ac_id] per
+#     $defs/visual_regression_emission.
+#
+# Captured baselines are NOT committed: _bmad-output/qa-a11y-baseline/ and
+# _bmad-output/qa-visual-baseline/ are gitignored; the records CITE the
+# gitignored paths exactly as they cite _bmad-output/qa-evidence/ artifacts.
+# These emissions are story-level evidence, NOT AC gates — they do not flip
+# ac_results (sensor-not-advisor).
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-1/main-add-to-cart-action.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-1/main-cart-line-count.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-reject-invalid-card-action.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-rejection-message.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-order-confirmation-action.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-confirmation-page.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/heuristics/empty-state-cart-empty.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/heuristics/error-state-card-declined.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/heuristics/auth-boundary-session-expiry.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/heuristics/large-input-boundary-quantity-overflow.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/heuristics/locale-i18n-edge-eur-rtl.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/a11y/ac-1-axe-report.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/a11y/ac-2-axe-report.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/a11y/ac-3-axe-report.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/visual/ac-1-screenshot.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/visual/ac-2-screenshot.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/visual/ac-3-screenshot.png
+findings: []
+rationale: "All three ACs of the QA-coverage synthetic story sample-qa-coverage-001 pass via playwright-driver dispatch (Story 4.4). The full 7-heuristic sweep was dispatched (Story 19.2 / FR-P2-5): empty-state, error-state, auth-boundary, large-input-boundary, and locale-i18n-edge are applicable and contributed exploratory evidence (no findings); rate-limit-boundary and permission-boundary are structurally inapplicable to this cart/checkout surface and were loud-failed via heuristic-skipped markers. The web-only a11y audit (Story 19.4) ran axe-core in-page per AC: no prior baseline existed, so a baseline was created and a11y-baseline-stale emitted per AC (informational first-run anchor). The visual-regression audit (Story 19.5) captured a per-AC screenshot via the Playwright MCP browser_take_screenshot surface: no prior baseline PNG existed, so a baseline was created and visual-regression-baseline-missing emitted per AC (informational first-run anchor). All emissions are story-level evidence, not AC gates — ac_results reflect the mechanical-assertion outcomes only."
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "main flow: a logged-in user adds an item to the cart and the cart line count increments"
+      - "exploratory empty-state (applicable): the empty-cart state renders its zero-items affordance before the first add"
+      - "exploratory large-input-boundary (applicable): a quantity at the per-line ceiling is clamped, not overflowed"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-1/main-add-to-cart-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-1/main-cart-line-count.png
+        tier: tier-2-outcome
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "main flow: the checkout form rejects an invalid payment card"
+      - "exploratory error-state (applicable): the card-declined error surface renders an accessible error message"
+      - "exploratory locale-i18n-edge (applicable): the EUR-locale amount formats correctly at the rejection surface"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-reject-invalid-card-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-rejection-message.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-semantic-verification.json
+        tier: tier-3-semantic
+    semantic_verification: verified
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "main flow: an order confirmation page renders after a successful purchase"
+      - "exploratory auth-boundary (applicable): a session-expiry mid-checkout redirects to re-auth before confirmation"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-order-confirmation-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-confirmation-page.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-semantic-verification.json
+        tier: tier-3-semantic
+    semantic_verification: verified
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: rate-limit-boundary
+    story_id: sample-qa-coverage-001
+  - marker_class: heuristic-skipped
+    sub_classification: permission-boundary
+    story_id: sample-qa-coverage-001
+a11y_emissions:
+  - marker_class: a11y-baseline-stale
+    ac_id: AC-1
+  - marker_class: a11y-baseline-stale
+    ac_id: AC-2
+  - marker_class: a11y-baseline-stale
+    ac_id: AC-3
+visual_regression_emissions:
+  - marker_class: visual-regression-baseline-missing
+    ac_id: AC-1
+  - marker_class: visual-regression-baseline-missing
+    ac_id: AC-2
+  - marker_class: visual-regression-baseline-missing
+    ac_id: AC-3

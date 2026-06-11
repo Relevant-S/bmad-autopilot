@@ -1,0 +1,83 @@
+$ /bmad-automation run sample-qa-coverage-mobile-001
+
+[orchestrator] Story sample-qa-coverage-mobile-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-qa-coverage-mobile-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+[orchestrator] project_type=mobile read from _bmad/automation/config.yaml (Story 9.2)
+[orchestrator] review_lad disabled — 3-layer review (mobile + LAD is not a default-on combination)
+[orchestrator] qa-runbook: heuristics.mobile.* enabled (6); visual_regression.enabled=true; NO a11y block (web-only)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: implementing AC-1 (add-to-cart) + AC-2 (invalid-card rejection) + AC-3 (order confirmation)
+[stream] Dev: writing CartScreen + CheckoutScreen + OrderConfirmationScreen + a11y-label assertion tests
+[seam: dev-return] Dev returned status=pass; envelope persisted
+[hook: SubagentStop] Commit created: "Story sample-qa-coverage-mobile-001: cart + checkout + confirmation screens (Epic-19 QA-coverage surface)"
+[orchestrator] proposed_commit_message captured (FR50 / NFR-O6)
+[orchestrator] Lifecycle: in-progress → review (Story 2.4 / FR5)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist (3-layer parallel pass)
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — rationale validated
+[seam: review-return] Review-BMAD returned status=pass; failed_layers=[]
+
+[seam: env-provision] Provisioning QA env (Story 4.3 + Story 9.3 / FR7)
+[stream] MobileMcpAvailabilityProbe.is_available() → True
+[stream] MobileMcpProvisioner.provision → ProvisionedEnv(env_kind=mobile, port=0, pid=0, health_url=None)
+[stream] No dev-server subprocess spawned (mobile MCP is npx-stdio-managed per ADR-007)
+
+[seam: qa-dispatch] Dispatching QA specialist (mobile dispatch branch — Story 9.3)
+[stream] QA: BPlan generation (Story 4.1 / FR23) — reused existing ## QA Behavioral Plan section
+[stream] QA: AC-1 verification — MobileDriver dispatch (smoke-first per FR22b)
+[stream]   → launch_app(com.example.bmad.qacoverage) via mobile_launch_app
+[stream]   ✓ AC-1 main flow pass: a logged-in user adds an item to the cart
+[stream] QA: AC-2 verification — MobileDriver dispatch
+[stream]   ✓ AC-2 main flow pass: the checkout form rejects an invalid payment card
+[stream] QA: AC-3 verification — MobileDriver dispatch
+[stream]   ✓ AC-3 main flow pass: an order confirmation screen renders after a successful purchase
+
+[stream] QA: exploratory-heuristic dispatch (Story 19.2 step 8 — 6-of-7 MOBILE subset)
+[stream]   → empty-state — plan declares applicable (AC-1); drove empty-cart state via mobile-mcp — no finding
+[stream]   → error-state — plan declares applicable (AC-2); drove card-declined error via mobile-mcp — no finding
+[stream]   → auth-boundary — plan declares applicable (AC-3); drove session-expiry boundary via mobile-mcp — no finding
+[stream]   → large-input-boundary — plan declares applicable (AC-1); drove quantity-ceiling clamp via mobile-mcp — no finding
+[stream]   → locale-i18n-edge — plan declares applicable (AC-2); drove EUR/RTL-locale formatting via mobile-mcp — no finding
+[stream]   → permission-boundary — structurally inapplicable (no role/permission-gated surface) — emit heuristic-skipped: permission-boundary
+[stream]   → rate-limit-boundary — SILENTLY matrix-excluded on mobile per ADR-010 (not in MOBILE_HEURISTIC_SPECS); NOT dispatched, NO marker
+[stream]     (two skip semantics: structural-inapplicability → marker [permission-boundary]; matrix-excluded → SILENT [rate-limit-boundary])
+
+[stream] QA: a11y audit — SKIPPED (web-only per NFR-I3; project_type=mobile does not invoke). No a11y_emissions; no a11y marker. (absence-of-marker doctrine)
+
+[stream] QA: visual-regression audit (Story 19.5 step 14 — web+mobile, visual_regression.enabled=true)
+[stream]   → screenshot captured via the EXISTING mobile-mcp mobile_take_screenshot surface (no new MCP server)
+[stream]   → AC-1: no prior baseline PNG at _bmad-output/qa-visual-baseline/sample-qa-coverage-mobile-001/ac-1/baseline.png (gitignored)
+[stream]     → store_baseline(...) wrote the new baseline; emit visual-regression-baseline-missing (AC-1, informational)
+[stream]   → AC-2: no prior baseline → store_baseline(...); emit visual-regression-baseline-missing (AC-2, informational)
+[stream]   → AC-3: no prior baseline → store_baseline(...); emit visual-regression-baseline-missing (AC-3, informational)
+[stream]     (no delta on a first run — nothing to diff against yet; dimension-mismatch folds to delta-exceeded on later runs, no -mode-unstable class)
+[seam: qa-return] QA returned status=pass; ac_results all pass; 5 applicable heuristics with evidence;
+                  1 heuristic-skipped marker (permission-boundary); rate-limit-boundary silently excluded;
+                  3 visual-regression-baseline-missing; NO a11y
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-qa-coverage-mobile-001/run-001.md
+[stream] Loud-fail block: 4 markers
+         (heuristic-skipped: permission-boundary, visual-regression-baseline-missing ×3 [AC-1/2/3])
+[stream] Zero mobile-blocked markers — the mobile MCP remained reachable throughout the run.
+[stream] Zero a11y markers — web-only (NFR-I3). Zero rate-limit-boundary marker — silently matrix-excluded (ADR-010).
+[stream] Cost telemetry: $1.89 (within NFR-P1 $3 target; 3-specialist partition, no lad row)
+  | dev          | $0.52 |  -    | $0.52 |
+  | qa           | $1.02 |  -    | $1.02 |
+  | review-bmad  | $0.35 |  -    | $0.35 |
+  | **Total**    | **$1.89** |
+[stream]   → cost partition is per-specialist × per-retry (NFR-P5); NO per-heuristic field
+[stream]   → activation gate (19.1/19.2 SHIP-ALL-ON): mobile 6-of-7 + VR cost < NFR-P1 ceiling → NOT triggered
+
+run sample-qa-coverage-mobile-001: complete; merge-ready bundle written.
+(6-of-7 mobile heuristic subset dispatched [5 applicable with evidence, 1 structurally-inapplicable
+ with a heuristic-skipped marker — permission-boundary, among the four 19.2-added sub_classifications];
+ rate-limit-boundary SILENTLY matrix-excluded per ADR-010 — NO marker; visual-regression first-run
+ baseline created per AC via mobile_take_screenshot [visual-regression-baseline-missing]; NO a11y
+ [web-only, NFR-I3]; per-specialist cost under the NFR-P1 ceiling.)
