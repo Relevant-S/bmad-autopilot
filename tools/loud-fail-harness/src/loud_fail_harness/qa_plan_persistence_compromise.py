@@ -59,12 +59,18 @@ Verbatim epic AC (``_bmad-output/planning-artifacts/epics.md`` lines
 FR-P2-9 Phase-2 upgrade pointer (``_bmad-output/planning-artifacts/prd.md``
 line 128 — "Per-run plan re-derivation cross-check"): MVP accepts plan
 persistence to support ``bmad-automation:resume {story-id}`` from Story
-8.3 without re-deriving the plan; full QA independence per FR-P2-9 will
-re-derive the plan every run with a cross-check against the persisted
-plan at Phase 2. THIS module's :data:`COMPROMISE_NOTE_BODY` constant +
-both render sites are removed at Phase 2; the audit-doc row's
-classification flips to ``Phase-2-upgraded`` and the row is preserved
-for historical-audit-trail purposes.
+8.3 without re-deriving the plan; full QA independence per FR-P2-9 re-derives
+the plan every run with a cross-check against the persisted plan
+(Story 20.1, LANDED — :mod:`loud_fail_harness.qa_plan_rederivation`).
+The FR-P2-9 resolution is **retain-and-accompany, NOT remove**: THIS
+module's :data:`COMPROMISE_NOTE_BODY` constant + both render sites are
+RETAINED; Story 20.1 adds an independent, read-only per-run cross-check
+that ACCOMPANIES the compromise note (the persistence-for-resumability
+tradeoff still stands — ``bmad-automation:resume`` relies on the
+persisted plan), making the re-derivation guarantee inspectable in the
+PR bundle co-located with this note. The audit-doc row is retained and
+annotated accordingly; the constant's line-3 forward-pointer to FR-P2-9
+remains accurate prose.
 
 Cross-reference to ``docs/extension-audit.md``:
     The audit doc's per-convention table carries one row appended by
@@ -161,8 +167,8 @@ COMPROMISE_NOTE_BODY: Final[str] = (
     "This plan is persisted across runs for resumability.\n"
     "Persistence is a known compromise: full QA independence would "
     "re-derive the plan every run.\n"
-    "See `docs/extension-audit.md` and FR-P2-9 (Phase 2 upgrade "
-    "replacing this with per-run plan re-derivation cross-check)."
+    "See `docs/extension-audit.md` and FR-P2-9 "
+    "(Story 20.1, LANDED — accompanies this note with per-run plan re-derivation cross-check)."
 )
 
 

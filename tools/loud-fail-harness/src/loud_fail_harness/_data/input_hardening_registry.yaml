@@ -39,6 +39,13 @@ externally_constructed:
     identifier_fields: [branch_id]
   qa_plan_drift.PlanDriftDiagnosticContext:
     identifier_fields: [story_id]
+  qa_plan_rederivation.PlanRederivationDiagnosticContext:
+    # story_id is the raw external-ingress identifier (hardened). drifted_ac_ids
+    # come from QABehavioralPlanEntry.ac_id (internal parsed-plan boundary, like
+    # the PlanDriftDiagnosticContext rationale) and drift_surfaces is a closed
+    # Literal — neither is a raw hostile-input surface, so only story_id routes
+    # through harden_identifier (Story 20.1 / FR-P2-9).
+    identifier_fields: [story_id]
   story_file_lock.LockRecord:
     identifier_fields: [story_id]
   parallel_pollution.StoryClaim:
@@ -235,6 +242,8 @@ internal_only:
   - qa_exploratory_heuristics.HeuristicSkippedEmissionRecord
   - qa_plan_drift.PlanDriftEmission
   - qa_plan_drift.PlanDriftEmissionRecord
+  - qa_plan_rederivation.PlanRederivationCrossCheck
+  - qa_plan_rederivation.PlanRederivationEmissionRecord
   - qa_runbook_heuristics_validator.ValidationFinding
   - qa_visual_regression.VisualRegressionBaselineMissingEmission
   - qa_visual_regression.VisualRegressionBaselineMissingEmissionRecord

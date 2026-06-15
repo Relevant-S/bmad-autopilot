@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 546
-- Emitted: 50
-- Not-applicable: 496
+- Total intersections: 560
+- Emitted: 51
+- Not-applicable: 509
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -357,6 +357,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | plan-drift-detected | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | plan-drift-detected | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_plan_drift.py:385` | 2026-05-05 |  |
 | plan-drift-detected | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
+| plan-rederivation-drift-detected | bundle-assembler | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); the bundle assembler RENDERS the plan_rederivation envelope field but does not emit the marker. |
+| plan-rederivation-drift-detected | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | hook-session-start | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | hook-stop | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | hook-subagent-stop | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | orchestrator-state-machine | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
+| plan-rederivation-drift-detected | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_plan_rederivation.py:296` | 2026-06-12 |  |
+| plan-rederivation-drift-detected | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-12 | QA-side marker emitted only by the QA specialist's substrate (qa_plan_rederivation); this surface has no code path that produces this cross-check evidence. |
 | playwright-mcp-unavailable | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | playwright-mcp-unavailable | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | playwright-mcp-unavailable | hook-session-start | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |

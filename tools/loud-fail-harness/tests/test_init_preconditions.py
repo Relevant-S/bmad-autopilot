@@ -659,7 +659,9 @@ def test_schema_version_bumps_non_regression() -> None:
     # Story 19.3 bumped 1.13 → 1.14 (additive: three new top-level a11y-audit
     # evidence marker classes; closed-set 34 → 37; MINOR bump per the new-top-
     # level-class rule + Story 24.1 precedent; ADR-011 / FR-P2-6).
-    assert taxonomy_data["schema_version"] == "1.15"
+    # Story 20.1 bumped 1.15 → 1.16 (additive: plan-rederivation-drift-detected
+    # top-level class; closed-set 39 → 40; PATCH bump; FR-P2-9).
+    assert taxonomy_data["schema_version"] == "1.16"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`

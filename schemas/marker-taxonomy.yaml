@@ -364,6 +364,30 @@
 #                            orchestrator-event.yaml stays at "1.2"
 #                            (co-versioned ≠ co-bumped; visual-regression markers
 #                            are QA-evidence, not orchestrator events).
+#   1.15 → 1.16 (Story 20.1) — additive: appended ONE new top-level marker
+#                            class `plan-rederivation-drift-detected` for the
+#                            Phase-2 per-run plan re-derivation cross-check
+#                            (FR-P2-9). A QA-runtime EVIDENCE marker emitted by
+#                            `qa_plan_rederivation.surface_plan_rederivation_cross_check`
+#                            on the `reuse-existing` path when the persisted vs
+#                            re-derived QA Behavioral Plan differ at a non-AC-hash
+#                            drift surface (`heuristic_applicability` /
+#                            `flow_branches` / the `semantic_verification_tier`
+#                            pair). Independent of FR23's `plan-drift-detected`
+#                            (AC-hash channel), which is left fully intact —
+#                            FR-P2-9 is an additive read-only cross-check that does
+#                            NOT overwrite the persisted plan (sensor-not-advisor).
+#                            `pointer_context_fields: [drift_surfaces]`;
+#                            `sub_classifications: []`. Enumeration-check ORPHAN
+#                            (no orchestrator-event / dependency counterpart;
+#                            tolerated exactly as `plan-drift-detected` / `a11y-*` /
+#                            `visual-regression-*`). Default `durable` lifetime by
+#                            omission. The top-level 39-class closed-set becomes 40.
+#                            Classified PATCH per the Story 20.1 AC + epics-phase-2.md
+#                            line 70 + the Story 14.3 top-level-as-PATCH-by-epic-
+#                            contract precedent (the numeric result 1.15 → 1.16 is
+#                            identical under either label). orchestrator-event.yaml
+#                            stays at "1.2" (co-versioned ≠ co-bumped).
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
@@ -374,7 +398,8 @@
 # schema PATCH bump for Story 19.2 heuristic-skipped +4 exploratory sub_classifications (34-class closed-set preserved; flow-branch unchanged; precedent: Story 9.5/13.6 sub_classification PATCH)
 # schema MINOR bump for Story 19.3 a11y-baseline-stale / a11y-delta-exceeded / a11y-delta-mode-unstable new top-level evidence classes (closed-set 34 → 37; ADR-011 / FR-P2-6; orphans; no runtime emitter — Story 19.4 wires emission)
 # schema MINOR bump for Story 19.5 visual-regression-delta-exceeded / visual-regression-baseline-missing new top-level evidence classes (closed-set 37 → 39; ADR-012 / FR-P2-10; both [ac_id]; orphans; runtime emission lands in THIS story — no split; no -mode-unstable class, dimension-mismatch folds into delta-exceeded)
-schema_version: "1.15"
+# schema PATCH bump for Story 20.1 plan-rederivation-drift-detected new top-level QA-evidence class (closed-set 39 → 40; FR-P2-9; pointer_context_fields [drift_surfaces]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.1 AC + epics-phase-2.md line 70, citing the Story 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.15 → 1.16 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; additive read-only cross-check, FR23's plan-drift-detected AC-hash channel left fully intact)
+schema_version: "1.16"
 
 markers:
 
@@ -481,6 +506,27 @@ markers:
       the AC change to confirm the new Plan reflects intent; rare false
       positives are acceptable per loud-fail discipline.
     pointer_context_fields: []
+    sub_classifications: []
+
+  - marker_class: plan-rederivation-drift-detected
+    diagnostic_pointer: |
+      FR-P2-9 / Story 20.1 — the QA Behavioral Plan re-derived this run from
+      the current AC + qa-runbook state differs from the PERSISTED plan at a
+      drift surface that AC-hash drift does NOT cover ({drift_surfaces}). This
+      is the `reuse-existing` path (AC text — and thus `ac_hash` — unchanged),
+      so the mismatch is necessarily beyond AC-hash drift: the per-AC plan
+      content (`heuristic_applicability` / `flow_branches` /
+      `semantic_verification_tier` — the `semantic_verification_requirement` +
+      `expected_evidence_tier` pair) drifted while the AC text held. Independent
+      of FR23's `plan-drift-detected` (AC-hash channel) and additive to it —
+      this is a read-only cross-check that does NOT overwrite the persisted plan
+      (sensor-not-advisor); FR23's `plan_status` reset remains the only trigger
+      for plan refresh. Remediation: review whether the qa-runbook / derivation
+      state changed intentionally between runs; if so, regenerate the persisted
+      plan (e.g. via an AC-text touch that triggers FR23 re-derivation), else
+      treat the persisted plan as authoritative. Rare false positives are
+      acceptable per loud-fail discipline.
+    pointer_context_fields: [drift_surfaces]
     sub_classifications: []
 
   - marker_class: specialist-timeout

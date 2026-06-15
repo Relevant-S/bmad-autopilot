@@ -36,7 +36,7 @@ This PR bundle is a walking-skeleton — it enumerates the structural shape of t
 >
 > This plan is persisted across runs for resumability.
 > Persistence is a known compromise: full QA independence would re-derive the plan every run.
-> See `docs/extension-audit.md` and FR-P2-9 (Phase 2 upgrade replacing this with per-run plan re-derivation cross-check).
+> See `docs/extension-audit.md` and FR-P2-9 (Story 20.1, LANDED — accompanies this note with per-run plan re-derivation cross-check).
 
 ### AC-1 — status: `pass`
 

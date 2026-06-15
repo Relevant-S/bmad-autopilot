@@ -50,6 +50,7 @@ from loud_fail_harness.qa_evidence_persistence import EvidenceTruncatedDiagnosti
 from loud_fail_harness.qa_evidence_tier import Tier3NotConfiguredDiagnosticContext
 from loud_fail_harness.qa_exploratory_heuristics import HeuristicSkippedDiagnosticContext
 from loud_fail_harness.qa_plan_drift import PlanDriftDiagnosticContext
+from loud_fail_harness.qa_plan_rederivation import PlanRederivationDiagnosticContext
 from loud_fail_harness.qa_runbook_heuristics_validator import HeuristicOptOutEntry
 from loud_fail_harness.run_state import CostToDateBySpecialist, RunState
 from loud_fail_harness.story_file_lock import LockRecord
@@ -231,6 +232,14 @@ def _plan_drift_kwargs() -> dict[str, object]:
     )
 
 
+def _plan_rederivation_kwargs() -> dict[str, object]:
+    return dict(
+        story_id="20-1-test",
+        drift_surfaces=("heuristic_applicability",),
+        drifted_ac_ids=("AC-1",),
+    )
+
+
 def _lock_record_kwargs() -> dict[str, object]:
     return dict(
         schema_version="1.0",
@@ -323,6 +332,10 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_plan_drift.PlanDriftDiagnosticContext": (
         PlanDriftDiagnosticContext,
         _plan_drift_kwargs,
+    ),
+    "qa_plan_rederivation.PlanRederivationDiagnosticContext": (
+        PlanRederivationDiagnosticContext,
+        _plan_rederivation_kwargs,
     ),
     "story_file_lock.LockRecord": (LockRecord, _lock_record_kwargs),
     "parallel_pollution.StoryClaim": (StoryClaim, _story_claim_kwargs),

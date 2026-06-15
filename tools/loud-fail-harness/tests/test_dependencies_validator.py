@@ -893,7 +893,21 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # entry adds NO passing reference (passing stays 14); the three markers join
     # the orphan bucket → orphan-count increment 26 → 29 is the load-bearing
     # witness that the Story 19.3 taxonomy + dependency edits landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 31 orphan marker class(es)" in text
+    #
+    # Post-Story-19.5 review: TWO visual-regression evidence markers
+    # (`visual-regression-delta-exceeded` / `visual-regression-baseline-missing`)
+    # joined the orphan bucket (QA-wrapper-emitted evidence; the `pixelmatch`
+    # dependency entry carries NO `marker_class`); orphan-count 29 → 31.
+    #
+    # Post-Story-20.1 review: ONE plan-rederivation evidence marker
+    # (`plan-rederivation-drift-detected`) newly enumerated via PATCH bump
+    # 1.15 → 1.16; zero `dependencies.yaml` / `escalation-bundles/*.yaml` /
+    # `orchestrator-event.yaml` reference (a QA-evidence marker emitted at QA
+    # RUNTIME by `qa_plan_rederivation.surface_plan_rederivation_cross_check`,
+    # exactly like `plan-drift-detected`, which also has no counterpart). The
+    # marker joins the orphan bucket → orphan-count increment 31 → 32 is the
+    # load-bearing witness that the Story 20.1 taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 32 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 

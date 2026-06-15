@@ -137,6 +137,23 @@ properties:
     # Recorded in `docs/extension-audit.md` per the no-introductions principle.
     $ref: "#/$defs/plan_drift"
 
+  plan_rederivation:
+    # QA-specific (FR-P2-9 + Story 20.1). The per-run plan re-derivation
+    # cross-check verdict surfaced on the `reuse-existing` path (persisted
+    # plan present AND `ac_hash` matches). Sibling of `plan_drift` (single
+    # object, NOT an array). Unlike `plan_drift` (absent on no-drift runs)
+    # this field is present on EVERY reuse-existing run — carrying
+    # `cross_check_status: green` on agreement so the bundle can render the
+    # `FR-P2-9 cross-check: green` line unconditionally, or
+    # `drift-detected` + the drift diagnostic on a non-AC-hash mismatch. The
+    # field is projected by the QA wrapper from
+    # `qa_plan_rederivation.PlanRederivationCrossCheck` (flat shape: the drift
+    # diagnostic fields are lifted from `emission_record.diagnostic_context`).
+    # Consumed by the bundle assembler's QA-section render co-located with the
+    # retained FR25 compromise blockquote. Recorded in
+    # `docs/extension-audit.md` per the no-introductions principle.
+    $ref: "#/$defs/plan_rederivation"
+
   heuristic_skipped_emissions:
     type: array
     description: "QA-specific (FR22 + Story 4.9). Per-heuristic-skipped emission records carried on the QA envelope. Optional non-null shape: the field is absent on stories where every heuristic applies (no skips); present-and-array-conforming-to-$defs/heuristic_skipped_emission on stories with ≥ 1 structurally inapplicable heuristic. The field is consumed by the bundle assembler's QA-section render to surface the per-emission diagnostic prose + the structured marker comment co-located. Recorded in `docs/extension-audit.md` per the no-introductions principle."
@@ -325,6 +342,50 @@ $defs:
       current_ac_hash:
         type: string
         pattern: "^[0-9a-f]{64}$"
+
+  plan_rederivation:
+    # QA-specific (FR-P2-9 + Story 20.1) per-run plan re-derivation
+    # cross-check verdict (the FLAT envelope projection of
+    # `qa_plan_rederivation.PlanRederivationCrossCheck`). `cross_check_status`
+    # is always present; on `drift-detected` the three diagnostic fields
+    # (`story_id`, `drift_surfaces`, `drifted_ac_ids`) lifted from the
+    # emission record's `PlanRederivationDiagnosticContext` are REQUIRED (the
+    # conditional `allOf`/`if`/`then` below), and absent on `green` (no
+    # diagnostic to carry). `drift_surfaces` is a non-empty subset of the
+    # three drift surfaces (the `semantic_verification_tier` value covers the
+    # `semantic_verification_requirement` + `expected_evidence_tier` pair).
+    # `additionalProperties: false` closed-by-default invariant preserved.
+    type: object
+    required:
+      - cross_check_status
+    additionalProperties: false
+    allOf:
+      - if:
+          properties:
+            cross_check_status:
+              const: drift-detected
+          required: [cross_check_status]
+        then:
+          required: [story_id, drift_surfaces, drifted_ac_ids]
+    properties:
+      cross_check_status:
+        type: string
+        enum: [green, drift-detected]
+      story_id:
+        type: string
+        minLength: 1
+      drift_surfaces:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          enum: [heuristic_applicability, flow_branches, semantic_verification_tier]
+      drifted_ac_ids:
+        type: array
+        minItems: 1
+        items:
+          type: string
+          minLength: 1
 
   heuristic_skipped_emission:
     # QA-specific (FR22 + Story 4.9; expanded to 7 at Story 19.2 / ADR-010 /

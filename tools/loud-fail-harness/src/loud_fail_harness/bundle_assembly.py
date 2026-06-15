@@ -138,6 +138,9 @@ from loud_fail_harness.exceptions import (
 from loud_fail_harness.marker_wiring import compute_alphabetical_marker_order
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
+from loud_fail_harness.qa_plan_rederivation import (
+    PLAN_REDERIVATION_DRIFT_DETECTED_MARKER,
+)
 from loud_fail_harness.qa_plan_persistence_compromise import (
     render_compromise_blockquote,
 )
@@ -539,6 +542,10 @@ def _render_per_ac_section(
     plan_drift_body = _render_qa_plan_drift_subsection(
         qa_envelope, marker_registry=marker_registry
     )
+    rederivation_line = _render_qa_plan_rederivation_line(qa_envelope)
+    rederivation_body = _render_qa_plan_rederivation_subsection(
+        qa_envelope, marker_registry=marker_registry
+    )
     heuristic_body = _render_qa_heuristic_findings_subsection(
         qa_envelope, marker_registry=marker_registry
     )
@@ -552,9 +559,20 @@ def _render_per_ac_section(
     # :func:`loud_fail_harness.qa_plan_persistence_compromise.render_compromise_blockquote`
     # — same single-source-of-truth invariant ``render_plan_section``
     # uses on the story-doc side.
-    parts = [render_compromise_blockquote().rstrip("\n"), ac_results_body]
+    # Story 20.1 (FR-P2-9): the per-run plan re-derivation cross-check line
+    # is co-located with the FR25 compromise blockquote (AC-5:
+    # retain-and-accompany) — rendered on EVERY reuse-existing run that
+    # populated the `plan_rederivation` field (green or drift). The
+    # `### Plan re-derivation drift detected` H3 sub-section + structured
+    # marker comment ride after `### Plan drift detected` on the drift branch.
+    parts = [render_compromise_blockquote().rstrip("\n")]
+    if rederivation_line:
+        parts.append(rederivation_line)
+    parts.append(ac_results_body)
     if plan_drift_body:
         parts.append(plan_drift_body)
+    if rederivation_body:
+        parts.append(rederivation_body)
     if heuristic_body:
         parts.append(heuristic_body)
     return "\n\n".join(parts)
@@ -611,6 +629,78 @@ def _render_qa_plan_drift_subsection(
         f"- Prior plan_status: `{prior_plan_status}`",
         f"- Prior ac_hash: `{prior_ac_hash}`",
         f"- Current ac_hash: `{current_ac_hash}`",
+    ]
+    return "\n".join(lines)
+
+
+def _render_qa_plan_rederivation_line(qa_envelope: dict[str, Any]) -> str:
+    """Render the Story-20.1 (FR-P2-9) ``FR-P2-9 cross-check: green`` /
+    ``… drift detected`` line co-located with the FR25 compromise blockquote
+    when QA's envelope ``plan_rederivation`` field is non-null; return the
+    empty string otherwise (silent — the field is absent on non-reuse runs).
+
+    The line is rendered on EVERY reuse-existing run (the field carries
+    ``cross_check_status: green`` on agreement) so the substrate-level
+    guarantee is inspectable in the bundle even when nothing drifted (AC-5).
+    """
+    plan_rederivation = qa_envelope.get("plan_rederivation")
+    if plan_rederivation is None:
+        return ""
+    status = plan_rederivation.get("cross_check_status")
+    if status == "drift-detected":
+        return "> FR-P2-9 cross-check: drift detected"
+    if status == "green":
+        return "> FR-P2-9 cross-check: green"
+    return ""
+
+
+def _render_qa_plan_rederivation_subsection(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-20.1 (FR-P2-9) ``### Plan re-derivation drift
+    detected`` H3 sub-section when QA's envelope ``plan_rederivation`` field
+    carries ``cross_check_status == "drift-detected"``; return the empty
+    string otherwise (silent on green and on the absent field).
+
+    The sub-section carries the diagnostic items in human-readable form
+    (``story_id``, ``drift_surfaces``, ``drifted_ac_ids``) + the structured
+    marker comment ``<!-- bmad-automation:marker
+    plan-rederivation-drift-detected -->`` co-located so the bundle carries
+    the marker. Defense-in-depth re-validation per Pattern 5 (mirrors
+    :func:`_render_qa_plan_drift_subsection`): :func:`validate_marker_emission`
+    fires once when the drift branch renders; registry rejection raises
+    :exc:`UnknownMarkerClass`.
+
+    FR23's ``### Plan drift detected`` render (AC-hash channel) is NOT
+    modified — FR-P2-9 is additive; both sub-sections render independently
+    per their own structural predicates.
+    """
+    plan_rederivation = qa_envelope.get("plan_rederivation")
+    if plan_rederivation is None:
+        return ""
+    if plan_rederivation.get("cross_check_status") != "drift-detected":
+        return ""
+
+    validate_marker_emission(
+        marker_registry, PLAN_REDERIVATION_DRIFT_DETECTED_MARKER
+    )
+
+    story_id = plan_rederivation.get("story_id", "(unknown)")
+    drift_surfaces = plan_rederivation.get("drift_surfaces") or []
+    drifted_ac_ids = plan_rederivation.get("drifted_ac_ids") or []
+    surfaces_render = ", ".join(f"`{s}`" for s in drift_surfaces) or "_(none)_"
+    ac_ids_render = ", ".join(f"`{a}`" for a in drifted_ac_ids) or "_(none)_"
+
+    lines = [
+        "### Plan re-derivation drift detected",
+        "",
+        _render_marker(PLAN_REDERIVATION_DRIFT_DETECTED_MARKER),
+        "",
+        f"- Story ID: `{story_id}`",
+        f"- Drift surfaces: {surfaces_render}",
+        f"- Drifted AC IDs: {ac_ids_render}",
     ]
     return "\n".join(lines)
 
