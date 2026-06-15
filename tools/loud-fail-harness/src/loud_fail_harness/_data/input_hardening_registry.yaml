@@ -64,6 +64,20 @@ externally_constructed:
     # format-validated (schema pattern) not hardened, status is a closed Literal, and
     # retry_count_within_run is an int — none are raw hostile-text surfaces.
     identifier_fields: [run_id, evidence_ref]
+  qa_flakiness_threshold.FlakinessThresholdDiagnosticContext:
+    # story_id is the raw external-ingress identifier; ac_id is supplied by the
+    # wrapper from the dispatch ac_list (pre-validated) — both hardened defensively
+    # (Story 20.3 / FR-P2-8). consecutive_transient_fail_runs is an int (the
+    # trailing transient-fail streak) — NOT a raw hostile-text surface.
+    identifier_fields: [story_id, ac_id]
+  # FlakinessThresholdConfig is parsed from the on-disk qa-runbook `flakiness:`
+  # block (externally constructed) but carries ONLY int knobs range-validated via
+  # Field(ge=1) — that constraint IS the hardening boundary; there is NO string
+  # hostile-input surface, so Rule A registers it with empty buckets (the
+  # qa_visual_regression.VisualDiffResult numeric-only precedent), Rule B has no
+  # string field to route, and test_input_hardening._BASELINES carries its
+  # valid-construction baseline (Story 20.3 / FR-P2-8).
+  qa_flakiness_threshold.FlakinessThresholdConfig: {}
   story_file_lock.LockRecord:
     identifier_fields: [story_id]
   parallel_pollution.StoryClaim:
@@ -258,6 +272,9 @@ internal_only:
   - qa_evidence_tier.Tier3NotConfiguredEmissionRecord
   - qa_exploratory_heuristics.HeuristicSkippedEmission
   - qa_exploratory_heuristics.HeuristicSkippedEmissionRecord
+  - qa_flakiness_threshold.FlakinessThresholdDecision
+  - qa_flakiness_threshold.FlakinessThresholdEmission
+  - qa_flakiness_threshold.FlakinessThresholdEmissionRecord
   - qa_plan_drift.PlanDriftEmission
   - qa_plan_drift.PlanDriftEmissionRecord
   - qa_plan_rederivation.PlanRederivationCrossCheck

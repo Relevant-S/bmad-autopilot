@@ -148,6 +148,16 @@ def test_invalid_opt_out_unknown_name() -> None:
     ), findings
 
 
+def test_invalid_flakiness_bad_knob() -> None:
+    raw = _load(INVALID / "flakiness-bad-knob.yaml")
+    findings = validate_qa_runbook_heuristics(raw, "f.yaml")
+    assert any(
+        f.pointer == "/flakiness/threshold_consecutive_runs"
+        and "must be an int >= 1" in f.message
+        for f in findings
+    ), findings
+
+
 # --------------------------------------------------------------------------- #
 # Pure-API shape rules                                                         #
 # --------------------------------------------------------------------------- #
@@ -155,6 +165,69 @@ def test_invalid_opt_out_unknown_name() -> None:
 
 def test_absence_of_heuristics_block_is_clean() -> None:
     assert validate_qa_runbook_heuristics({"masked_selectors": ["x"]}, "f") == []
+
+
+def test_absence_of_flakiness_block_is_clean() -> None:
+    # FR42: absence means "defaults apply", never a finding (Story 20.3).
+    assert validate_qa_runbook_heuristics({"heuristics": {"web": {}}}, "f") == []
+
+
+def test_valid_flakiness_block_clean() -> None:
+    raw = {
+        "flakiness": {
+            "threshold_consecutive_runs": 5,
+            "threshold_transient_fail_count": 2,
+        }
+    }
+    assert validate_qa_runbook_heuristics(raw, "f") == []
+
+
+def test_flakiness_partial_block_clean() -> None:
+    # One knob present → the other defaults; no finding (absence = default).
+    raw = {"flakiness": {"threshold_consecutive_runs": 3}}
+    assert validate_qa_runbook_heuristics(raw, "f") == []
+
+
+def test_flakiness_below_floor_rejected() -> None:
+    findings = validate_qa_runbook_heuristics(
+        {"flakiness": {"threshold_transient_fail_count": 0}}, "f"
+    )
+    assert any(
+        f.pointer == "/flakiness/threshold_transient_fail_count"
+        and "must be an int >= 1" in f.message
+        for f in findings
+    ), findings
+
+
+def test_flakiness_non_int_knob_rejected() -> None:
+    findings = validate_qa_runbook_heuristics(
+        {"flakiness": {"threshold_consecutive_runs": "3"}}, "f"
+    )
+    assert any(
+        f.pointer == "/flakiness/threshold_consecutive_runs"
+        and "must be an int >= 1" in f.message
+        for f in findings
+    ), findings
+
+
+def test_flakiness_bool_knob_rejected() -> None:
+    # bool is an int subclass but not a valid threshold count — must be rejected.
+    findings = validate_qa_runbook_heuristics(
+        {"flakiness": {"threshold_transient_fail_count": True}}, "f"
+    )
+    assert any(
+        f.pointer == "/flakiness/threshold_transient_fail_count"
+        and "must be an int >= 1" in f.message
+        for f in findings
+    ), findings
+
+
+def test_non_mapping_flakiness_block() -> None:
+    findings = validate_qa_runbook_heuristics({"flakiness": [1, 2]}, "f")
+    assert any(
+        f.pointer == "/flakiness" and "must be a mapping" in f.message
+        for f in findings
+    ), findings
 
 
 def test_unrelated_keys_ignored() -> None:
@@ -429,7 +502,7 @@ def _marker_taxonomy() -> dict:
 
 
 def test_marker_taxonomy_version_is_1_14() -> None:
-    assert _marker_taxonomy()["schema_version"] == "1.16"
+    assert _marker_taxonomy()["schema_version"] == "1.17"
 
 
 def test_heuristic_skipped_subclassifications_are_eight() -> None:

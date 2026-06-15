@@ -172,6 +172,12 @@ properties:
     items:
       $ref: "#/$defs/visual_regression_emission"
 
+  flakiness_emissions:
+    type: array
+    description: "QA-specific (FR-P2-8 + Story 20.3). Per-AC longitudinal flakiness-threshold emission records carried on the QA envelope. Unlike `a11y_emissions` / `visual_regression_emissions` (opt-in via an `enabled` flag), the Story 20.2 flakiness log accumulates on EVERY QA run; the `flakiness:` qa-runbook block only TUNES the threshold, it does not gate collection. This array is present-and-array-conforming-to-$defs/flakiness_emission ONLY on runs where ≥ 1 AC crossed the consecutive-transient-fail threshold (the marker fires solely on a crossing — absence is silent, the no-marker-on-absence parity with the opt-in surfaces), and absent otherwise. Sibling of `visual_regression_emissions` (the typed-emission-array precedent). The threshold marker is story-level evidence, NOT an AC gate — these records do not flip `ac_results` (sensor-not-advisor). Recorded in `docs/extension-audit.md` per the no-introductions principle."
+    items:
+      $ref: "#/$defs/flakiness_emission"
+
 $defs:
   finding:
     type: object
@@ -476,6 +482,31 @@ $defs:
       marker_class:
         type: string
         enum: [visual-regression-delta-exceeded, visual-regression-baseline-missing]
+      ac_id:
+        type: string
+        minLength: 1
+
+  flakiness_emission:
+    # QA-specific (FR-P2-8 + Story 20.3) per-AC longitudinal flakiness-threshold
+    # evidence emission record. Mirrors `qa_flakiness_threshold.py`'s
+    # `FlakinessThresholdEmissionRecord` byte-for-byte (the
+    # `visual_regression_emission`↔`VisualRegression*EmissionRecord` mirror
+    # precedent). `marker_class` is the single-value enum 20.3 enumerated in
+    # `marker-taxonomy.yaml` (`1.17`); `ac_id` is UNCONDITIONALLY required because
+    # the class is AC-scoped (`pointer_context_fields: [ac_id]`) — so this $def is
+    # FLAT (`required: [marker_class, ac_id]`, no `allOf`/`if`/`then`), the same
+    # shape as `visual_regression_emission`. The `additionalProperties: false`
+    # closed-by-default invariant + the top-level `not.anyOf` sensor-not-advisor
+    # clause are preserved (no `next_action` / `recommendation` here).
+    type: object
+    required:
+      - marker_class
+      - ac_id
+    additionalProperties: false
+    properties:
+      marker_class:
+        type: string
+        enum: [flakiness-threshold-exceeded]
       ac_id:
         type: string
         minLength: 1

@@ -137,6 +137,9 @@ from loud_fail_harness.exceptions import (
 )
 from loud_fail_harness.marker_wiring import compute_alphabetical_marker_order
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
+from loud_fail_harness.qa_flakiness_threshold import (
+    FLAKINESS_THRESHOLD_EXCEEDED_MARKER,
+)
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.qa_plan_rederivation import (
     PLAN_REDERIVATION_DRIFT_DETECTED_MARKER,
@@ -477,6 +480,13 @@ def _render_per_ac_section(
     suffix appended to the existing backtick-path bullet. Default
     empty preserves byte-stable behavior for callers that don't
     validate.
+
+    Story 20.3 thickening (FR-P2-8 / AC-5): when the QA envelope's optional
+    ``flakiness_emissions`` array is non-empty the renderer appends a
+    ``### Flakiness threshold exceeded`` H3 sub-section AFTER the heuristic
+    sub-section, emitting the per-AC ``<!-- bmad-automation:marker
+    flakiness-threshold-exceeded -->`` comment co-located so the longitudinal
+    marker is greppable in the bundle.
     """
     dangling_index: dict[tuple[str, str], DanglingEvidenceRef] = {
         (ref.ac_id, ref.path): ref
@@ -549,6 +559,9 @@ def _render_per_ac_section(
     heuristic_body = _render_qa_heuristic_findings_subsection(
         qa_envelope, marker_registry=marker_registry
     )
+    flakiness_body = _render_qa_flakiness_subsection(
+        qa_envelope, marker_registry=marker_registry
+    )
 
     # Story 4.11 (FR25): the plan-persistence-compromise blockquote is
     # PREPENDED unconditionally — present even when ``ac_results`` is
@@ -575,6 +588,8 @@ def _render_per_ac_section(
         parts.append(rederivation_body)
     if heuristic_body:
         parts.append(heuristic_body)
+    if flakiness_body:
+        parts.append(flakiness_body)
     return "\n\n".join(parts)
 
 
@@ -704,6 +719,57 @@ def _render_qa_plan_rederivation_subsection(
     ]
     return "\n".join(lines)
 
+
+
+def _render_qa_flakiness_subsection(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-20.3 (FR-P2-8) ``### Flakiness threshold exceeded`` H3
+    sub-section when QA's envelope ``flakiness_emissions`` array is non-empty;
+    return the empty string otherwise (silent — the array is absent on runs where
+    no AC crossed the longitudinal threshold).
+
+    Each emission carries ``{marker_class, ac_id}``; the renderer emits the per-AC
+    diagnostic prose + the structured ``<!-- bmad-automation:marker
+    flakiness-threshold-exceeded -->`` marker comment co-located at the per-AC
+    location, so the longitudinal marker is greppable in the bundle exactly as
+    every sibling QA-evidence marker (``heuristic-skipped`` / ``plan-*``) is. (The
+    documented a11y/visual ``*_emissions`` render is not yet wired in the assembler
+    — this mirrors the genuinely-existing per-AC marker-comment render path of
+    :func:`_render_qa_heuristic_findings_subsection`.)
+
+    Defense-in-depth re-validation per Pattern 5 (mirrors
+    :func:`_render_qa_heuristic_findings_subsection`):
+    :func:`validate_marker_emission` fires once per emission; registry rejection
+    raises :exc:`UnknownMarkerClass`.
+    """
+    emissions = qa_envelope.get("flakiness_emissions") or []
+    if not emissions:
+        return ""
+
+    lines = [
+        "### Flakiness threshold exceeded",
+        "",
+        "Longitudinal flakiness surfaced by the FR-P2-8 across-runs threshold",
+        "(Story 20.3): the AC's most-recent consecutive QA runs each needed an",
+        "action-level transient retry. Story-level evidence — does NOT flip the",
+        "AC verdict (sensor-not-advisor); inspect the gitignored flakiness log at",
+        "`_bmad-output/qa-flakiness/<story-id>.yaml`.",
+    ]
+    for emission in emissions:
+        validate_marker_emission(
+            marker_registry, FLAKINESS_THRESHOLD_EXCEEDED_MARKER
+        )
+        ac_id = emission["ac_id"]
+        lines.append("")
+        lines.append(
+            f"AC `{ac_id}` crossed the consecutive-transient-fail threshold."
+        )
+        lines.append(_render_marker(FLAKINESS_THRESHOLD_EXCEEDED_MARKER))
+
+    return "\n".join(lines)
 
 
 def _render_qa_heuristic_findings_subsection(

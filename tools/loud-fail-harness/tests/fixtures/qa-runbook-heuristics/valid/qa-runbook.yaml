@@ -38,3 +38,8 @@ behavioral_plan_overrides:
       heuristic_opt_out: [rate-limit-boundary, large-input-boundary]
     ac_2:
       semantic_verification_requirement: not_applicable
+
+# Story 20.3 / FR-P2-8: the optional flakiness-threshold knobs (both int >= 1).
+flakiness:
+  threshold_consecutive_runs: 3
+  threshold_transient_fail_count: 1

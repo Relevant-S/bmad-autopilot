@@ -52,6 +52,10 @@ from loud_fail_harness.qa_flakiness_log import (
     FlakinessLog,
     FlakinessRunRecord,
 )
+from loud_fail_harness.qa_flakiness_threshold import (
+    FlakinessThresholdConfig,
+    FlakinessThresholdDiagnosticContext,
+)
 from loud_fail_harness.qa_evidence_tier import Tier3NotConfiguredDiagnosticContext
 from loud_fail_harness.qa_exploratory_heuristics import HeuristicSkippedDiagnosticContext
 from loud_fail_harness.qa_plan_drift import PlanDriftDiagnosticContext
@@ -353,6 +357,18 @@ def _flakiness_log_kwargs() -> dict[str, object]:
     )
 
 
+def _flakiness_threshold_config_kwargs() -> dict[str, object]:
+    # Numeric-only externally_constructed model (parsed from the qa-runbook
+    # `flakiness:` block) — no string hostile-input fields, so the registry
+    # registers it with empty buckets and _corpus_params() yields no hostile
+    # cases; only the valid-baseline construction is exercised here.
+    return dict(threshold_consecutive_runs=3, threshold_transient_fail_count=1)
+
+
+def _flakiness_threshold_diag_kwargs() -> dict[str, object]:
+    return dict(story_id="20-3", ac_id="AC-1", consecutive_transient_fail_runs=3)
+
+
 #: qualname -> (model class, valid-baseline-kwargs factory).
 _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] = {
     "epic_run_state.EpicRunState": (EpicRunState, _epic_kwargs),
@@ -418,6 +434,14 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_flakiness_log.FlakinessRunRecord": (
         FlakinessRunRecord,
         _flakiness_run_record_kwargs,
+    ),
+    "qa_flakiness_threshold.FlakinessThresholdConfig": (
+        FlakinessThresholdConfig,
+        _flakiness_threshold_config_kwargs,
+    ),
+    "qa_flakiness_threshold.FlakinessThresholdDiagnosticContext": (
+        FlakinessThresholdDiagnosticContext,
+        _flakiness_threshold_diag_kwargs,
     ),
 }
 

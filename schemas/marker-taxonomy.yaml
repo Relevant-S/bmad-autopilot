@@ -388,6 +388,32 @@
 #                            contract precedent (the numeric result 1.15 → 1.16 is
 #                            identical under either label). orchestrator-event.yaml
 #                            stays at "1.2" (co-versioned ≠ co-bumped).
+#   1.16 → 1.17 (Story 20.3) — additive: appended ONE new top-level marker
+#                            class `flakiness-threshold-exceeded` for the Phase-2
+#                            longitudinal flakiness threshold (FR-P2-8). A
+#                            QA-runtime EVIDENCE marker emitted by
+#                            `qa_flakiness_threshold.surface_flakiness_threshold_exceeded`
+#                            on every QA run when an AC's most-recent
+#                            `threshold_consecutive_runs` flakiness-log records
+#                            (Story 20.2) EACH carry an action-level
+#                            `retry_count_within_run >= threshold_transient_fail_count`
+#                            (the two qa-runbook `flakiness:` knobs; defaults 3 / 1).
+#                            A `pass` with a non-zero action-level retry IS a
+#                            transient-fail signal; a clean deterministic fail
+#                            (retry 0) is NOT. `pointer_context_fields: [ac_id]`
+#                            (per-AC scope, mirroring visual-regression-* /
+#                            a11y-delta-exceeded); `sub_classifications: []`.
+#                            Enumeration-check ORPHAN (a QA-evidence marker with NO
+#                            orchestrator-event / dependency counterpart, tolerated
+#                            exactly as plan-rederivation-drift-detected /
+#                            plan-drift-detected / a11y-* / visual-regression-*).
+#                            Default `durable` lifetime by omission. The top-level
+#                            40-class closed-set becomes 41. Classified PATCH per the
+#                            Story 20.3 AC + epics-phase-2.md line 70 + the Story
+#                            20.1 / 14.3 top-level-as-PATCH-by-epic-contract
+#                            precedent (the numeric result 1.16 → 1.17 is identical
+#                            under either label). orchestrator-event.yaml stays at
+#                            "1.2" (co-versioned ≠ co-bumped).
 
 # schema PATCH bump for Story 14.3 worktree-stale-lock new top-level class (precedent: epics-phase-2.md line 325 contract)
 # schema PATCH bump for Story 14.5 parallel-story-state-pollution new top-level class (precedent: epics-phase-2.md line 70 + Story 14.3)
@@ -399,7 +425,8 @@
 # schema MINOR bump for Story 19.3 a11y-baseline-stale / a11y-delta-exceeded / a11y-delta-mode-unstable new top-level evidence classes (closed-set 34 → 37; ADR-011 / FR-P2-6; orphans; no runtime emitter — Story 19.4 wires emission)
 # schema MINOR bump for Story 19.5 visual-regression-delta-exceeded / visual-regression-baseline-missing new top-level evidence classes (closed-set 37 → 39; ADR-012 / FR-P2-10; both [ac_id]; orphans; runtime emission lands in THIS story — no split; no -mode-unstable class, dimension-mismatch folds into delta-exceeded)
 # schema PATCH bump for Story 20.1 plan-rederivation-drift-detected new top-level QA-evidence class (closed-set 39 → 40; FR-P2-9; pointer_context_fields [drift_surfaces]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.1 AC + epics-phase-2.md line 70, citing the Story 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.15 → 1.16 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; additive read-only cross-check, FR23's plan-drift-detected AC-hash channel left fully intact)
-schema_version: "1.16"
+# schema PATCH bump for Story 20.3 flakiness-threshold-exceeded new top-level QA-evidence class (closed-set 40 → 41; FR-P2-8; pointer_context_fields [ac_id]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.3 AC + epics-phase-2.md line 70, citing the Story 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.16 → 1.17 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; threshold marker is story-level evidence, never flips ac_results)
+schema_version: "1.17"
 
 markers:
 
@@ -527,6 +554,32 @@ markers:
       treat the persisted plan as authoritative. Rare false positives are
       acceptable per loud-fail discipline.
     pointer_context_fields: [drift_surfaces]
+    sub_classifications: []
+
+  - marker_class: flakiness-threshold-exceeded
+    diagnostic_pointer: |
+      FR-P2-8 / Story 20.3 — AC {ac_id} crossed the longitudinal flakiness
+      threshold: its most-recent `threshold_consecutive_runs` QA runs (default 3)
+      EACH carried `retry_count_within_run >= threshold_transient_fail_count`
+      (default 1) — an action-level (Playwright-native) transient retry on the
+      same AC across that many consecutive runs. This is intermittency, not
+      breakage: a clean deterministic fail (`retry_count_within_run: 0`) does NOT
+      qualify a run — only a `pass`/`fail` that needed an action-level retry does
+      (a `pass` with a non-zero retry IS a flakiness signal). The per-AC pass/fail
+      history is the gitignored flakiness log at
+      `_bmad-output/qa-flakiness/<story-id>.yaml` (Story 20.2), AC {ac_id}; the
+      current trailing transient-fail streak is the marker's
+      `consecutive_transient_fail_runs`. Story-level evidence (sensor-not-advisor)
+      — does NOT flip the AC verdict and does NOT contribute to the wrapper-level
+      `status`; the orchestrator's flow policy decides what a fired marker means.
+      Remediation: open the flakiness-log entry to inspect the per-run records and
+      stabilize the flaky interaction (timing/animation races, network/clock
+      nondeterminism, shared-state leakage), OR tune
+      `flakiness.threshold_consecutive_runs` /
+      `flakiness.threshold_transient_fail_count` in
+      `_bmad/automation/qa-runbook.yaml` if the default is too sensitive for this
+      project.
+    pointer_context_fields: [ac_id]
     sub_classifications: []
 
   - marker_class: specialist-timeout

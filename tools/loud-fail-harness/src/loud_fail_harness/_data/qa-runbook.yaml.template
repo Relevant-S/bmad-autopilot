@@ -211,3 +211,33 @@
 #   # curated in-repo baselines). Omit for the gitignored default.
 #   baseline_storage: gitignored
 # ---
+
+# ---
+# flakiness — opt-in TUNING ONLY (default: absent → defaults apply; NOT an enablement gate)
+# Story 20.3; FR-P2-8
+# How it differs from `a11y` / `visual_regression` above: the Story 20.2 flakiness log
+# accumulates per-AC pass/fail history on EVERY QA run (the gitignored, practitioner-local
+# corpus FR-P2-8 mandates — "longitudinal, design from real data" only works if the data is
+# ALWAYS collected). This block is therefore NOT an `enabled: true` switch — it ONLY tunes
+# the two threshold knobs evaluated per AC on each run. ABSENCE of this block is NOT a marker —
+# it means "defaults apply" (FR42 user-owned file, mirroring the `masked_selectors` /
+# `heuristics` / `a11y` absence-of-marker posture).
+# Threshold semantics (the design decision): an AC crosses the threshold — and surfaces
+# `flakiness-threshold-exceeded` for that AC — when its most-recent `threshold_consecutive_runs`
+# runs EACH carry an action-level `retry_count_within_run >= threshold_transient_fail_count`.
+# The transient-fail predicate is purely the action-level (Playwright-native) retry count:
+# a `pass` with a non-zero retry IS a flakiness signal; a clean deterministic fail
+# (`retry_count_within_run: 0`) is breakage the AC verdict already surfaces, NOT flakiness,
+# so it does NOT qualify a run. The marker is story-level evidence (sensor-not-advisor) — it
+# does NOT flip the AC verdict. The per-AC history lives in the gitignored flakiness log at
+# `_bmad-output/qa-flakiness/<story-id>.yaml` (Story 20.2); the marker's diagnostic_pointer
+# directs you there. Both knobs are int >= 1 (range-validated when present).
+# Worked example (uncomment to override the defaults shown):
+# flakiness:
+#   # threshold_consecutive_runs — how many consecutive runs must EACH carry a transient
+#   # fail on the same AC before the threshold is crossed. Default 3.
+#   threshold_consecutive_runs: 3
+#   # threshold_transient_fail_count — the action-level retry count at/above which a run
+#   # record counts as a transient fail. Default 1 (any action-level retry qualifies).
+#   threshold_transient_fail_count: 1
+# ---

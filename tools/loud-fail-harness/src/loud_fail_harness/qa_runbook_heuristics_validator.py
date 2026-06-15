@@ -100,6 +100,18 @@ _ENABLEMENT_VALUES: tuple[str, ...] = ("enabled", "disabled")
 
 _ADR_REMEDIATION: str = "(per ADR-010 / FR-P2-5; FROZEN_HEURISTIC_NAMES is the closed set)"
 
+#: Closed set of int knobs permitted under the `flakiness:` block (Story 20.3 /
+#: FR-P2-8); each must be an int >= 1 (the Pydantic Field(ge=1) range-validation
+#: boundary, asserted here at the qa-runbook surface).
+_FLAKINESS_KNOBS: tuple[str, ...] = (
+    "threshold_consecutive_runs",
+    "threshold_transient_fail_count",
+)
+
+_FLAKINESS_REMEDIATION: str = (
+    "(per Story 20.3 / FR-P2-8; both flakiness threshold knobs are int >= 1)"
+)
+
 
 def _frozen_names_rendered() -> str:
     return ", ".join(sorted(FROZEN_HEURISTIC_NAMES))
@@ -223,6 +235,38 @@ def _validate_heuristics_block(
                 )
 
 
+def _validate_flakiness_block(
+    flakiness: object, out: list[ValidationFinding]
+) -> None:
+    """Type-check the optional `flakiness:` block (Story 20.3 / FR-P2-8). Each of
+    the two threshold knobs, WHEN present, must be an int >= 1 (a bool is rejected
+    — ``True``/``False`` are int subclasses but not valid threshold counts).
+    Absent block / absent knob → no finding (FR42: absence means "defaults apply").
+    Emits a :class:`ValidationFinding` (never raises) on a malformed value,
+    mirroring :func:`_validate_heuristics_block`'s finding-emitting shape."""
+    if not isinstance(flakiness, dict):
+        out.append(
+            _make_finding(
+                "/flakiness",
+                f"'flakiness' must be a mapping; got {_type_name(flakiness)}",
+                _FLAKINESS_REMEDIATION,
+            )
+        )
+        return
+    for knob in _FLAKINESS_KNOBS:
+        if knob not in flakiness:
+            continue
+        value = flakiness[knob]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            out.append(
+                _make_finding(
+                    _path_pointer(["flakiness", knob]),
+                    f"'flakiness.{knob}' must be an int >= 1; got {value!r}",
+                    _FLAKINESS_REMEDIATION,
+                )
+            )
+
+
 def _validate_opt_out_list(
     opt_out: object, base_path: list[object], out: list[ValidationFinding]
 ) -> None:
@@ -308,8 +352,9 @@ def validate_qa_runbook_heuristics(
     violations (those are findings). The returned list is sorted lexicographically
     by ``(pointer, message)`` for determinism. Surfaces NOT owned here (other
     `qa-runbook.yaml` keys, the non-opt-out fields of
-    ``behavioral_plan_overrides``) are left untouched — this validator only
-    asserts the ``heuristics:`` block + per-AC ``heuristic_opt_out``.
+    ``behavioral_plan_overrides``) are left untouched — this validator asserts the
+    ``heuristics:`` block + per-AC ``heuristic_opt_out`` + the Story 20.3
+    ``flakiness:`` threshold knobs (each int >= 1 when present).
 
     ``file_path`` is accepted for API symmetry with :func:`format_findings`.
     """
@@ -330,6 +375,8 @@ def validate_qa_runbook_heuristics(
         _validate_heuristics_block(raw["heuristics"], out)
     if "behavioral_plan_overrides" in raw:
         _validate_overrides(raw["behavioral_plan_overrides"], out)
+    if "flakiness" in raw:
+        _validate_flakiness_block(raw["flakiness"], out)
 
     out.sort(key=lambda f: (f.pointer, f.message))
     return out

@@ -108,6 +108,8 @@ CANONICAL_MARKER_CLASSES = [
     "plan-drift-detected",
     # Story 20.1 — Epic 20 per-run plan re-derivation cross-check (FR-P2-9).
     "plan-rederivation-drift-detected",
+    # Story 20.3 — Epic 20 longitudinal flakiness threshold (FR-P2-8).
+    "flakiness-threshold-exceeded",
     "specialist-timeout",
     "context-near-limit",
     "evidence-truncated",
@@ -389,7 +391,7 @@ def test_determinism_under_shuffle() -> None:
 
 def test_taxonomy_has_37_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 40
+    assert len(names) == 41
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
         "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
@@ -399,7 +401,11 @@ def test_taxonomy_has_37_canonical_markers(taxonomy_data: dict) -> None:
         "Story 16.2 appended entry 33: sprint-escalation-rate-exceeded; "
         "Story 24.1 appended entry 34: parallel-dispatch-infra-failed; "
         "Story 19.3 appended entries 35-37: a11y-baseline-stale / "
-        "a11y-delta-exceeded / a11y-delta-mode-unstable)"
+        "a11y-delta-exceeded / a11y-delta-mode-unstable; "
+        "Story 19.5 appended entries 38-39: visual-regression-delta-exceeded / "
+        "visual-regression-baseline-missing; "
+        "Story 20.1 appended entry 40: plan-rederivation-drift-detected; "
+        "Story 20.3 appended entry 41: flakiness-threshold-exceeded)"
     )
 
 
@@ -454,7 +460,7 @@ def test_taxonomy_declares_schema_version_1_14(taxonomy_data: dict) -> None:
     # level-class rule + epics-phase-2.md line 70 + the Story 24.1 precedent;
     # ADR-011 / FR-P2-6; no runtime emitter — Story 19.4 wires emission).
     # Story 20.1 bumps 1.15 → 1.16 (PATCH: plan-rederivation-drift-detected; FR-P2-9).
-    assert taxonomy_data.get("schema_version") == "1.16"
+    assert taxonomy_data.get("schema_version") == "1.17"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -523,7 +529,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 40  # Story 20.1 appended plan-rederivation-drift-detected (39 → 40)
+    assert len(ids) == 41  # Story 20.3 appended flakiness-threshold-exceeded (40 → 41)
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

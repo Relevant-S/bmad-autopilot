@@ -645,7 +645,7 @@ def test_canonical_corpus_validates() -> None:
     story 19.3 added 3 markers + 3 fixtures, taking the count from 34 → 37)."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "40 passing marker class(es)" in out
+    assert "41 passing marker class(es)" in out
     assert "0 uncovered marker class(es)" in out
     assert "0 dangling fixture(s)" in out
     assert "0 shape-violation finding(s)" in out

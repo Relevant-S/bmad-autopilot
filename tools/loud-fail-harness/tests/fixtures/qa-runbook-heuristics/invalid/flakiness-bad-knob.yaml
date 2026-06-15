@@ -1,0 +1,4 @@
+# Story 20.3 / FR-P2-8: a flakiness threshold knob below the int >= 1 floor.
+flakiness:
+  threshold_consecutive_runs: 0
+  threshold_transient_fail_count: 1

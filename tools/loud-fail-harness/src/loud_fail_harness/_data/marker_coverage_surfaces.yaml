@@ -1133,6 +1133,103 @@ verdicts:
       Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this
       surface has no code path that produces this skip-event.
     audit_date: "2026-05-05"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: bundle-assembler
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      the bundle assembler RENDERS the flakiness_emissions envelope array but does not emit
+      the marker.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: specialist-wrapper-qa
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/qa_flakiness_threshold.py:302
+    audit_date: "2026-06-15"
+  - marker_class: flakiness-threshold-exceeded
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold);
+      this surface has no code path that produces this longitudinal flakiness evidence.
+    audit_date: "2026-06-15"
   - marker_class: heuristic-skipped
     surface_name: bundle-assembler
     verdict: not-applicable

@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 560
-- Emitted: 51
-- Not-applicable: 509
+- Total intersections: 574
+- Emitted: 52
+- Not-applicable: 522
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -217,6 +217,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | evidence-truncated | specialist-wrapper-dev | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
 | evidence-truncated | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_evidence_persistence.py:468` | 2026-05-05 |  |
 | evidence-truncated | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-05-05 | QA-side marker emitted only by the QA specialist's substrate (env_provisioning / playwright_driver / qa_*); this surface has no code path that produces this skip- event. |
+| flakiness-threshold-exceeded | bundle-assembler | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); the bundle assembler RENDERS the flakiness_emissions envelope array but does not emit the marker. |
+| flakiness-threshold-exceeded | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | hook-session-start | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | hook-stop | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | hook-subagent-stop | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | orchestrator-run-state-helper | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | orchestrator-state-machine | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
+| flakiness-threshold-exceeded | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_flakiness_threshold.py:302` | 2026-06-15 |  |
+| flakiness-threshold-exceeded | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-15 | QA-side marker emitted only by the QA specialist's substrate (qa_flakiness_threshold); this surface has no code path that produces this longitudinal flakiness evidence. |
 | git-uncommitted-work-detected | bundle-assembler | not-applicable | `n/a` | 2026-05-05 | Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this surface has no code path that produces this skip-event. |
 | git-uncommitted-work-detected | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this surface has no code path that produces this skip-event. |
 | git-uncommitted-work-detected | hook-session-start | not-applicable | `n/a` | 2026-05-05 | Branch-lifecycle write-time guard emitted only by branch_lifecycle module; this surface has no code path that produces this skip-event. |

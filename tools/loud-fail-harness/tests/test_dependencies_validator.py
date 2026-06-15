@@ -907,7 +907,17 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # exactly like `plan-drift-detected`, which also has no counterpart). The
     # marker joins the orphan bucket → orphan-count increment 31 → 32 is the
     # load-bearing witness that the Story 20.1 taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 32 orphan marker class(es)" in text
+    #
+    # Post-Story-20.3 review: ONE flakiness-threshold evidence marker
+    # (`flakiness-threshold-exceeded`) newly enumerated via PATCH bump
+    # 1.16 → 1.17; zero `dependencies.yaml` / `escalation-bundles/*.yaml` /
+    # `orchestrator-event.yaml` reference (a QA-evidence marker emitted at QA
+    # RUNTIME by `qa_flakiness_threshold.surface_flakiness_threshold_exceeded`,
+    # exactly like `plan-rederivation-drift-detected` / `plan-drift-detected`,
+    # which also have no counterpart). The marker joins the orphan bucket →
+    # orphan-count increment 32 → 33 is the load-bearing witness that the
+    # Story 20.3 taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 33 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
