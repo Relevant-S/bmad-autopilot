@@ -46,6 +46,24 @@ externally_constructed:
     # Literal — neither is a raw hostile-input surface, so only story_id routes
     # through harden_identifier (Story 20.1 / FR-P2-9).
     identifier_fields: [story_id]
+  qa_flakiness_log.FlakinessLog:
+    # story_id composes the on-disk path _bmad-output/qa-flakiness/{story-id}.yaml
+    # (parsed from on-disk YAML), so it is path-hardened — like run_state.RunState's
+    # story_id (Story 20.2 / FR-P2-8). schema_version is a closed Literal; acs is a
+    # nested-model collection (each FlakinessAcHistory hardens its own ac_id).
+    path_fields: [story_id]
+  qa_flakiness_log.FlakinessAcHistory:
+    # ac_id is the acceptance-criterion identifier parsed from the on-disk log;
+    # runs is a nested-model collection (each FlakinessRunRecord hardens its own
+    # fields).
+    identifier_fields: [ac_id]
+  qa_flakiness_log.FlakinessRunRecord:
+    # run_id + evidence_ref are raw strings parsed from the on-disk log. evidence_ref
+    # is a qa-evidence-tree POINTER carrying path separators, so it is hardened as an
+    # identifier (whitespace/newline/null rejected) NOT a path segment. timestamp is
+    # format-validated (schema pattern) not hardened, status is a closed Literal, and
+    # retry_count_within_run is an int — none are raw hostile-text surfaces.
+    identifier_fields: [run_id, evidence_ref]
   story_file_lock.LockRecord:
     identifier_fields: [story_id]
   parallel_pollution.StoryClaim:

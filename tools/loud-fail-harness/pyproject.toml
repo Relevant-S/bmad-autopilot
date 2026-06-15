@@ -229,6 +229,18 @@ done-story-review-ledger-gate = "loud_fail_harness.done_story_review_ledger_gate
 # LAST because all prior [project.scripts] entries pre-date this story; the
 # position does NOT reflect CI execution order.
 qa-runbook-heuristics-validator = "loud_fail_harness.qa_runbook_heuristics_validator:main"
+# flakiness-log-validator (Story 20.2; FR-P2-8) is a library-as-CLI-aid
+# exercised via pytest over the examples/qa-flakiness-logs/ fixture corpus, NOT
+# a discrete ci.yml step — same posture + rationale as story-doc-validator
+# (pyproject.toml lines 38-46), sprint-status-artifact-validator, and
+# qa-runbook-heuristics-validator: the flakiness log is a RUNTIME-emitted
+# artifact at a target project's _bmad-output/qa-flakiness/{story-id}.yaml
+# (gitignored, practitioner-local), NOT a committed filesystem surface the
+# harness CI can scan (precedent: Stories 24.3 / 13.5 / 24.2 / 19.1 —
+# fixture-driven gates run via pytest, not a CI step). The hook/gate budget
+# does NOT grow. Listed LAST because all prior [project.scripts] entries
+# pre-date this story; the position does NOT reflect CI execution order.
+flakiness-log-validator = "loud_fail_harness.qa_flakiness_log:main"
 
 [dependency-groups]
 dev = [

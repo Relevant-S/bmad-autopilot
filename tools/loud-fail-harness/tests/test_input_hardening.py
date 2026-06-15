@@ -47,6 +47,11 @@ from loud_fail_harness.qa_visual_regression import (
     VisualRegressionDiagnosticContext,
 )
 from loud_fail_harness.qa_evidence_persistence import EvidenceTruncatedDiagnosticContext
+from loud_fail_harness.qa_flakiness_log import (
+    FlakinessAcHistory,
+    FlakinessLog,
+    FlakinessRunRecord,
+)
 from loud_fail_harness.qa_evidence_tier import Tier3NotConfiguredDiagnosticContext
 from loud_fail_harness.qa_exploratory_heuristics import HeuristicSkippedDiagnosticContext
 from loud_fail_harness.qa_plan_drift import PlanDriftDiagnosticContext
@@ -323,6 +328,31 @@ def _visual_regression_diag_kwargs() -> dict[str, object]:
     return dict(story_id="19-5", ac_id="AC-1")
 
 
+def _flakiness_run_record_kwargs() -> dict[str, object]:
+    return dict(
+        run_id="20260615T123456Z",
+        timestamp="2026-06-15T12:34:56Z",
+        status="pass",
+        retry_count_within_run=0,
+        evidence_ref="_bmad-output/qa-evidence/20-2-test/20260615T123456Z/AC-1",
+    )
+
+
+def _flakiness_ac_history_kwargs() -> dict[str, object]:
+    return dict(
+        ac_id="AC-1",
+        runs=(FlakinessRunRecord(**_flakiness_run_record_kwargs()),),
+    )
+
+
+def _flakiness_log_kwargs() -> dict[str, object]:
+    return dict(
+        schema_version="1.0",
+        story_id="20-2-test",
+        acs=(FlakinessAcHistory(**_flakiness_ac_history_kwargs()),),
+    )
+
+
 #: qualname -> (model class, valid-baseline-kwargs factory).
 _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] = {
     "epic_run_state.EpicRunState": (EpicRunState, _epic_kwargs),
@@ -379,6 +409,15 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_runbook_heuristics_validator.HeuristicOptOutEntry": (
         HeuristicOptOutEntry,
         _opt_out_entry_kwargs,
+    ),
+    "qa_flakiness_log.FlakinessLog": (FlakinessLog, _flakiness_log_kwargs),
+    "qa_flakiness_log.FlakinessAcHistory": (
+        FlakinessAcHistory,
+        _flakiness_ac_history_kwargs,
+    ),
+    "qa_flakiness_log.FlakinessRunRecord": (
+        FlakinessRunRecord,
+        _flakiness_run_record_kwargs,
     ),
 }
 
