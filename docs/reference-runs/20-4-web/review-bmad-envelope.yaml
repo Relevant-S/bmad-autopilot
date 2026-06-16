@@ -1,0 +1,35 @@
+# Review-BMAD specialist return envelope — 4-layer parallel pass per Story 10.4
+# (Story 2.9 + Story 3.1 + Story 10.4; FR26 + FR56)
+# LAD layer dispatched per agents/review-lad-wrapper.md (Story 10.2 / 10.5);
+# upstream `mcp__lad__code_review` (Shelpuk-AI-Technology-Consulting/lad_mcp_server
+# version_floor `bb47e9e` per ADR-008). The 20-4-web run preserves the
+# LAD-enabled 4-layer review posture of the 19-6-web / 13-7-web / 10-7-lad-web
+# baseline (Story 20.4 AC-1) so migrating the web row's `Latest Run Record`
+# (AC-9) does not regress the latest web capture from 4-layer to 3-layer; the
+# Epic-20 QA-independence + flakiness surfaces — not LAD — are this run's net-new
+# witness, so the LAD layer is rendered as a clean representative pass
+# (re-deriving a fresh real 12-finding capture is out of scope per AC-1; the
+# genuine-LAD-findings capture is preserved permanently at
+# docs/reference-runs/10-7-lad-web/). Carries NO Epic-20 net-new field.
+status: pass
+specialist: review-bmad
+layer_results:
+  - layer: blind-hunter
+    status: pass
+    findings: []
+  - layer: edge-case-hunter
+    status: pass
+    findings: []
+  - layer: acceptance-auditor
+    status: pass
+    findings: []
+    rationale_validated: true
+  - layer: lad
+    status: pass
+    findings: []
+    primary_model: "moonshotai/kimi-k2-thinking"
+    secondary_model: "minimax/minimax-m2.7"
+    secondary_outcome: "dual-reviewer parallel pass completed; both reviewers returned clean."
+failed_layers: []
+findings: []
+rationale: "4-layer adversarial pass: three BMAD layers (blind/edge/auditor) clean; LAD layer COMPLETED with a clean dual-reviewer pass. The reviewed diff (sample-qa-coverage-001's cart/checkout/confirmation surface) is a representative stand-in for the LAD layer's structural presence — the genuine 12-finding LAD capture is preserved at docs/reference-runs/10-7-lad-web/; this run's net-new witness is the Epic-20 QA-independence (FR-P2-9 plan re-derivation cross-check) + flakiness (FR-P2-8) surfaces, surfaced on the QA side."

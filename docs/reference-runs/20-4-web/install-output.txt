@@ -1,0 +1,46 @@
+$ # Pre-existing install reused on the dev machine — Story 7.2 install path
+$ # was resolved at the Phase 1 / Story 8.7 commit (git-clone-symlink fallback
+$ # chosen per Story 7.1 spike outcome). install_method recorded in
+$ # _bmad/automation/config.yaml; FR42 non-destructive guard preserved
+$ # user customizations on re-install.
+
+install_path: git-clone-symlink
+install_root: /Users/dev/.claude/skills/bmad-automation
+install_method_recorded_at: _bmad/automation/config.yaml
+install_path_first_recorded_at: 2026-05-10 (Story 8.7 dev-completion)
+
+$ # LAD MCP registration carried forward from the 19-6-web / 13-7-web /
+$ # 10-7-lad-web baseline per ADR-008 + docs/lad-setup.md. The 20-4-web run
+$ # preserves the LAD-enabled 4-layer review posture (Story 20.4 AC-1) — the
+$ # Epic-20 QA-independence + flakiness surfaces, not LAD, are this run's net-new
+$ # witness. The OPENROUTER_API_KEY VALUE is read by the upstream lad_mcp_server
+$ # at startup via the install-handle env-var flow; NEVER captured here (NFR-S1
+$ # NAME-not-VALUE discipline).
+
+$ claude mcp add --transport stdio lad -e OPENROUTER_API_KEY="$OPENROUTER_API_KEY" -- uvx --from git+https://github.com/Shelpuk-AI-Technology-Consulting/lad_mcp_server lad-mcp-server
+Added stdio MCP server lad with command: uvx --from git+https://github.com/Shelpuk-AI-Technology-Consulting/lad_mcp_server lad-mcp-server
+
+$ # Verify reachability via `claude mcp list` (env-var VALUE never rendered
+$ # — only the NAME is visible per NFR-S1 NAME-not-VALUE discipline).
+
+$ claude mcp list
+claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✓ Connected
+kindly-web-search: uvx --from git+https://github.com/Shelpuk-AI-Technology-Consulting/kindly-web-search-mcp-server kindly-web-search-mcp-server start-mcp-server - ✓ Connected
+lad: uvx --from git+https://github.com/Shelpuk-AI-Technology-Consulting/lad_mcp_server lad-mcp-server - ✓ Connected
+playwright: npx -y @playwright/mcp@latest - ✓ Connected
+playwright-test: npx playwright run-test-mcp-server - ✓ Connected
+serena: uvx --from git+https://github.com/oraios/serena serena start-mcp-server --context=claude-code --project-from-cwd - ✓ Connected
+
+$ # No new MCP server is registered for Epic-20. The two Epic-20 surfaces are
+$ # PURE IN-WRAPPER substrate (Stories 20.1–20.3): the plan re-derivation
+$ # cross-check is an in-wrapper comparison of the persisted vs re-derived
+$ # QABehavioralPlan (no driver, no MCP), and the flakiness log is a per-AC
+$ # pass/fail history persisted to the gitignored _bmad-output/qa-flakiness/
+$ # tree. Neither adds a dependency; no dependencies.yaml change in this
+$ # reference-run story.
+
+$ # version_floor per ADR-008 = `bb47e9e` — the resolved short SHA of the
+$ # `Shelpuk-AI-Technology-Consulting/lad_mcp_server` HEAD; uvx fetches the
+$ # latest commit at first invocation (cold-start 30-60s per
+$ # architecture.md line 695); subsequent invocations reuse the cached
+$ # uvx environment.

@@ -1,0 +1,26 @@
+# Dev specialist return envelope (Story 2.8; FR51 + FR54)
+# Schema: bmad-autopilot/schemas/envelope.schema.yaml (Story 1.2)
+# Carries NO Epic-20 net-new field — the two Epic-20 QA-evidence surfaces
+# (plan_rederivation / flakiness_emissions) are both on the QA envelopes
+# (qa-envelope.yaml + qa-envelope-rederivation-drift.yaml) + the committed
+# flakiness-corpus snapshot (qa-flakiness-log.yaml). This is the SAME cart/
+# checkout/confirmation surface the 19-6-web run captured (reused per Story 20.4
+# Dev Notes — not a new app); the Dev seam is unchanged across the run sequence.
+status: pass
+artifacts:
+  - src/cart/add_to_cart.py
+  - src/checkout/payment_card.py
+  - src/checkout/order_confirmation.py
+  - tests/test_add_to_cart.py
+  - tests/test_payment_card.py
+  - tests/test_order_confirmation.py
+findings: []
+rationale: "AC-1 (add an item to the cart), AC-2 (reject an invalid payment card), and AC-3 (order confirmation page renders) implemented for the e-commerce QA-coverage synthetic surface sample-qa-coverage-001 — the established UI-bearing surface reused across the Epic-19 and Epic-20 reference runs. Each AC renders a web DOM surface so the QA specialist's per-run plan re-derivation cross-check (FR-P2-9) and longitudinal flakiness accumulation (FR-P2-8) have a real multi-AC surface to exercise."
+proposed_commit_message: |
+  Story sample-qa-coverage-001: cart + checkout + confirmation (Epic-20 QA-independence + flakiness surface)
+
+  The cart/checkout/confirmation web surface the Epic-20 reference run
+  exercises: the per-run plan re-derivation cross-check (green + drift)
+  and the longitudinal flakiness log accumulating to threshold-exceeded.
+scope_expanded_to: []
+retry_mode: null

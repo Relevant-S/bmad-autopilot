@@ -1,0 +1,87 @@
+# QA specialist return envelope — SUPPLEMENTARY drift-run witness (run-004) per Story 20.4.
+# Web dispatch branch — driver=playwright per Story 4.4 qa_ac_iteration.py dispatch.
+#
+# This is the second of the two Epic-20 supplementary witness files (the
+# deviation from the strict nine-file 19.6 set, enumerated in README's artifact
+# table): a follow-on run of the SAME story (sample-qa-coverage-001) capturing the
+# FR-P2-9 cross-check on its DRIFT-DETECTED branch.
+#
+# The cross-check is per-run state, so witnessing both green and drift requires
+# two run captures. The primary qa-envelope.yaml (run-003) witnessed `green`; THIS
+# envelope (run-004) witnesses `drift-detected`.
+#
+# The drift driver (narrative.md § FR-P2-9 plan re-derivation cross-check):
+# between run-003 and run-004 the practitioner edited the qa-runbook to declare
+# the `rate-limit-boundary` heuristic APPLICABLE to AC-2 (it had been
+# structurally inapplicable — surfaced as a heuristic-skipped marker on every
+# prior run). The AC *text* is unchanged, so ac_hash matches and the QA wrapper
+# takes the `reuse-existing` path (FR23's plan_status reset does NOT fire — that
+# is the AC-hash channel, which this does not touch). The re-derived plan now
+# carries `rate-limit-boundary` in AC-2's heuristic_applicability while the
+# PERSISTED `## QA Behavioral Plan` (written on run-001) does not, so the
+# FR-P2-9 read-only cross-check (Story 20.1) finds a mismatch at the
+# `heuristic_applicability` drift surface and surfaces
+# plan-rederivation-drift-detected. The persisted plan is NOT overwritten (AC-3
+# of Story 20.1 — FR-P2-9 is a read-only cross-check; FR23's plan_status reset on
+# AC-hash drift remains the ONLY trigger for plan refresh).
+#
+# Authored to validate against the UNMODIFIED schemas/envelope.schema.yaml — the
+# $defs/plan_rederivation conditional `if cross_check_status == drift-detected then
+# required: [story_id, drift_surfaces, drifted_ac_ids]` branch (AC-6). drift_surfaces
+# is the non-empty subset [heuristic_applicability]; drifted_ac_ids is [AC-2].
+#
+# The drift marker is STORY-LEVEL EVIDENCE (sensor-not-advisor): ac_results stay
+# pass and the run still reaches merge-ready. No flakiness_emissions on this run
+# (the corpus snapshot is captured at the run-003 point; this follow-on's net-new
+# witness is the drift branch, not flakiness accumulation).
+status: pass
+artifacts:
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-1/main-add-to-cart-action.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-2/main-reject-invalid-card-action.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-2/main-rejection-message.png
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-2/main-semantic-verification.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-3/main-order-confirmation-action.json
+  - _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/heuristics/rate-limit-boundary-ac-2.json
+findings: []
+rationale: "Follow-on run (run-004) of sample-qa-coverage-001 after the qa-runbook was edited to declare rate-limit-boundary applicable to AC-2. The AC text is unchanged (ac_hash matches), so the wrapper took the reuse-existing path and re-derived the plan; the FR-P2-9 cross-check (Story 20.1) compared the re-derived plan against the persisted ## QA Behavioral Plan and found a mismatch at the heuristic_applicability drift surface for AC-2 (the persisted plan, written on run-001, declares no rate-limit-boundary for AC-2; the re-derived plan does), so cross_check_status: drift-detected and plan-rederivation-drift-detected emits naming drift_surfaces: [heuristic_applicability], drifted_ac_ids: [AC-2]. The persisted plan is NOT overwritten — FR-P2-9 is a read-only cross-check (Story 20.1 AC-3); FR23's plan_status reset on AC-hash drift remains the only refresh trigger, and the AC text did not change. The drift marker is story-level evidence — it does NOT flip ac_results (all three ACs still pass) and the run reaches merge-ready."
+ac_results:
+  - ac_id: AC-1
+    status: pass
+    assertions:
+      - "main flow: a logged-in user adds an item to the cart and the cart line count increments"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-1/main-add-to-cart-action.json
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+  - ac_id: AC-2
+    status: pass
+    assertions:
+      - "main flow: the checkout form rejects an invalid payment card"
+      - "exploratory rate-limit-boundary (now applicable per the mutated qa-runbook): the rejection endpoint throttles repeated invalid-card submissions"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-2/main-reject-invalid-card-action.json
+        tier: tier-1-mechanical
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-2/main-rejection-message.png
+        tier: tier-2-outcome
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-2/main-semantic-verification.json
+        tier: tier-3-semantic
+    semantic_verification: verified
+  - ac_id: AC-3
+    status: pass
+    assertions:
+      - "main flow: an order confirmation page renders after a successful purchase"
+    evidence_refs:
+      - path: _bmad-output/qa-evidence/sample-qa-coverage-001/run-004/ac-3/main-order-confirmation-action.json
+        tier: tier-1-mechanical
+    semantic_verification: not_applicable
+plan_rederivation:
+  cross_check_status: drift-detected
+  story_id: sample-qa-coverage-001
+  drift_surfaces:
+    - heuristic_applicability
+  drifted_ac_ids:
+    - AC-2
+heuristic_skipped_emissions:
+  - marker_class: heuristic-skipped
+    sub_classification: permission-boundary
+    story_id: sample-qa-coverage-001

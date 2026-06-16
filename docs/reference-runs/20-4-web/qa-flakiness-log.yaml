@@ -1,0 +1,89 @@
+# Flakiness-corpus snapshot (Story 20.4 / FR-P2-8) — a COMMITTED RECORD, not the live store.
+#
+# The live longitudinal store at _bmad-output/qa-flakiness/{story-id}.yaml is
+# gitignored (Story 20.2 / .gitignore line 31 — practitioner-local signal), so
+# this directory commits a captured SNAPSHOT of the accumulated corpus as the
+# reference-run record — exactly as 19.6 cited the gitignored a11y / visual
+# baselines without committing the live binaries (here the corpus IS the
+# witness, so its content is reproduced in the snapshot).
+#
+# Authored to validate against the UNMODIFIED schemas/qa-flakiness-log.yaml
+# (Story 20.2; AC-4 + AC-6) AND to replay through the real
+# qa_flakiness_threshold.evaluate_ac_flakiness substrate (AC-7,
+# tests/test_reference_run_20_4.py).
+#
+# Accumulation timeline (narrative.md § FR-P2-8 flakiness corpus):
+#   run-001 -> run-002 -> run-003, each appending one record per AC. The flaky
+#   AC (AC-2 — the invalid-card-rejection checkout flow, whose payment-gateway
+#   round-trip is the genuine source of action-level transient retries) carries
+#   three consecutive records EACH with retry_count_within_run >= 1, so its
+#   trailing streak reaches the default threshold (3 consecutive / >= 1 transient
+#   fail) and flakiness-threshold-exceeded fires on the run-003 (primary) QA run.
+#   The clean control AC (AC-1 — add-to-cart) carries three records EACH with
+#   retry_count_within_run: 0, so its streak is 0 and it NEVER crosses (silent —
+#   no-marker-on-absence parity).
+#
+# retry_count_within_run is the ACTION-LEVEL (Playwright-native) retry tier of
+# the two-tier retry model (prd.md line 1044) — DISTINCT from the orchestrator
+# whole-story retry budget. A `pass` WITH a non-zero action-level retry IS a
+# transient fail (the subtle predicate Story 20.3 designed); a clean
+# deterministic `fail` with retry_count_within_run: 0 is NOT flakiness — that is
+# breakage the AC verdict already surfaces. `status` is intentionally NOT
+# consulted by evaluate_ac_flakiness; the predicate is purely the retry count.
+#
+# evidence_ref pointers cite the gitignored FR49 qa-evidence tree (NFR-O3 trace
+# linkability) without committing any evidence binary.
+schema_version: "1.0"
+story_id: sample-qa-coverage-001
+acs:
+  - ac_id: AC-1
+    runs:
+      - run_id: run-001
+        timestamp: "2026-06-13T09:00:00Z"
+        status: pass
+        retry_count_within_run: 0
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-1/main-add-to-cart-action.json
+      - run_id: run-002
+        timestamp: "2026-06-14T09:00:00Z"
+        status: pass
+        retry_count_within_run: 0
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-002/ac-1/main-add-to-cart-action.json
+      - run_id: run-003
+        timestamp: "2026-06-15T09:00:00Z"
+        status: pass
+        retry_count_within_run: 0
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-003/ac-1/main-add-to-cart-action.json
+  - ac_id: AC-2
+    runs:
+      - run_id: run-001
+        timestamp: "2026-06-13T09:00:00Z"
+        status: pass
+        retry_count_within_run: 2
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-2/main-reject-invalid-card-action.json
+      - run_id: run-002
+        timestamp: "2026-06-14T09:00:00Z"
+        status: pass
+        retry_count_within_run: 1
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-002/ac-2/main-reject-invalid-card-action.json
+      - run_id: run-003
+        timestamp: "2026-06-15T09:00:00Z"
+        status: pass
+        retry_count_within_run: 2
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-003/ac-2/main-reject-invalid-card-action.json
+  - ac_id: AC-3
+    runs:
+      - run_id: run-001
+        timestamp: "2026-06-13T09:00:00Z"
+        status: pass
+        retry_count_within_run: 0
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-001/ac-3/main-order-confirmation-action.json
+      - run_id: run-002
+        timestamp: "2026-06-14T09:00:00Z"
+        status: pass
+        retry_count_within_run: 0
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-002/ac-3/main-order-confirmation-action.json
+      - run_id: run-003
+        timestamp: "2026-06-15T09:00:00Z"
+        status: pass
+        retry_count_within_run: 0
+        evidence_ref: _bmad-output/qa-evidence/sample-qa-coverage-001/run-003/ac-3/main-order-confirmation-action.json

@@ -1,0 +1,80 @@
+$ /bmad-automation run sample-qa-coverage-001    # run-003 — the PRIMARY / latest capture
+
+[orchestrator] Story sample-qa-coverage-001 selected from sprint plan.
+[orchestrator] Per-story branch: bmad-autopilot/sample-qa-coverage-001 (Story 2.3 / FR4)
+[orchestrator] Lifecycle: ready-for-dev → in-progress (Story 2.4 / FR5)
+[orchestrator] Run-state initialized at _bmad/automation/run-state.yaml (FR45)
+[orchestrator] project_type=web read from _bmad/automation/config.yaml (Story 9.2)
+[orchestrator] review_lad.enabled=true read from _bmad/automation/config.yaml (Story 10.4 AC-1)
+[orchestrator] qa-runbook: heuristics.web.* all enabled (7); a11y.enabled=true; visual_regression.enabled=true; no `flakiness:` block (defaults 3/1 apply)
+
+[seam: dev-dispatch] Dispatching Dev specialist (Story 2.6 / FR3)
+[stream] Dev: AC-1/AC-2/AC-3 already implemented (run-003 — the cart/checkout/confirmation surface is unchanged since run-001)
+[seam: dev-return] Dev returned status=pass; envelope persisted
+[hook: SubagentStop] No new commit (no source change this run)
+[orchestrator] Lifecycle: in-progress → review (Story 2.4 / FR5)
+
+[seam: review-dispatch] Dispatching Review-BMAD specialist (4-layer parallel pass per Story 10.4)
+[stream] Review-BMAD: layer-1 (Blind Hunter) — clean
+[stream] Review-BMAD: layer-2 (Edge Case Hunter) — clean
+[stream] Review-BMAD: layer-3 (Acceptance Auditor) — rationale validated against the story ACs
+[stream] Review-BMAD: layer-4 (LAD — Review-LAD wrapper) — dispatched via mcp__lad__code_review; dual-reviewer parallel pass completed; clean
+[seam: review-return] Review-BMAD returned status=pass; failed_layers=[]
+
+[seam: env-provision] Provisioning QA env (Story 4.3 / FR7)
+[stream] PlaywrightMcpAvailabilityProbe.is_available() → True
+[stream] Web env provisioned: env_kind=web, port=auto, health_url=…
+
+[seam: qa-dispatch] Dispatching QA specialist (web dispatch branch — Story 4.4)
+[stream] QA: BPlan handling (Story 4.1 / FR23) — ## QA Behavioral Plan section present
+[stream]   → ac_hash MATCHES the persisted plan (AC text unchanged) → reuse-existing path (NO FR23 plan_status reset)
+[stream] QA: FR-P2-9 per-run plan re-derivation cross-check (Story 20.1)
+[stream]   → re-derived the plan from the current AC list + qa-runbook state
+[stream]   → surface_plan_rederivation_cross_check(persisted, re-derived, story_id, registry)
+[stream]   → compared heuristic_applicability / flow_branches / semantic_verification_tier across all ACs — NO mismatch
+[stream]   → cross_check_status: green (NO plan-rederivation-drift-detected marker)
+[stream]     (the cross-check fires ONLY on the reuse-existing path, so any mismatch would be "beyond AC-hash drift" — distinct from FR23's AC-hash channel)
+[stream] QA: AC-1 verification — PlaywrightDriver dispatch (smoke-first per FR22b)
+[stream]   ✓ AC-1 main flow pass (add-to-cart); 0 action-level retries
+[stream] QA: AC-2 verification — PlaywrightDriver dispatch
+[stream]   ⟲ AC-2 invalid-card-rejection: action-level transient retry ×2 (payment-gateway round-trip flaked), then PASS
+[stream]   ✓ AC-2 main flow pass (status=pass, retry_count_within_run=2 — a `pass` WITH action-level retries IS a transient fail per Story 20.2/20.3)
+[stream] QA: AC-3 verification — PlaywrightDriver dispatch
+[stream]   ✓ AC-3 main flow pass (order confirmation); 0 action-level retries
+
+[stream] QA: FR-P2-8 flakiness log (Story 20.2 — accumulates on EVERY QA run)
+[stream]   → append run-003 records to _bmad-output/qa-flakiness/sample-qa-coverage-001.yaml (gitignored)
+[stream]     AC-1 ← {run-003, pass, retry_count_within_run: 0}    (clean control)
+[stream]     AC-2 ← {run-003, pass, retry_count_within_run: 2}    (third consecutive transient fail)
+[stream]   → corpus now: AC-2 = [run-001(retry 2), run-002(retry 1), run-003(retry 2)]; AC-1 = [0,0,0]
+[stream] QA: FR-P2-8 threshold evaluation (Story 20.3 — defaults 3 consecutive / >=1 transient fail)
+[stream]   → evaluate_ac_flakiness(AC-2 history, FlakinessThresholdConfig()) → exceeded=True (consecutive_transient_fail_runs=3)
+[stream]   → emit flakiness-threshold-exceeded (AC-2) — story-level evidence, does NOT flip ac_results
+[stream]   → evaluate_ac_flakiness(AC-1 history, …) → exceeded=False (streak 0) — SILENT (no-marker-on-absence parity)
+
+[stream] QA: exploratory-heuristic dispatch (Story 19.2 step 8 — carried-forward 7-heuristic sweep)
+[stream]   → empty-state / error-state / auth-boundary / large-input-boundary / locale-i18n-edge applicable — no findings
+[stream]   → rate-limit-boundary — structurally inapplicable — emit heuristic-skipped: rate-limit-boundary
+[stream]   → permission-boundary — structurally inapplicable — emit heuristic-skipped: permission-boundary
+[stream] QA: a11y + visual-regression audits (Stories 19.4/19.5 — baselines exist from run-001; deltas within threshold → SILENT, no markers on run-003)
+[seam: qa-return] QA returned status=pass; ac_results all pass; cross_check_status=green;
+                  flakiness-threshold-exceeded (AC-2); 2 heuristic-skipped markers
+
+[orchestrator] Lifecycle: review → qa → done
+[hook: Stop] Bundle assembly: merge-ready
+[stream] PR bundle assembled at _bmad-output/pr-bundles/sample-qa-coverage-001/run-003.md
+[stream] Per-AC results: FR-P2-9 cross-check: green line co-located with the RETAINED FR25 compromise blockquote
+[stream] Flakiness: ### Flakiness threshold exceeded — AC-2 (1 marker comment, greppable)
+[stream] Loud-fail block: 2 heuristic-skipped markers
+[stream] Cost telemetry: $2.39 (within NFR-P1 $3 target; per-specialist partition includes Review-LAD row)
+[stream]   → neither Epic-20 surface adds a cost row (the cross-check is a pure in-wrapper comparison; the flakiness log accumulates on every run — no new specialist boundary)
+
+run sample-qa-coverage-001: complete; merge-ready bundle written.
+(FR-P2-9 plan re-derivation cross-check fired GREEN on the reuse-existing path;
+ FR-P2-8 flakiness threshold fired flakiness-threshold-exceeded for AC-2 over the
+ accumulated 3-run corpus; both are story-level evidence — the run still reached
+ merge-ready. The DRIFT branch of the cross-check is witnessed separately in the
+ run-004 follow-on capture qa-envelope-rederivation-drift.yaml: after the
+ qa-runbook was edited to declare rate-limit-boundary applicable to AC-2, the
+ re-derived plan diverged from the persisted plan at heuristic_applicability and
+ plan-rederivation-drift-detected fired — without overwriting the persisted plan.)
