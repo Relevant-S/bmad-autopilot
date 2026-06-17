@@ -113,7 +113,7 @@ import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from types import ModuleType
-from typing import Any
+from typing import Any, Final
 
 import yaml
 
@@ -136,9 +136,18 @@ from loud_fail_harness.exceptions import (
     PromptIdCorrelationMissing,
 )
 from loud_fail_harness.marker_wiring import compute_alphabetical_marker_order
+from loud_fail_harness.qa_a11y_audit import (
+    A11Y_BASELINE_STALE_MARKER,
+    A11Y_DELTA_EXCEEDED_MARKER,
+    A11Y_DELTA_MODE_UNSTABLE_MARKER,
+)
 from loud_fail_harness.qa_exploratory_heuristics import HEURISTIC_SKIPPED_MARKER
 from loud_fail_harness.qa_flakiness_threshold import (
     FLAKINESS_THRESHOLD_EXCEEDED_MARKER,
+)
+from loud_fail_harness.qa_visual_regression import (
+    VISUAL_REGRESSION_BASELINE_MISSING_MARKER,
+    VISUAL_REGRESSION_DELTA_EXCEEDED_MARKER,
 )
 from loud_fail_harness.qa_plan_drift import PLAN_DRIFT_DETECTED_MARKER
 from loud_fail_harness.qa_plan_rederivation import (
@@ -487,6 +496,15 @@ def _render_per_ac_section(
     sub-section, emitting the per-AC ``<!-- bmad-automation:marker
     flakiness-threshold-exceeded -->`` comment co-located so the longitudinal
     marker is greppable in the bundle.
+
+    Story 21.0 thickening (FR-P2-6 / FR-P2-10): when the QA envelope's optional
+    ``a11y_emissions`` / ``visual_regression_emissions`` arrays carry AC-scoped
+    entries, the renderer appends an ``### Accessibility audit findings`` and an
+    ``### Visual regression findings`` H3 sub-section (in that order) AFTER the
+    flakiness sub-section, each co-locating its per-AC ``<!-- bmad-automation:marker
+    a11y-* -->`` / ``visual-regression-* -->`` comment. The envelope-scoped
+    ``a11y-delta-mode-unstable`` is NOT rendered here — it lands at the bundle
+    bottom via :func:`_render_qa_a11y_envelope_scoped_marker`.
     """
     dangling_index: dict[tuple[str, str], DanglingEvidenceRef] = {
         (ref.ac_id, ref.path): ref
@@ -562,6 +580,12 @@ def _render_per_ac_section(
     flakiness_body = _render_qa_flakiness_subsection(
         qa_envelope, marker_registry=marker_registry
     )
+    a11y_body = _render_qa_a11y_subsection(
+        qa_envelope, marker_registry=marker_registry
+    )
+    visual_body = _render_qa_visual_subsection(
+        qa_envelope, marker_registry=marker_registry
+    )
 
     # Story 4.11 (FR25): the plan-persistence-compromise blockquote is
     # PREPENDED unconditionally — present even when ``ac_results`` is
@@ -590,6 +614,10 @@ def _render_per_ac_section(
         parts.append(heuristic_body)
     if flakiness_body:
         parts.append(flakiness_body)
+    if a11y_body:
+        parts.append(a11y_body)
+    if visual_body:
+        parts.append(visual_body)
     return "\n\n".join(parts)
 
 
@@ -735,10 +763,8 @@ def _render_qa_flakiness_subsection(
     diagnostic prose + the structured ``<!-- bmad-automation:marker
     flakiness-threshold-exceeded -->`` marker comment co-located at the per-AC
     location, so the longitudinal marker is greppable in the bundle exactly as
-    every sibling QA-evidence marker (``heuristic-skipped`` / ``plan-*``) is. (The
-    documented a11y/visual ``*_emissions`` render is not yet wired in the assembler
-    — this mirrors the genuinely-existing per-AC marker-comment render path of
-    :func:`_render_qa_heuristic_findings_subsection`.)
+    every sibling QA-evidence marker (``heuristic-skipped`` / ``plan-*`` /
+    ``a11y-*`` / ``visual-regression-*``) is.
 
     Defense-in-depth re-validation per Pattern 5 (mirrors
     :func:`_render_qa_heuristic_findings_subsection`):
@@ -770,6 +796,143 @@ def _render_qa_flakiness_subsection(
         lines.append(_render_marker(FLAKINESS_THRESHOLD_EXCEEDED_MARKER))
 
     return "\n".join(lines)
+
+
+_A11Y_AC_SCOPED_MARKERS: Final = frozenset(
+    {A11Y_BASELINE_STALE_MARKER, A11Y_DELTA_EXCEEDED_MARKER}
+)
+
+_A11Y_AC_DIAGNOSTIC: Final = {
+    A11Y_BASELINE_STALE_MARKER: (
+        "the a11y baseline was missing or refreshed (no prior delta could be computed)"
+    ),
+    A11Y_DELTA_EXCEEDED_MARKER: (
+        "the a11y violation-key delta exceeded the configured threshold"
+    ),
+}
+
+_VISUAL_DIAGNOSTIC: Final = {
+    VISUAL_REGRESSION_DELTA_EXCEEDED_MARKER: (
+        "the visual mismatched-pixel-ratio delta exceeded the configured threshold"
+    ),
+    VISUAL_REGRESSION_BASELINE_MISSING_MARKER: (
+        "the visual baseline was missing (a new baseline was captured this run)"
+    ),
+}
+
+
+def _render_qa_a11y_subsection(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-21.0 (FR-P2-6) ``### Accessibility audit findings`` H3
+    sub-section for the TWO AC-scoped a11y classes (``a11y-baseline-stale`` /
+    ``a11y-delta-exceeded``) when QA's envelope ``a11y_emissions`` array carries
+    such entries; return the empty string otherwise (silent — the array is
+    absent on api/mobile, on ``a11y.enabled: false``, and on the unconfigured
+    default, per ``agents/qa.md:144``).
+
+    The envelope-scoped ``a11y-delta-mode-unstable`` (``pointer_context_fields:
+    []`` — NO ``ac_id``) is FILTERED OUT here and rendered at the bundle bottom
+    by :func:`_render_qa_a11y_envelope_scoped_marker` (the canonical envelope-
+    scoped location, mirroring ``marker_emissions``).
+
+    Byte-mirrors :func:`_render_qa_flakiness_subsection`: per-emission diagnostic
+    prose + the co-located ``<!-- bmad-automation:marker a11y-* -->`` comment.
+    Defense-in-depth re-validation per Pattern 5: :func:`validate_marker_emission`
+    fires once per emission; registry rejection raises :exc:`UnknownMarkerClass`.
+    """
+    emissions = [
+        emission
+        for emission in (qa_envelope.get("a11y_emissions") or [])
+        if emission.get("marker_class") in _A11Y_AC_SCOPED_MARKERS
+    ]
+    if not emissions:
+        return ""
+
+    lines = [
+        "### Accessibility audit findings",
+        "",
+        "Accessibility-audit signal surfaced by the Epic-19 a11y delta engine",
+        "(FR-P2-6). Story-level evidence — does NOT flip the AC verdict",
+        "(sensor-not-advisor); inspect the gitignored per-AC baselines under",
+        "`_bmad-output/qa-a11y-baseline/<story-id>/<ac-id>/`.",
+    ]
+    for emission in emissions:
+        marker_class = emission["marker_class"]
+        validate_marker_emission(marker_registry, marker_class)
+        ac_id = emission["ac_id"]
+        lines.append("")
+        lines.append(f"AC `{ac_id}`: {_A11Y_AC_DIAGNOSTIC[marker_class]}.")
+        lines.append(_render_marker(marker_class))
+
+    return "\n".join(lines)
+
+
+def _render_qa_visual_subsection(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-21.0 (FR-P2-10) ``### Visual regression findings`` H3
+    sub-section when QA's envelope ``visual_regression_emissions`` array is
+    non-empty; return the empty string otherwise (silent — the array is absent
+    on api, on ``visual_regression.enabled: false``, and on the unconfigured
+    default, per ``agents/qa.md:145``).
+
+    BOTH visual classes (``visual-regression-delta-exceeded`` /
+    ``visual-regression-baseline-missing``) are AC-scoped, so no filtering is
+    needed beyond the array — a near-verbatim clone of
+    :func:`_render_qa_flakiness_subsection`. Per-emission diagnostic prose + the
+    co-located ``<!-- bmad-automation:marker visual-regression-* -->`` comment;
+    Pattern-5 :func:`validate_marker_emission` fires once per emission.
+    """
+    emissions = qa_envelope.get("visual_regression_emissions") or []
+    if not emissions:
+        return ""
+
+    lines = [
+        "### Visual regression findings",
+        "",
+        "Visual-regression signal surfaced by the Epic-19 pixelmatch delta engine",
+        "(FR-P2-10). Story-level evidence — does NOT flip the AC verdict",
+        "(sensor-not-advisor); inspect the gitignored per-AC baselines under",
+        "`_bmad-output/qa-visual-baseline/<story-id>/<ac-id>/`.",
+    ]
+    for emission in emissions:
+        marker_class = emission["marker_class"]
+        validate_marker_emission(marker_registry, marker_class)
+        ac_id = emission["ac_id"]
+        lines.append("")
+        lines.append(f"AC `{ac_id}`: {_VISUAL_DIAGNOSTIC[marker_class]}.")
+        lines.append(_render_marker(marker_class))
+
+    return "\n".join(lines)
+
+
+def _render_qa_a11y_envelope_scoped_marker(
+    qa_envelope: dict[str, Any],
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-21.0 (FR-P2-6) envelope-scoped ``a11y-delta-mode-unstable``
+    marker comment for the bundle bottom; return the empty string when no such
+    entry is present.
+
+    Unlike the two AC-scoped a11y classes, ``a11y-delta-mode-unstable`` has
+    ``pointer_context_fields: []`` (no ``ac_id``) — it is a run-level
+    "delta mode was unstable, full-report fallback" signal, NOT an AC finding.
+    Per ``agents/qa.md:144`` it renders at the bundle bottom, the same canonical
+    location the walking-skeleton ``emitted_markers`` use in
+    :func:`assemble_bundle`'s ``body_parts`` tail (which :func:`_render_per_ac_section`
+    cannot reach). Pattern-5 :func:`validate_marker_emission` fires once.
+    """
+    for emission in qa_envelope.get("a11y_emissions") or []:
+        if emission.get("marker_class") == A11Y_DELTA_MODE_UNSTABLE_MARKER:
+            validate_marker_emission(marker_registry, A11Y_DELTA_MODE_UNSTABLE_MARKER)
+            return _render_marker(A11Y_DELTA_MODE_UNSTABLE_MARKER)
+    return ""
 
 
 def _render_qa_heuristic_findings_subsection(
@@ -1982,6 +2145,16 @@ def assemble_bundle(
         body_parts.append("")
         for marker in emitted_markers:
             body_parts.append(_render_marker(marker))
+        body_parts.append("")
+    # Story 21.0 (FR-P2-6): the envelope-scoped a11y-delta-mode-unstable marker
+    # renders at the canonical bundle-bottom location (no ac_id → not a per-AC
+    # finding), independent of ac_results content.
+    a11y_envelope_scoped = _render_qa_a11y_envelope_scoped_marker(
+        envelopes["qa"], marker_registry=registry
+    )
+    if a11y_envelope_scoped:
+        body_parts.append("")
+        body_parts.append(a11y_envelope_scoped)
         body_parts.append("")
     bundle_body = "\n".join(body_parts)
 

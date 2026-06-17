@@ -3865,10 +3865,10 @@ verdicts:
     surface_name: bundle-assembler
     verdict: not-applicable
     rationale: |-
-      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
-      ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime
-      emission lands in Story 19.4 (flip-the-switch property).
-    audit_date: "2026-06-11"
+      QA-side marker emitted only by the QA specialist's substrate (qa_a11y_audit);
+      the bundle assembler RENDERS the a11y_emissions envelope array (Story 21.0) but
+      does not emit the marker.
+    audit_date: "2026-06-17"
   - marker_class: a11y-baseline-stale
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -3974,10 +3974,10 @@ verdicts:
     surface_name: bundle-assembler
     verdict: not-applicable
     rationale: |-
-      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
-      ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime
-      emission lands in Story 19.4 (flip-the-switch property).
-    audit_date: "2026-06-11"
+      QA-side marker emitted only by the QA specialist's substrate (qa_a11y_audit);
+      the bundle assembler RENDERS the a11y_emissions envelope array (Story 21.0) but
+      does not emit the marker.
+    audit_date: "2026-06-17"
   - marker_class: a11y-delta-exceeded
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -4083,10 +4083,10 @@ verdicts:
     surface_name: bundle-assembler
     verdict: not-applicable
     rationale: |-
-      The a11y audit is a QA-side, web-only evidence marker (Story 19.3 /
-      ADR-011, FR-P2-6); the PR/escalation/epic bundle assembler has no code path that produces it. Runtime
-      emission lands in Story 19.4 (flip-the-switch property).
-    audit_date: "2026-06-11"
+      QA-side marker emitted only by the QA specialist's substrate (qa_a11y_audit);
+      the bundle assembler RENDERS the envelope-scoped a11y_emissions entry at the
+      bundle bottom (Story 21.0) but does not emit the marker.
+    audit_date: "2026-06-17"
   - marker_class: a11y-delta-mode-unstable
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -4196,10 +4196,10 @@ verdicts:
     surface_name: bundle-assembler
     verdict: not-applicable
     rationale: |-
-      The visual-regression audit is a QA-side, web-AND-mobile evidence marker
-      (Story 19.5 / ADR-012, FR-P2-10); the PR/escalation/epic bundle assembler
-      has no code path that produces it.
-    audit_date: "2026-06-11"
+      QA-side marker emitted only by the QA specialist's substrate (qa_visual_regression);
+      the bundle assembler RENDERS the visual_regression_emissions envelope array
+      (Story 21.0) but does not emit the marker.
+    audit_date: "2026-06-17"
   - marker_class: visual-regression-delta-exceeded
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable
@@ -4305,10 +4305,10 @@ verdicts:
     surface_name: bundle-assembler
     verdict: not-applicable
     rationale: |-
-      The visual-regression audit is a QA-side, web-AND-mobile evidence marker
-      (Story 19.5 / ADR-012, FR-P2-10); the PR/escalation/epic bundle assembler
-      has no code path that produces it.
-    audit_date: "2026-06-11"
+      QA-side marker emitted only by the QA specialist's substrate (qa_visual_regression);
+      the bundle assembler RENDERS the visual_regression_emissions envelope array
+      (Story 21.0) but does not emit the marker.
+    audit_date: "2026-06-17"
   - marker_class: visual-regression-baseline-missing
     surface_name: cost-telemetry-pipeline
     verdict: not-applicable

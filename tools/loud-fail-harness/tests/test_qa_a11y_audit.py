@@ -21,6 +21,10 @@ from loud_fail_harness.envelope_validator import (
     load_schema,
     validate_envelope,
 )
+from loud_fail_harness.bundle_assembly import (
+    _render_per_ac_section,
+    _render_qa_a11y_envelope_scoped_marker,
+)
 from loud_fail_harness.qa_a11y_audit import (
     A11Y_BASELINE_STALE_MARKER,
     A11Y_DELTA_EXCEEDED_MARKER,
@@ -458,3 +462,95 @@ def test_no_a11y_skip_or_disabled_marker_class_in_taxonomy() -> None:
         "a11y-delta-exceeded",
         "a11y-delta-mode-unstable",
     }
+
+
+# --------------------------------------------------------------------------- #
+# Story 21.0 — bundle render-gap fix (a11y_emissions → bundle)                 #
+# --------------------------------------------------------------------------- #
+
+
+def _minimal_qa_envelope() -> dict[str, object]:
+    return {
+        "specialist": "qa",
+        "status": "pass",
+        "ac_results": [
+            {
+                "ac_id": "AC-1",
+                "status": "pass",
+                "assertions": ["holds"],
+                "evidence_refs": [],
+                "semantic_verification": "not_applicable",
+            }
+        ],
+        "findings": [],
+    }
+
+
+def test_bundle_renders_ac_scoped_a11y_markers() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": A11Y_BASELINE_STALE_MARKER, "ac_id": "AC-1"},
+            {"marker_class": A11Y_DELTA_EXCEEDED_MARKER, "ac_id": "AC-2"},
+        ]
+    }
+    rendered = _render_per_ac_section(envelope, marker_registry=_registry())
+    assert rendered.count("bmad-automation:marker a11y-baseline-stale") == 1
+    assert rendered.count("bmad-automation:marker a11y-delta-exceeded") == 1
+    assert "### Accessibility audit findings" in rendered
+    assert "AC `AC-1`" in rendered
+    assert "AC `AC-2`" in rendered
+
+
+def test_bundle_per_ac_section_excludes_envelope_scoped_a11y_marker() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": A11Y_DELTA_MODE_UNSTABLE_MARKER},
+        ]
+    }
+    rendered = _render_per_ac_section(envelope, marker_registry=_registry())
+    assert "a11y-delta-mode-unstable" not in rendered
+    assert "### Accessibility audit findings" not in rendered
+
+
+def test_envelope_scoped_a11y_marker_renders_at_bottom() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": A11Y_DELTA_MODE_UNSTABLE_MARKER},
+        ]
+    }
+    rendered = _render_qa_a11y_envelope_scoped_marker(
+        envelope, marker_registry=_registry()
+    )
+    assert rendered == "<!-- bmad-automation:marker a11y-delta-mode-unstable -->"
+
+
+def test_envelope_scoped_a11y_marker_silent_without_unstable_entry() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": A11Y_BASELINE_STALE_MARKER, "ac_id": "AC-1"},
+        ]
+    }
+    assert (
+        _render_qa_a11y_envelope_scoped_marker(envelope, marker_registry=_registry())
+        == ""
+    )
+
+
+def test_bundle_silent_without_a11y_emissions() -> None:
+    rendered = _render_per_ac_section(
+        _minimal_qa_envelope(), marker_registry=_registry()
+    )
+    assert "a11y-baseline-stale" not in rendered
+    assert "a11y-delta-exceeded" not in rendered
+    assert "Accessibility audit findings" not in rendered
+
+
+def test_a11y_render_revalidates_against_registry() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "a11y_emissions": [
+            {"marker_class": A11Y_DELTA_EXCEEDED_MARKER, "ac_id": "AC-1"},
+        ]
+    }
+    empty_registry = MarkerClassRegistry(marker_classes=frozenset())
+    with pytest.raises(UnknownMarkerClass):
+        _render_per_ac_section(envelope, marker_registry=empty_registry)

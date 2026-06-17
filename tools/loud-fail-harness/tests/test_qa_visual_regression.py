@@ -40,6 +40,7 @@ from loud_fail_harness.qa_visual_regression import (
     surface_visual_regression_baseline_missing,
     surface_visual_regression_delta_exceeded,
 )
+from loud_fail_harness.bundle_assembly import _render_per_ac_section
 from loud_fail_harness.specialist_dispatch import (
     MarkerClassRegistry,
     UnknownMarkerClass,
@@ -474,3 +475,59 @@ def test_no_visual_regression_skip_or_disabled_marker_class_in_taxonomy() -> Non
         "visual-regression-delta-exceeded",
         "visual-regression-baseline-missing",
     }
+
+
+# --------------------------------------------------------------------------- #
+# Story 21.0 — bundle render-gap fix (visual_regression_emissions → bundle)    #
+# --------------------------------------------------------------------------- #
+
+
+def _minimal_qa_envelope() -> dict[str, object]:
+    return {
+        "specialist": "qa",
+        "status": "pass",
+        "ac_results": [
+            {
+                "ac_id": "AC-1",
+                "status": "pass",
+                "assertions": ["holds"],
+                "evidence_refs": [],
+                "semantic_verification": "not_applicable",
+            }
+        ],
+        "findings": [],
+    }
+
+
+def test_bundle_renders_visual_regression_markers() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "visual_regression_emissions": [
+            {"marker_class": VISUAL_REGRESSION_DELTA_EXCEEDED_MARKER, "ac_id": "AC-1"},
+            {"marker_class": VISUAL_REGRESSION_BASELINE_MISSING_MARKER, "ac_id": "AC-2"},
+        ]
+    }
+    rendered = _render_per_ac_section(envelope, marker_registry=_registry())
+    assert rendered.count("bmad-automation:marker visual-regression-delta-exceeded") == 1
+    assert rendered.count("bmad-automation:marker visual-regression-baseline-missing") == 1
+    assert "### Visual regression findings" in rendered
+    assert "AC `AC-1`" in rendered
+    assert "AC `AC-2`" in rendered
+
+
+def test_bundle_silent_without_visual_regression_emissions() -> None:
+    rendered = _render_per_ac_section(
+        _minimal_qa_envelope(), marker_registry=_registry()
+    )
+    assert "visual-regression-delta-exceeded" not in rendered
+    assert "visual-regression-baseline-missing" not in rendered
+    assert "Visual regression findings" not in rendered
+
+
+def test_visual_regression_render_revalidates_against_registry() -> None:
+    envelope = _minimal_qa_envelope() | {
+        "visual_regression_emissions": [
+            {"marker_class": VISUAL_REGRESSION_DELTA_EXCEEDED_MARKER, "ac_id": "AC-1"},
+        ]
+    }
+    with pytest.raises(UnknownMarkerClass):
+        _render_per_ac_section(envelope, marker_registry=_empty_registry())
