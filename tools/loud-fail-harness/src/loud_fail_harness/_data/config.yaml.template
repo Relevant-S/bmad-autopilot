@@ -239,3 +239,31 @@ max_parallel_stories: 2
 # an open cross-session-survival churn), so enabling it is an explicit operator
 # choice, not the default.
 background_execution: false
+
+# Auto-merge opt-in gate + adoption gate-conditions (Phase 2 / Story 17.1,
+# FR-P2-3). When `enabled: true`, a landed story/epic PR bundle that has cleared
+# every gate condition below is auto-merged to the remote default branch instead
+# of pausing for the human merge-review moment; the gate-condition evaluator
+# (Story 17.2) and the Stop-hook execution path (Story 17.3) consume this surface.
+# When `false` (the default), dispatch is bit-identical to the manual-merge
+# posture — zero `gh pr merge`, zero auto-merge state, zero behavioral change.
+# Auto-merge is the only Phase-2 surface that pushes to a remote, so it is
+# gated default-off behind explicit, non-zero adoption conditions (NFR-S3).
+# Source: FR-P2-3 (see _bmad-output/planning-artifacts/prd.md line 946)
+# Default rationale: `false` per the opt-in posture — auto-merge *removes* the
+# merge-review moment where trust is earned, so enabling it is a deliberate
+# maintainer choice gated on reference-project adoption evidence, not the default.
+# Loud-fail discipline: `enabled: true` with any gate condition below left blank
+# or zero is REJECTED at config-validation time (auto-merge must never run
+# without a non-zero adoption gate); set all three before enabling.
+auto_merge:
+  enabled: false
+  # Reference-project adoption gate thresholds (prd.md line 748 Scope Decisions
+  # row: "≥ 6 months adoption with completion-fidelity ≥ X% and retry-exhaustion
+  # ≤ Y% ... specific thresholds TBD post-release data"). Shipped blank: the
+  # maintainer sets them from real reference-project adoption data when the gate
+  # threshold is determined. All three are required (non-zero) before enabling.
+  gate_conditions:
+    min_adoption_months:    # TBD — set by maintainer when gate threshold is determined post-release data (integer months, e.g. 6)
+    min_completion_fidelity:    # TBD — set by maintainer when gate threshold is determined post-release data (fraction in [0.0, 1.0], e.g. 0.9)
+    max_retry_exhaustion:    # TBD — set by maintainer when gate threshold is determined post-release data (fraction in [0.0, 1.0], e.g. 0.1)
