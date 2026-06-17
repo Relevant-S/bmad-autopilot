@@ -37,6 +37,7 @@ from loud_fail_harness.qa_ac_iteration import (
     SmokeFirstAbortDiagnosticContext,
 )
 from loud_fail_harness.qa_behavioral_plan import FlowBranch
+from loud_fail_harness.background_dispatch import BackgroundAgentSession
 from loud_fail_harness.qa_a11y_audit import (
     A11yAcScopedDiagnosticContext,
     A11yRunScopedDiagnosticContext,
@@ -369,6 +370,12 @@ def _flakiness_threshold_diag_kwargs() -> dict[str, object]:
     return dict(story_id="20-3", ac_id="AC-1", consecutive_transient_fail_runs=3)
 
 
+def _background_agent_session_kwargs() -> dict[str, object]:
+    # Parsed from `claude agents --json` (Story 21.2 / FR-P2-7). story_id is the
+    # hardened external-ingress identifier; session_id / state are daemon tokens.
+    return dict(session_id="job-abc123", state="completed", story_id="21-2")
+
+
 #: qualname -> (model class, valid-baseline-kwargs factory).
 _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] = {
     "epic_run_state.EpicRunState": (EpicRunState, _epic_kwargs),
@@ -442,6 +449,10 @@ _BASELINES: dict[str, tuple[type[BaseModel], Callable[[], dict[str, object]]]] =
     "qa_flakiness_threshold.FlakinessThresholdDiagnosticContext": (
         FlakinessThresholdDiagnosticContext,
         _flakiness_threshold_diag_kwargs,
+    ),
+    "background_dispatch.BackgroundAgentSession": (
+        BackgroundAgentSession,
+        _background_agent_session_kwargs,
     ),
 }
 

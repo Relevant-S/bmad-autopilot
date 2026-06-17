@@ -182,6 +182,11 @@ _PARALLEL_STORIES_FIELD: str = "parallel_stories"
 #: concurrency ceiling honored when ``parallel_stories`` is true. Snake_case.
 _MAX_PARALLEL_STORIES_FIELD: str = "max_parallel_stories"
 
+#: Canonical ``background_execution`` config-file field name (Story 21.2 /
+#: FR-P2-7). The opt-in gate for daemon-backed background-session dispatch.
+#: Snake_case per Pattern 1.
+_BACKGROUND_EXECUTION_FIELD: str = "background_execution"
+
 
 class RetryBudgetConfigError(ValueError):
     """Raised on malformed ``retry_budget`` config input.
@@ -829,6 +834,105 @@ def read_parallel_stories_from_config_file(
     return resolve_parallel_stories(parsed, default=default)
 
 
+def resolve_background_execution(
+    config: Mapping[str, Any] | None = None,
+    *,
+    default: bool = False,
+) -> bool:
+    """Resolve the ``background_execution`` opt-in flag from a config mapping
+    (Story 21.2 / FR-P2-7).
+
+    A strict-bool resolver, byte-mirroring :func:`resolve_parallel_stories`: it
+    REQUIRES ``type(value) is bool`` and rejects everything else (``int``
+    including ``0``/``1``, ``str`` including ``"true"``/``"false"``, ``float``,
+    and containers) — the same operator-typo guard the integer resolvers apply
+    from the other direction. ``true`` opts the story-loop dispatch into the
+    daemon-backed background-session primitive (``claude --bg`` / ``claude
+    agents``); ``false`` (the default) keeps the dispatch bit-identical to the
+    foreground loop.
+
+    Per-input contract:
+
+    * ``config is None`` → ``default`` (pre-Story-7.5 "config.yaml not yet
+      scaffolded" case).
+    * field absent / value ``None`` → ``default`` (the YAML loader parses
+      ``background_execution:`` with no value as :data:`None`).
+    * ``type(value) is bool`` → the value.
+    * any other value → :exc:`RetryBudgetConfigError` naming the field + the
+      YAML-bool remediation.
+    """
+    if config is None:
+        return default
+
+    if _BACKGROUND_EXECUTION_FIELD not in config:
+        return default
+
+    value = config[_BACKGROUND_EXECUTION_FIELD]
+
+    if value is None:
+        return default
+
+    if type(value) is not bool:
+        raise RetryBudgetConfigError(
+            f"{_BACKGROUND_EXECUTION_FIELD} must be a YAML boolean; "
+            f"got {value!r} ({type(value).__name__}) — write the value as an "
+            f"unquoted YAML bool in config.yaml (e.g., "
+            f"'background_execution: true' or 'background_execution: false'), "
+            f"not as an integer, quoted string, or other type"
+        )
+
+    return value
+
+
+def read_background_execution_from_config_file(
+    config_path: pathlib.Path,
+    *,
+    default: bool = False,
+) -> bool:
+    """Read ``background_execution`` from a YAML config file (Story 21.2).
+
+    The boolean sibling of :func:`read_retry_budget_from_config_file`; the
+    missing-file / empty-file / malformed-YAML / non-mapping contract is
+    identical (delegates value-shape validation to
+    :func:`resolve_background_execution`). Uses :func:`yaml.safe_load` per the
+    loud-fail security doctrine.
+    """
+    if not config_path.exists():
+        return default
+
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise RetryBudgetConfigError(
+            f"failed to read {config_path}: {exc}"
+        ) from exc
+
+    if not raw_text.strip():
+        return default
+
+    try:
+        parsed = yaml.safe_load(raw_text)
+    except yaml.YAMLError as exc:
+        raise RetryBudgetConfigError(
+            f"{config_path} is not valid YAML; "
+            f"parser error: {exc} — fix the YAML syntax in "
+            f"{config_path} and re-run"
+        ) from exc
+
+    if parsed is None:
+        return default
+
+    if not isinstance(parsed, Mapping):
+        raise RetryBudgetConfigError(
+            f"{config_path} top-level must be a YAML mapping; "
+            f"got {type(parsed).__name__}: {parsed!r} — write the file as "
+            f"'background_execution: false' (key/value pairs at the top level), "
+            f"not as a list or scalar"
+        )
+
+    return resolve_background_execution(parsed, default=default)
+
+
 def resolve_max_parallel_stories(
     config: Mapping[str, Any] | None = None,
     *,
@@ -1002,12 +1106,14 @@ __all__ = [
     "RetryBudgetConfigError",
     "RetryDecision",
     "evaluate_retry_decision",
+    "read_background_execution_from_config_file",
     "read_max_parallel_stories_from_config_file",
     "read_parallel_stories_from_config_file",
     "read_per_epic_retry_budget_multiplier_from_config_file",
     "read_per_sprint_retry_budget_from_config_file",
     "read_retry_budget_from_config_file",
     "read_sprint_escalation_rate_threshold_from_config_file",
+    "resolve_background_execution",
     "resolve_max_parallel_stories",
     "resolve_parallel_stories",
     "resolve_per_epic_retry_budget_multiplier",

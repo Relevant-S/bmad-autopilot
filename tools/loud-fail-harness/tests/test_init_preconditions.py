@@ -621,7 +621,9 @@ def test_schema_version_bumps_non_regression() -> None:
     raw = load_dependencies()
     # Story 19.3 bumped 1.5 → 1.6 (axe-core Phase-2 a11y-audit dependency entry
     # per ADR-011 / FR-P2-6; new dependency entry = MINOR).
-    assert raw["schema_version"] == "1.7"
+    # Story 21.2 bumped 1.7 → 1.8 (background-primitive Phase-2 opt-in-skip entry
+    # per FR-P2-7; new dependency entry = MINOR).
+    assert raw["schema_version"] == "1.8"
 
     # Marker taxonomy round-trip: load_marker_taxonomy returns the
     # closure of marker_class strings; verify the schema_version field
@@ -661,7 +663,7 @@ def test_schema_version_bumps_non_regression() -> None:
     # level-class rule + Story 24.1 precedent; ADR-011 / FR-P2-6).
     # Story 20.1 bumped 1.15 → 1.16 (additive: plan-rederivation-drift-detected
     # top-level class; closed-set 39 → 40; PATCH bump; FR-P2-9).
-    assert taxonomy_data["schema_version"] == "1.17"
+    assert taxonomy_data["schema_version"] == "1.18"
 
     # Confirm the marker-taxonomy load surfaces the new sub_classifications
     # under env-setup-failed (closure check via `load_marker_taxonomy`
@@ -787,10 +789,11 @@ def test_project_type_parametrized_over_three_types(
             marker_registry=runtime_marker_registry,
             run_state=_make_run_state(),
         )
-        # Always the same nine top-level deps (declaration order).
+        # Always the same ten top-level deps (declaration order).
         # Story 14.1 added `git` as the first MVP entry per ADR-009;
         # Story 19.3 added `axe-core` per ADR-011; Story 19.5 added
-        # `pixelmatch` as the last (Phase-2) entry per ADR-012.
+        # `pixelmatch` per ADR-012; Story 21.2 added `background-primitive`
+        # as the last (Phase-2) opt-in-skip entry per FR-P2-7.
         deps = [r.dependency for r in run.results]
         assert deps == [
             "git",
@@ -802,6 +805,7 @@ def test_project_type_parametrized_over_three_types(
             "lad",
             "axe-core",
             "pixelmatch",
+            "background-primitive",
         ]
 
 

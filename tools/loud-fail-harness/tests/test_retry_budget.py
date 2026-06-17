@@ -36,12 +36,14 @@ from loud_fail_harness.retry_budget import (
     RetryBudgetConfigError,
     RetryDecision,
     evaluate_retry_decision,
+    read_background_execution_from_config_file,
     read_max_parallel_stories_from_config_file,
     read_parallel_stories_from_config_file,
     read_per_epic_retry_budget_multiplier_from_config_file,
     read_per_sprint_retry_budget_from_config_file,
     read_retry_budget_from_config_file,
     read_sprint_escalation_rate_threshold_from_config_file,
+    resolve_background_execution,
     resolve_max_parallel_stories,
     resolve_parallel_stories,
     resolve_per_epic_retry_budget_multiplier,
@@ -1217,3 +1219,117 @@ def test_read_max_parallel_non_utf8_raises(tmp_path: pathlib.Path) -> None:
     config.write_bytes(b"\xff\xfe max_parallel_stories: 2")
     with pytest.raises(RetryBudgetConfigError, match="failed to read"):
         read_max_parallel_stories_from_config_file(config)
+
+
+# ---------------------------------------------------------------------------
+# Story 21.2 AC-1 — resolve_background_execution (strict-bool resolver; FR-P2-7)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_background_execution_none_config_returns_default() -> None:
+    assert resolve_background_execution(None) is False
+
+
+def test_resolve_background_execution_field_absent_returns_default() -> None:
+    assert resolve_background_execution({"retry_budget": 2}) is False
+
+
+def test_resolve_background_execution_value_none_returns_default() -> None:
+    assert resolve_background_execution({"background_execution": None}) is False
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_resolve_background_execution_accepts_bool(value: bool) -> None:
+    assert resolve_background_execution({"background_execution": value}) is value
+
+
+def test_resolve_background_execution_honors_default_keyword() -> None:
+    assert resolve_background_execution(None, default=True) is True
+
+
+@pytest.mark.parametrize("value", [0, 1, 2])
+def test_resolve_background_execution_rejects_int(value: int) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_background_execution({"background_execution": value})
+
+
+@pytest.mark.parametrize("value", ["true", "false", "yes", ""])
+def test_resolve_background_execution_rejects_string(value: str) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_background_execution({"background_execution": value})
+
+
+def test_resolve_background_execution_rejects_float() -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_background_execution({"background_execution": 1.0})
+
+
+@pytest.mark.parametrize("value", [[], {}, [True]])
+def test_resolve_background_execution_rejects_container(value: object) -> None:
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        resolve_background_execution({"background_execution": value})
+
+
+def test_resolve_background_execution_error_names_field() -> None:
+    with pytest.raises(RetryBudgetConfigError) as exc_info:
+        resolve_background_execution({"background_execution": 1})
+    assert "background_execution" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# Story 21.2 AC-1 — read_background_execution_from_config_file (file contract)
+# ---------------------------------------------------------------------------
+
+
+def test_read_background_execution_missing_file_returns_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    assert read_background_execution_from_config_file(tmp_path / "nope.yaml") is False
+
+
+def test_read_background_execution_empty_file_returns_default(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("", encoding="utf-8")
+    assert read_background_execution_from_config_file(config) is False
+
+
+def test_read_background_execution_reads_value(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("background_execution: true\n", encoding="utf-8")
+    assert read_background_execution_from_config_file(config) is True
+
+
+def test_read_background_execution_malformed_yaml_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("background_execution: [\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="not valid YAML"):
+        read_background_execution_from_config_file(config)
+
+
+def test_read_background_execution_non_mapping_raises(tmp_path: pathlib.Path) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("- a\n- b\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML mapping"):
+        read_background_execution_from_config_file(config)
+
+
+def test_read_background_execution_propagates_resolver_error(
+    tmp_path: pathlib.Path,
+) -> None:
+    config = tmp_path / "config.yaml"
+    config.write_text("background_execution: 1\n", encoding="utf-8")
+    with pytest.raises(RetryBudgetConfigError, match="must be a YAML boolean"):
+        read_background_execution_from_config_file(config)
+
+
+def test_config_template_carries_background_execution_field() -> None:
+    import importlib.resources
+
+    template = (
+        importlib.resources.files("loud_fail_harness")
+        / "_data"
+        / "config.yaml.template"
+    ).read_text(encoding="utf-8")
+    assert "background_execution: false" in template

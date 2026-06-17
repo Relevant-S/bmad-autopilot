@@ -151,6 +151,8 @@ CANONICAL_MARKER_CLASSES = [
     # Story 19.5 — Epic 19 visual-regression evidence markers (ADR-012 / FR-P2-10).
     "visual-regression-delta-exceeded",
     "visual-regression-baseline-missing",
+    # Story 21.2 — Epic 21 background-execution runtime-evidence marker (FR-P2-7).
+    "background-primitive-unstable",
 ]
 
 # Map: marker_class → key phrase that must appear verbatim in
@@ -391,7 +393,7 @@ def test_determinism_under_shuffle() -> None:
 
 def test_taxonomy_has_37_canonical_markers(taxonomy_data: dict) -> None:
     names = [m["marker_class"] for m in taxonomy_data["markers"]]
-    assert len(names) == 41
+    assert len(names) == 42
     assert names == CANONICAL_MARKER_CLASSES, (
         "marker-taxonomy.yaml entries are out of canonical order; "
         "AC-2 mandates the order verbatim (Story 2.3 appended entries 28-29; "
@@ -405,7 +407,8 @@ def test_taxonomy_has_37_canonical_markers(taxonomy_data: dict) -> None:
         "Story 19.5 appended entries 38-39: visual-regression-delta-exceeded / "
         "visual-regression-baseline-missing; "
         "Story 20.1 appended entry 40: plan-rederivation-drift-detected; "
-        "Story 20.3 appended entry 41: flakiness-threshold-exceeded)"
+        "Story 20.3 appended entry 41: flakiness-threshold-exceeded; "
+        "Story 21.2 appended entry 42: background-primitive-unstable)"
     )
 
 
@@ -460,7 +463,7 @@ def test_taxonomy_declares_schema_version_1_14(taxonomy_data: dict) -> None:
     # level-class rule + epics-phase-2.md line 70 + the Story 24.1 precedent;
     # ADR-011 / FR-P2-6; no runtime emitter — Story 19.4 wires emission).
     # Story 20.1 bumps 1.15 → 1.16 (PATCH: plan-rederivation-drift-detected; FR-P2-9).
-    assert taxonomy_data.get("schema_version") == "1.17"
+    assert taxonomy_data.get("schema_version") == "1.18"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:
@@ -529,7 +532,7 @@ def test_skip_event_is_frozen() -> None:
 def test_load_marker_taxonomy_default_path() -> None:
     ids = load_marker_taxonomy()
     assert isinstance(ids, set)
-    assert len(ids) == 41  # Story 20.3 appended flakiness-threshold-exceeded (40 → 41)
+    assert len(ids) == 42  # Story 21.2 appended background-primitive-unstable (41 → 42)
     assert set(CANONICAL_MARKER_CLASSES) == ids
 
 

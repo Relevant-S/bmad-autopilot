@@ -642,10 +642,12 @@ def test_canonical_corpus_validates() -> None:
     story 15.2 added 1 marker + 1 fixture, taking the count from 31 → 32;
     story 16.2 added 1 marker + 1 fixture, taking the count from 32 → 33;
     story 24.1 added 1 marker + 1 fixture, taking the count from 33 → 34;
-    story 19.3 added 3 markers + 3 fixtures, taking the count from 34 → 37)."""
+    story 19.3 added 3 markers + 3 fixtures, taking the count from 34 → 37;
+    stories 19.5/20.1/20.3 took it 37 → 41; story 21.2 added 1 marker + 1
+    fixture (background-primitive-unstable), taking the count from 41 → 42)."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "41 passing marker class(es)" in out
+    assert "42 passing marker class(es)" in out
     assert "0 uncovered marker class(es)" in out
     assert "0 dangling fixture(s)" in out
     assert "0 shape-violation finding(s)" in out

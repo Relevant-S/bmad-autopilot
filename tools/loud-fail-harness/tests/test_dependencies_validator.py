@@ -917,7 +917,16 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # which also have no counterpart). The marker joins the orphan bucket →
     # orphan-count increment 32 → 33 is the load-bearing witness that the
     # Story 20.3 taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 33 orphan marker class(es)" in text
+    #
+    # Post-Story-21.2 review: ONE background-execution runtime-evidence marker
+    # (`background-primitive-unstable`) newly enumerated via PATCH bump
+    # 1.17 → 1.18; zero `dependencies.yaml` / `escalation-bundles/*.yaml` /
+    # `orchestrator-event.yaml` reference (the `background-primitive` dependency
+    # entry carries NO `marker_class`; the marker is emitted at status RUNTIME by
+    # `background_dispatch.reconcile_background_runs`, exactly like the QA-evidence
+    # orphans above). The marker joins the orphan bucket → orphan-count increment
+    # 33 → 34 is the load-bearing witness that the Story 21.2 taxonomy edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 34 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 
@@ -979,7 +988,7 @@ def test_load_dependencies_returns_dict() -> None:
     """The on-disk canonical schema loads + shape-validates cleanly."""
     raw = load_dependencies(CANONICAL_DEPENDENCIES_PATH)
     assert isinstance(raw, dict)
-    assert raw["schema_version"] == "1.7"
+    assert raw["schema_version"] == "1.8"
     deps = raw["dependencies"]
     # Story 14.1 AC-6: git entry present with version_floor "2.5";
     # both init + runtime profiles total-block; operator-actionable
@@ -1064,11 +1073,11 @@ def test_pixelmatch_dependency_entry() -> None:
     entry is present with the opt-in-skip shape (version_floor "7.2", no `phase`,
     no `marker_class` — the wrapper-emitted-evidence-marker precedent), both init
     + runtime profiles `opt-in-skip` with `unconfigured`/`silent: true`; the live
-    schema_version is "1.7" and the validator finds zero issues."""
+    schema_version is "1.8" and the validator finds zero issues."""
     repo_root = find_repo_root()
     deps_path = repo_root / "schemas" / "dependencies.yaml"
     raw = load_dependencies(deps_path)
-    assert raw["schema_version"] == "1.7"
+    assert raw["schema_version"] == "1.8"
     assert validate_dependencies(raw, str(deps_path)) == []
     deps = raw["dependencies"]
     assert "pixelmatch" in deps
@@ -1084,6 +1093,35 @@ def test_pixelmatch_dependency_entry() -> None:
     ]
     assert "marker_class" not in deps["pixelmatch"]["profiles"]["init"]
     assert "marker_class" not in deps["pixelmatch"]["profiles"]["runtime"]
+
+
+def test_background_primitive_dependency_entry() -> None:
+    """Story 21.2 AC-2: the `background-primitive` Phase-2 background-execution
+    dependency entry is present with the opt-in-skip shape (version_floor
+    "2.1.179", `phase: "2"`, NO `marker_class` — the
+    `background-primitive-unstable` marker is enumerated in marker-taxonomy.yaml
+    independently, not pinned through this entry), both init + runtime profiles
+    `opt-in-skip` with `unconfigured`/`silent: true`; the live schema_version is
+    "1.8" and the validator finds zero issues."""
+    repo_root = find_repo_root()
+    deps_path = repo_root / "schemas" / "dependencies.yaml"
+    raw = load_dependencies(deps_path)
+    assert raw["schema_version"] == "1.8"
+    assert validate_dependencies(raw, str(deps_path)) == []
+    deps = raw["dependencies"]
+    assert "background-primitive" in deps
+    assert deps["background-primitive"]["phase"] == "2"
+    assert deps["background-primitive"]["version_floor"] == "2.1.179"
+    assert deps["background-primitive"]["profiles"]["init"]["profile"] == "opt-in-skip"
+    assert deps["background-primitive"]["profiles"]["runtime"]["profile"] == "opt-in-skip"
+    assert deps["background-primitive"]["profiles"]["init"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert deps["background-primitive"]["profiles"]["runtime"]["sub_classifications"] == [
+        {"condition": "unconfigured", "silent": True}
+    ]
+    assert "marker_class" not in deps["background-primitive"]["profiles"]["init"]
+    assert "marker_class" not in deps["background-primitive"]["profiles"]["runtime"]
 
 
 def test_extended_fixture_git_entry_state() -> None:

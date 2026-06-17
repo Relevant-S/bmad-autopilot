@@ -1,0 +1,26 @@
+$ /bmad-automation run sample-bg-001
+# (config: _bmad/automation/config.yaml carries `background_execution: true`)
+
+[pre-flight] background-execution gate: background_execution=true, reentry=false → mode=background
+[pre-flight] NOT running the inline six-step foreground loop (sensor: non-blocking dispatch)
+[pre-flight] dispatching the story loop as a detached, daemon-backed background session
+[pre-flight] argv: claude --bg --add-dir /proj/web-shop /bmad-automation run sample-bg-001 --foreground
+[pre-flight] NOTE: this is the daemon-backed `claude --bg` primitive — NOT the in-session
+             `Agent run_in_background` subagent path (that is the #63023 silent-data-loss path
+             the Story 21.1 spike rejected).
+
+background-dispatched: story sample-bg-001 dispatched as a detached Claude Code background session (claude --bg). The terminal is NOT blocked. Inspect progress + landed state via `/bmad-automation status sample-bg-001` (background runs are reconciled against git ground-truth; a background-primitive-unstable marker surfaces if the run cannot be confirmed landed on resume).
+
+# The detached child re-enters `/bmad-automation run sample-bg-001 --foreground`; the `--foreground`
+# re-entrancy sentinel forces the real foreground six-step loop in the child (background dispatch
+# disabled) so the detached session executes the story loop and does not recurse.
+
+# ----------------------------------------------------------------------------------------------
+# Contrast: with `background_execution: false` (the default), the SAME command is bit-identical
+# to the pre-Story-21.2 foreground loop — zero `claude --bg` invocation, zero background-run
+# state, zero behavioral change:
+#
+# $ /bmad-automation run sample-bg-001
+# [pre-flight] background-execution gate: background_execution=false → mode=foreground
+# (a) Locate … (b) Validate … (c) Branch … (d) Init run-state … (e) Advance … (f) Dispatch Dev …
+# → merge-ready

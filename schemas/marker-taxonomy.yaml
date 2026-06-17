@@ -426,7 +426,8 @@
 # schema MINOR bump for Story 19.5 visual-regression-delta-exceeded / visual-regression-baseline-missing new top-level evidence classes (closed-set 37 → 39; ADR-012 / FR-P2-10; both [ac_id]; orphans; runtime emission lands in THIS story — no split; no -mode-unstable class, dimension-mismatch folds into delta-exceeded)
 # schema PATCH bump for Story 20.1 plan-rederivation-drift-detected new top-level QA-evidence class (closed-set 39 → 40; FR-P2-9; pointer_context_fields [drift_surfaces]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.1 AC + epics-phase-2.md line 70, citing the Story 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.15 → 1.16 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; additive read-only cross-check, FR23's plan-drift-detected AC-hash channel left fully intact)
 # schema PATCH bump for Story 20.3 flakiness-threshold-exceeded new top-level QA-evidence class (closed-set 40 → 41; FR-P2-8; pointer_context_fields [ac_id]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.3 AC + epics-phase-2.md line 70, citing the Story 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.16 → 1.17 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; threshold marker is story-level evidence, never flips ac_results)
-schema_version: "1.17"
+# schema PATCH bump for Story 21.2 background-primitive-unstable new top-level class (closed-set 41 → 42; FR-P2-7; pointer_context_fields [story_id, session_id]; sub_classifications []; orphan — runtime-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / flakiness-threshold-exceeded / a11y-* / visual-regression-*; classified PATCH per the Story 21.2 AC + the Story 21.1 spike routing rule ("Marker class enumerated per PATCH bump regardless of path") + epics-phase-2.md line 70, citing the Story 20.3 / 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.17 → 1.18 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; marker is story-level runtime evidence, never flips ac_results / wrapper status / run lifecycle state)
+schema_version: "1.18"
 
 markers:
 
@@ -1140,4 +1141,31 @@ markers:
       unexpectedly new, confirm the prior baseline artifact was not lost or
       relocated before trusting subsequent deltas.
     pointer_context_fields: [ac_id]
+    sub_classifications: []
+
+  - marker_class: background-primitive-unstable
+    diagnostic_pointer: |
+      FR-P2-7 / Story 21.2 — a story loop dispatched via the daemon-backed
+      background-session primitive (`claude --bg` / `claude agents`, gated on
+      `_bmad/automation/config.yaml` `background_execution: true`) could NOT be
+      confirmed landed on resume for story `{story_id}` (background session
+      `{session_id}`): `claude agents --json` and git ground-truth disagree, or
+      the run's per-story branch / PR landed state is absent. This surfaces the
+      silent cross-session-survival failure mode of anthropics/claude-code#63023
+      (background agents terminated on session pause with no completion
+      notification) + #68117 (the agents registry rendering dead tasks as
+      "Running") LOUDLY rather than letting the work disappear silently — the
+      loud-fail inversion the partial surface exists to provide. Story-level
+      runtime evidence (sensor-not-advisor): the marker SURFACES the
+      unconfirmable run; it does NOT auto-recover, re-dispatch, or flip any
+      `ac_results`, wrapper `status`, or run lifecycle state. Remediation (the
+      human decides): inspect `claude agents --json --all` for the session's
+      actual state; check the per-story branch / PR landed state directly with
+      git (e.g. `git log <branch>`); if the run was lost, re-dispatch the story
+      (with `background_execution: false` for a foreground run, or re-issue the
+      background dispatch). The unqualified "close the session and forget it;
+      results always surface" guarantee is DEFERRED (Story 21.1 spike
+      `## Forward consumers` → "FR-P2-7 Phase-3 revisit"); this marker is the
+      visible boundary of what the partial surface promises.
+    pointer_context_fields: [story_id, session_id]
     sub_classifications: []

@@ -80,6 +80,26 @@ If the practitioner needs to advance state, they MUST invoke `/bmad-automation r
 
 The substrate's `inspect_story` function does NOT invoke `cross_state_recovery.evaluate_recovery` because that function's rebuild path mutates run-state via the `run_state_writer` DI seam — even if run-state and story-doc disagree, status surfaces the run-state's recorded values WITHOUT correcting them. The recovery-on-disagreement path is `/bmad-automation resume`'s job, not `/bmad-automation status`'s.
 
+## Background runs (Story 21.2 / FR-P2-7)
+
+When `background_execution: true` is set and the operator has dispatched one or more story loops as detached daemon-backed background sessions (`claude --bg`; see `steps/run.md`), `/bmad-automation status` surfaces an additional `## Background runs` section reconciling each background run against **git ground-truth**.
+
+Protocol: capture the live background-agent registry with `claude agents --json --all` into a temp file, then invoke the status CLI with `--background-agents-json <file>`:
+
+```bash
+claude agents --json --all > /tmp/bmad-agents.json
+uv --directory bmad-autopilot/tools/loud-fail-harness/ run bmad-automation-status <story-id> \
+  --project-root <absolute-path> --background-agents-json /tmp/bmad-agents.json
+```
+
+The substrate composition is `background_dispatch.reconcile_background_runs(agents_json, git_ground_truth_probe=..., marker_recorder=..., marker_registry=...)`. It consumes the parsed `claude agents --json` array (fields `id` / `state` / `waitingFor`) **as injected data** and cross-checks each run against git ground-truth via the production probe `make_git_ground_truth_probe`, which runs two read-only git queries: `git rev-parse --verify refs/heads/<branch>` (branch present) and `git rev-list --count refs/heads/main..refs/heads/<branch>` (story-specific commits only — a freshly-cut empty branch counts 0 and is not confirmed). Each run is classified:
+
+- **`in-flight`** — the session is still running; no confirmation is owed; silent.
+- **`completed-confirmed`** — the session finished AND git ground-truth confirms the per-story branch landed with commits; silent.
+- **`unconfirmable`** — the session claims to be finished (or is in an unknown/failed state) but git ground-truth cannot confirm the work landed (`claude agents --json` and git disagree, or the branch/PR is absent — the `#63023` / `#68117` failure signatures). For every `unconfirmable` run the substrate emits the loud-fail **`background-primitive-unstable`** marker via the injected `marker_recorder` (Pattern 5 validate-first) — the **Story 8.5 `orphan-run-state-detected` discovery-surface emission pattern**, NOT a run-state mutation.
+
+The marker is greppable in the rendered `## Background runs` section. **Read-only invariant preserved:** the reconciliation reads `claude agents --json` (injected) + git (read-only probes); it does NOT mutate run-state contents (NFR-O4 mtime/sha256 invariant holds) — the marker emission is a discovery-surface emission, exactly like the no-args listing's orphan emission. **Sensor-not-advisor:** the marker SURFACES the unconfirmable run; it does NOT auto-recover, re-dispatch, or flip `ac_results` / wrapper `status` / run lifecycle state. Omitting `--background-agents-json` yields output bit-identical to the pre-Story-21.2 single-story render.
+
 ## No-args multi-story listing protocol
 
 When the practitioner invokes `/bmad-automation status` without a `<story-id>` argument, dispatch to the Story 8.5 multi-story enumeration substrate. THIS is structurally distinct from the single-story inspection protocol above — both surfaces share the `/bmad-automation status` slash command and dispatch on argument presence per the `## Branch on argument presence` section near the top.

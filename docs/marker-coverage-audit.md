@@ -25,9 +25,9 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 
 ## Coverage summary
 
-- Total intersections: 574
-- Emitted: 52
-- Not-applicable: 522
+- Total intersections: 588
+- Emitted: 53
+- Not-applicable: 535
 - Scheduled-by-story: 0
 - Gaps: 0
 
@@ -105,6 +105,20 @@ This audit is COMPLEMENTARY to BOTH the fixture-driven gate (Story 1.8 / `fr33_f
 | a11y-delta-mode-unstable | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Dev specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
 | a11y-delta-mode-unstable | specialist-wrapper-qa | emitted | `tools/loud-fail-harness/src/loud_fail_harness/qa_a11y_audit.py:549` | 2026-06-11 |  |
 | a11y-delta-mode-unstable | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-11 | The a11y audit is a QA-side, web-only evidence marker (Story 19.3 / ADR-011, FR-P2-6); the Review-BMAD specialist wrapper has no code path that produces it. Runtime emission lands in Story 19.4 (flip-the-switch property). |
+| background-primitive-unstable | bundle-assembler | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the bundle assembler has no code path that reconciles background runs. |
+| background-primitive-unstable | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the cost-telemetry pipeline has no code path that produces it. |
+| background-primitive-unstable | hook-session-start | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the SessionStart hook has no code path that produces it. |
+| background-primitive-unstable | hook-stop | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the Stop hook has no code path that produces it. |
+| background-primitive-unstable | hook-subagent-stop | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the SubagentStop hook has no code path that produces it. |
+| background-primitive-unstable | orchestrator-dispatch-wrapper | not-applicable | `n/a` | 2026-06-17 | The dispatch seam BUILDS the `claude --bg` argv (build_background_dispatch_command) but does NOT emit this marker — the unconfirmable-on-resume detection lives at the status reconciliation surface, not the dispatch wrapper (Story 21.2). |
+| background-primitive-unstable | orchestrator-lifecycle-transitions | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); lifecycle transitions have no code path that produces it (sensor-not-advisor — the marker never flips run lifecycle state). |
+| background-primitive-unstable | orchestrator-run-state-helper | emitted | `tools/loud-fail-harness/src/loud_fail_harness/background_dispatch.py:526` | 2026-06-17 | Emitted by background_dispatch.reconcile_background_runs at the `/bmad-automation status` discovery surface (Story 21.2 / FR-P2-7) for every background run that cannot be confirmed landed on resume — the Story 8.5 orphan-run-state-detected discovery-surface emission pattern, read-only against run-state contents. |
+| background-primitive-unstable | orchestrator-state-machine | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the lifecycle state machine has no code path that produces it. |
+| background-primitive-unstable | reconciliation-gate-fixture | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the fixture-driven reconciliation gate has no code path that produces it. |
+| background-primitive-unstable | reconciliation-gate-runtime | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the runtime reconciliation gate has no code path that produces it. |
+| background-primitive-unstable | specialist-wrapper-dev | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the Dev specialist wrapper has no code path that produces it. |
+| background-primitive-unstable | specialist-wrapper-qa | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the QA specialist wrapper has no code path that produces it. |
+| background-primitive-unstable | specialist-wrapper-review-bmad | not-applicable | `n/a` | 2026-06-17 | Status-side runtime-evidence marker emitted only by background_dispatch.reconcile_background_runs (Story 21.2 / FR-P2-7); the Review-BMAD specialist wrapper has no code path that produces it. |
 | bundle-assembly-failed | bundle-assembler | emitted | `tools/loud-fail-harness/src/loud_fail_harness/bundle_assembly_failure.py:354` | 2026-05-07 |  |
 | bundle-assembly-failed | cost-telemetry-pipeline | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |
 | bundle-assembly-failed | hook-session-start | not-applicable | `n/a` | 2026-05-05 | FR59 bundle-assembly-failed marker fires only at the bundle-assembler / Stop-hook seam; this surface has no bundle-assembly code path. |

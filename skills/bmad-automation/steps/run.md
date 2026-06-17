@@ -2,6 +2,20 @@
 
 When the practitioner invokes `/bmad-automation run <story-id>`, execute the six-step entry sequence verbatim per AC-2 of Story 2.5. The canonical Python composition is `bmad-autopilot/tools/loud-fail-harness/src/loud_fail_harness/orchestrator_run_entry.py`'s `run_story_loop_entry` function — that function structurally encodes the steps below; this prose IS the LLM-runtime protocol that names what each step is for and what to surface to the practitioner.
 
+## Pre-flight: background-execution branch (Story 21.2 / FR-P2-7)
+
+BEFORE the six-step entry sequence, resolve the background-execution gate. Read `background_execution` from `_bmad/automation/config.yaml` via `retry_budget.resolve_background_execution` (or `read_background_execution_from_config_file`) — the same place `run-epic.md` reads `parallel_stories`. Then check whether THIS invocation is the re-entrant background child by testing the invocation arguments with `background_dispatch.is_background_reentry` (the dispatched child carries the `--foreground` sentinel; see below).
+
+Compose the gate via `background_dispatch.dispatch_run(story_id, project_root=..., background_execution=<resolved flag>, background_reentry=<is_background_reentry(args)>, launcher=<argv launcher>, foreground_runner=<thunk that runs the six-step loop below>)`. The pure decision is `background_dispatch.decide_dispatch_mode`:
+
+- **`background_execution: false` (the default) → mode `foreground`.** The dispatch path is **bit-identical** to the pre-Story-21.2 behavior: NO `claude --bg` argv is built, NO background-run state is created, and the six-step entry sequence below runs inline exactly as before. Zero behavioral change.
+- **`background_execution: true` AND not a re-entrant child → mode `background`.** Do **NOT** run the inline six-step loop. Instead `dispatch_run` builds the `claude --bg …` argv via `background_dispatch.build_background_dispatch_command` and hands it to the injected launcher, which dispatches the whole story loop as a **detached, daemon-backed Claude Code background session** (`claude --bg "/bmad-automation run <story-id> --foreground"`). The terminal is NOT blocked; surface the non-blocking confirmation (`build_background_dispatch_confirmation`) directing the operator to `/bmad-automation status <story-id>`.
+- **Re-entrant child (`is_background_reentry(args)` true) → mode `foreground`.** The detached child re-enters `/bmad-automation run <story-id>` carrying the `--foreground` sentinel; `dispatch_run` therefore runs the real six-step loop with background dispatch disabled, so the detached session executes the actual story loop and does NOT recurse.
+
+**CRITICAL — the in-session `Agent run_in_background` subagent path is explicitly NOT used.** That is the `anthropics/claude-code#63023` silent-data-loss path the Story 21.1 spike rejected (background agents terminated on session pause with no completion notification). Background dispatch uses ONLY the daemon-backed `claude --bg` / `claude agents` surface the spike verified functional at Claude Code 2.1.179. If you find yourself wiring `Agent run_in_background` for the orchestrator dispatch, stop — you have left the `partial` surface.
+
+The unconfirmable-on-resume loud-fail marker (`background-primitive-unstable`) fires from `/bmad-automation status`, NOT from this dispatch step — see `steps/status.md`.
+
 ## The six-step entry sequence
 
 The entry sequence has two phases:

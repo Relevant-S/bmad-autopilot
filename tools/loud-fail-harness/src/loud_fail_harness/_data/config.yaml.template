@@ -217,3 +217,25 @@ parallel_stories: false
 # independent stories; raise it when the host has spare capacity and the stories
 # are known-independent.
 max_parallel_stories: 2
+
+# Background / fire-and-forget execution opt-in gate (Phase 2 / Story 21.2,
+# FR-P2-7). When `background_execution: true`, `/bmad-automation run <story-id>`
+# does NOT run the inline foreground loop; instead it dispatches the whole story
+# loop as a detached, daemon-backed Claude Code background session
+# (`claude --bg` / `claude agents` — NOT the in-session `Agent run_in_background`
+# subagent path, which loses work silently on session pause per
+# anthropics/claude-code#63023) and returns a non-blocking confirmation pointing
+# at `/bmad-automation status`. `/bmad-automation status` then surfaces in-flight
+# + completed background runs reconciled against git ground-truth, emitting a
+# loud-fail `background-primitive-unstable` marker whenever a background run
+# cannot be confirmed landed on resume. When `false` (the default), dispatch is
+# bit-identical to the foreground loop — zero `claude --bg` invocation, zero
+# background-run state, zero behavioral change.
+# Source: FR-P2-7 (see _bmad-output/planning-artifacts/prd.md line 950)
+# Spike verdict: Story 21.1 assessed the primitive `partially-stable` → path
+# `partial` (docs/research-spikes/2026-06-17-background-primitive-stability.md).
+# Default rationale: `false` per the opt-in posture — background dispatch relies
+# on an external daemon primitive that is `partially-stable` (functional but with
+# an open cross-session-survival churn), so enabling it is an explicit operator
+# choice, not the default.
+background_execution: false

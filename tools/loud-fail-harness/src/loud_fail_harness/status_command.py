@@ -117,6 +117,12 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from .background_dispatch import (
+    _default_background_runs_recorder,
+    make_git_ground_truth_probe,
+    reconcile_background_runs,
+    render_background_runs_section,
+)
 from .cross_state_recovery import (
     RUN_STATE_RELATIVE_PATH,
     CrossStateRecoveryError,
@@ -141,6 +147,7 @@ from .run_state import (
     DispatchedSpecialist,
     RetryAttempt,
 )
+from .specialist_dispatch import load_marker_class_registry
 
 __all__ = [
     "StatusCommandError",
@@ -956,7 +963,54 @@ def _build_arg_parser() -> argparse.ArgumentParser:
             "enumeration cheap; auto-ON when --json is set)."
         ),
     )
+    parser.add_argument(
+        "--background-agents-json",
+        type=pathlib.Path,
+        default=None,
+        dest="background_agents_json",
+        help=(
+            "Optional path to a file containing the captured `claude agents "
+            "--json --all` output (Story 21.2 / FR-P2-7). When provided, the "
+            "status command appends a '## Background runs' section reconciling "
+            "each background run against git ground-truth and emitting the "
+            "background-primitive-unstable marker on the unconfirmable-on-"
+            "resume path. Omitted → no background-runs section (bit-identical "
+            "to the pre-Story-21.2 output)."
+        ),
+    )
     return parser
+
+
+def _render_background_runs_for_cli(
+    agents_json_path: pathlib.Path,
+    *,
+    repo_root: pathlib.Path,
+) -> str:
+    """Read the captured ``claude agents --json`` file, reconcile against git
+    ground-truth, and render the ``## Background runs`` section (Story 21.2 AC-6).
+
+    The marker emission flows through the discovery-surface recorder
+    (:func:`background_dispatch._default_background_runs_recorder`), NOT a
+    run-state write — status stays read-only against run-state contents.
+    """
+    raw = json.loads(agents_json_path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise StatusCommandError(
+            reason="background-agents-json-not-a-list",
+            diagnostic=(
+                f"status: harness-level error: {agents_json_path} must contain a "
+                f"JSON array (the `claude agents --json` output); got "
+                f"{type(raw).__name__}"
+            ),
+        )
+    registry = load_marker_class_registry()
+    roster = reconcile_background_runs(
+        raw,
+        git_ground_truth_probe=make_git_ground_truth_probe(repo_root=repo_root),
+        marker_recorder=_default_background_runs_recorder,
+        marker_registry=registry,
+    )
+    return render_background_runs_section(roster)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1007,6 +1061,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"status: harness-level error: {exc}", file=sys.stderr)
         return 2
 
+    # Story 21.2 / FR-P2-7: optionally append the background-runs section,
+    # reconciled against git ground-truth (read-only). Incompatible with --json
+    # (the JSON schema is stable and does not include the background-runs section;
+    # combining both flags would silently suppress the reconciliation and the
+    # background-primitive-unstable emission — a loud-fail violation).
+    background_section: str | None = None
+    if args.background_agents_json is not None:
+        if args.json_flag:
+            print(
+                "status: --background-agents-json is incompatible with --json: "
+                "the JSON output schema does not include the background-runs "
+                "section; omit --json to get the reconciled human-readable output "
+                "with background-primitive-unstable marker emission",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            background_section = _render_background_runs_for_cli(
+                args.background_agents_json, repo_root=project_root
+            )
+        except (StatusCommandError, OSError, ValueError) as exc:
+            print(f"status: harness-level error: {exc}", file=sys.stderr)
+            return 2
+
     if outcome.action == "status-found":
         if outcome.inspection is None:
             print(
@@ -1019,9 +1097,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(render_story_inspection_json(outcome.inspection))
         else:
             print(render_story_inspection_human(outcome.inspection))
+            if background_section is not None:
+                print("")
+                print(background_section)
         return 0
 
     # outcome.action == "status-no-run-state"
     if outcome.diagnostic is not None:
         print(outcome.diagnostic, file=sys.stderr)
+    if background_section is not None:
+        print(background_section)
     return 1

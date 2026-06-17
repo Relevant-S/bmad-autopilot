@@ -129,6 +129,14 @@ externally_constructed:
     # keys (the genuinely hostile-input surface; Story 19.1). The opt-out *values*
     # are closed-set-checked against FROZEN_HEURISTIC_NAMES in the findings walk.
     identifier_fields: [story_id, ac_key]
+  background_dispatch.BackgroundAgentSession:
+    # Parsed from the `claude agents --json` array (Story 21.2 / FR-P2-7).
+    # story_id is the genuine external-ingress identifier — recovered from the
+    # session's dispatched `/bmad-automation run <story-id>` prompt, tracing back
+    # to operator input — so it is hardened. session_id / state / waiting_for are
+    # daemon-generated status tokens (NOT operator identifiers), so they are not
+    # routed through the identifier hardener.
+    identifier_fields: [story_id]
 
 # parse_functions: registered free functions that RETURN an externally_constructed
 # model (Rule C treats a call to one inside a try-body like a direct construction).
@@ -137,6 +145,10 @@ externally_constructed:
 parse_functions: []
 
 internal_only:
+  - background_dispatch.BackgroundDispatchResult
+  - background_dispatch.BackgroundRunRoster
+  - background_dispatch.GitGroundTruth
+  - background_dispatch.ReconciledBackgroundRun
   - branch_lifecycle.BranchLifecycleResult
   - branch_lifecycle.WorkingTreeProbeResult
   - bundle_assembly_failure_emission_gate.ForbiddenEmissionFinding

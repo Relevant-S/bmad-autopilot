@@ -884,6 +884,51 @@ def test_main_exits_one_on_status_no_run_state(
     assert "no-in-flight-run-found-for-story-id" in captured.err
 
 
+def test_main_background_agents_json_renders_section_with_marker(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Story 21.2 AC-6: `--background-agents-json` appends a `## Background runs`
+    section reconciled against git ground-truth; an unconfirmable completed run
+    surfaces the greppable `background-primitive-unstable` marker."""
+    import subprocess
+
+    repo = tmp_path
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.email", "t@t.local"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "config", "commit.gpgsign", "false"], cwd=repo, capture_output=True, check=True)
+    (repo / "README.md").write_text("x\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=repo, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=repo, capture_output=True, check=True)
+
+    _write_run_state_yaml(repo, story_id="8-4", current_state="in-progress")
+
+    agents_file = repo / "agents.json"
+    # Completed per the registry, but the per-story branch was never created →
+    # the unconfirmable-on-resume (#63023 silent-loss) signature.
+    agents_file.write_text(
+        json.dumps(
+            [{"id": "job-lost", "state": "completed", "prompt": "/bmad-automation run 99-9 --foreground"}]
+        ),
+        encoding="utf-8",
+    )
+
+    rc = main(
+        [
+            "8-4",
+            "--project-root",
+            str(repo),
+            "--background-agents-json",
+            str(agents_file),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "## Background runs" in captured.out
+    assert "background-primitive-unstable" in captured.out
+    assert "job-lost" in captured.out
+
+
 def test_main_exits_two_on_substrate_error(
     tmp_project: pathlib.Path,
     capsys: pytest.CaptureFixture[str],

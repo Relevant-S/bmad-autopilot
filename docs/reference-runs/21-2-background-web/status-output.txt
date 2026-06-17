@@ -1,0 +1,52 @@
+$ claude agents --json --all > /tmp/bmad-agents.json
+$ /bmad-automation status sample-bg-001 --background-agents-json /tmp/bmad-agents.json
+
+# /bmad-automation status — story sample-bg-001
+
+## Lifecycle state
+
+state: in-progress
+branch: bmad-automation/story/sample-bg-001
+run_id: r-bg-001
+run_state_path: _bmad/automation/run-state.yaml
+story_doc: _bmad-output/implementation-artifacts/sample-bg-001-….md
+
+## Active loud-fail markers
+
+(no active markers)
+
+## Retry history
+
+(no retries — story has not entered the retry seam)
+
+## Latest specialist envelope
+
+dispatched_specialist: dev
+envelope_status: (no envelope recorded)
+per_specialist_log_dir: _bmad-output/qa-evidence/sample-bg-001/r-bg-001/logs (inspect via filesystem for full per-specialist envelope history)
+
+## Cost-to-date by specialist
+
+- dev: (none)
+- review-bmad: (none)
+- qa: (none)
+- lad: (none)
+
+## Background runs
+
+- job-cc33 [story sample-bg-002] state=running → in-flight
+- job-bb22 [story sample-bg-001] state=completed → completed-confirmed
+- job-aa11 [story sample-bg-003] state=completed → unconfirmable — background-primitive-unstable
+
+# Reconciliation (Story 21.2 AC-6): each `claude agents --json` row is cross-checked against git
+# ground-truth (per-story branch existence + landed commits, read-only).
+#   - job-cc33 still running → in-flight (no confirmation owed; silent).
+#   - job-bb22 completed AND its per-story branch landed with commits → completed-confirmed (silent).
+#   - job-aa11 completed per the agents registry, but git shows NO landed branch (the #63023 /
+#     #68117 silent-loss signature) → unconfirmable → loud-fail `background-primitive-unstable`
+#     marker emitted (greppable above). Sensor-not-advisor: the marker surfaces; it does NOT
+#     auto-recover, re-dispatch, or flip any ac_results / wrapper status / run lifecycle state.
+#
+# Read-only invariant (NFR-O4): reconciliation reads `claude agents --json` (injected) + git
+# (read-only rev-parse / rev-list); run-state contents are NOT mutated — the marker emission is a
+# discovery-surface emission (the Story 8.5 orphan-run-state-detected pattern).
