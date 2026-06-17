@@ -1,0 +1,95 @@
+# Adoption-metrics schema (Story 17.2 / FR-P2-3 — auto-merge gate data source).
+#
+# Contract anchors:
+#   - Story 17.2 (this schema's authoring; epics-phase-2.md lines 552-566).
+#     The MAINTAINER-CURATED record of the three reference-project metrics the
+#     auto-merge gate-condition evaluator compares against the resolved
+#     `auto_merge.gate_conditions` (Story 17.1). Persisted at
+#     `_bmad-output/metrics/adoption-metrics.yaml` — NOT Automator-derived: a
+#     human curates it from reference-project measurements, exactly as the PRD
+#     Scope-Decisions auto-merge row contemplates ("≥ 6 months adoption,
+#     completion-fidelity ≥ X%, retry-exhaustion ≤ Y% on reference projects").
+#   - FR-P2-3 (prd.md line 946) — "Auto-merge — configurable flag (default
+#     false); gated on reference-project adoption conditions." This file is the
+#     data the gate is "gated by data, not by intention" against.
+#   - PRD Scope Decisions (prd.md line 748, auto-merge row) — the three metrics
+#     map 1:1 to the 17.1 gate-condition triple (min_adoption_months ⇒
+#     adoption_months; min_completion_fidelity ⇒ completion_fidelity;
+#     max_retry_exhaustion ⇒ retry_exhaustion).
+#   - NFR-O2 (prd.md line 1016) — plain, human-readable YAML; a maintainer can
+#     `cat` and hand-edit the file.
+#   - NFR-S3 (prd.md line 1006) — auto-merge is the first Phase-2 surface that
+#     can push to a remote; it ships in three audited slices (config → gate →
+#     execution). This schema lands in the gate slice (17.2): NO merge logic
+#     consumes it yet (that is 17.3).
+#   - ADR-003 substrate closure at FIVE (architecture.md) — this schema is a
+#     cell-1 data artifact (like run-state / the flakiness log), NOT a sixth
+#     substrate component; meta-validation reuses the existing `load_schema`
+#     family, no new CI gate.
+#
+# Read contract (loud-fail doctrine):
+#   The file is consulted ONLY when gate conditions are configured (at least
+#   one of the three `auto_merge.gate_conditions` is non-blank). When gates are
+#   blank/TBD (the shipped default), the evaluator returns `not-configured` and
+#   this file is NEVER read. When gates ARE configured, an absent / empty /
+#   malformed / out-of-range / NaN / Inf file is a LOUD FAIL
+#   (`AutoMergeGateError`) — you cannot pass a data gate with no data.
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://bmad-autopilot.local/schemas/adoption-metrics.yaml"
+schema_version: "1.0"
+title: "Adoption-Metrics"
+description: >-
+  Maintainer-curated reference-project adoption metrics (FR-P2-3): the three
+  measurements the auto-merge gate-condition evaluator (Story 17.2) compares
+  against the resolved auto_merge.gate_conditions (Story 17.1). Persisted at
+  _bmad-output/metrics/adoption-metrics.yaml (maintainer-curated, NOT
+  Automator-derived). See the contract-header comment block above for the full
+  FR/NFR/ADR anchor set and the read contract.
+
+type: object
+required:
+  - schema_version
+  - adoption_months
+  - completion_fidelity
+  - retry_exhaustion
+additionalProperties: false
+
+properties:
+  schema_version:
+    type: string
+    enum: ["1.0"]
+    description: >-
+      Schema version of this adoption-metrics document. Closed enum at the
+      Phase-2 introduction so a future MINOR/MAJOR bump requires an explicit
+      additive change rather than silent acceptance. Mirrors the
+      qa-flakiness-log.yaml / run-state.yaml closed-enum posture.
+
+  adoption_months:
+    type: integer
+    minimum: 0
+    description: >-
+      Current reference-project adoption duration in whole months. Compared to
+      auto_merge.gate_conditions.min_adoption_months (pass iff
+      adoption_months >= min_adoption_months). Maintainer-curated; NOT
+      Automator-derived.
+
+  completion_fidelity:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+    description: >-
+      Reference-project completion fidelity as a fraction in [0.0, 1.0].
+      Compared to auto_merge.gate_conditions.min_completion_fidelity (pass iff
+      completion_fidelity >= min_completion_fidelity). Maintainer-curated; NOT
+      Automator-derived.
+
+  retry_exhaustion:
+    type: number
+    minimum: 0.0
+    maximum: 1.0
+    description: >-
+      Reference-project retry-exhaustion rate as a fraction in [0.0, 1.0].
+      Compared to auto_merge.gate_conditions.max_retry_exhaustion (pass iff
+      retry_exhaustion <= max_retry_exhaustion — note the INVERTED direction:
+      it is a ceiling). Maintainer-curated; NOT Automator-derived.

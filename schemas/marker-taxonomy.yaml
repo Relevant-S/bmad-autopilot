@@ -427,7 +427,8 @@
 # schema PATCH bump for Story 20.1 plan-rederivation-drift-detected new top-level QA-evidence class (closed-set 39 → 40; FR-P2-9; pointer_context_fields [drift_surfaces]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.1 AC + epics-phase-2.md line 70, citing the Story 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.15 → 1.16 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; additive read-only cross-check, FR23's plan-drift-detected AC-hash channel left fully intact)
 # schema PATCH bump for Story 20.3 flakiness-threshold-exceeded new top-level QA-evidence class (closed-set 40 → 41; FR-P2-8; pointer_context_fields [ac_id]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.3 AC + epics-phase-2.md line 70, citing the Story 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.16 → 1.17 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; threshold marker is story-level evidence, never flips ac_results)
 # schema PATCH bump for Story 21.2 background-primitive-unstable new top-level class (closed-set 41 → 42; FR-P2-7; pointer_context_fields [story_id, session_id]; sub_classifications []; orphan — runtime-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / flakiness-threshold-exceeded / a11y-* / visual-regression-*; classified PATCH per the Story 21.2 AC + the Story 21.1 spike routing rule ("Marker class enumerated per PATCH bump regardless of path") + epics-phase-2.md line 70, citing the Story 20.3 / 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.17 → 1.18 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; marker is story-level runtime evidence, never flips ac_results / wrapper status / run lifecycle state)
-schema_version: "1.18"
+# schema MINOR bump for Story 17.2 auto-merge-gate-not-met new top-level class (closed-set 42 → 43; FR-P2-3; pointer_context_fields [failing_gates]; sub_classifications []; orphan — orchestrator-domain INFORMATIONAL observability marker with NO orchestrator-event / dependency counterpart, tolerated exactly as flakiness-threshold-exceeded / sprint-escalation-rate-exceeded / plan-rederivation-drift-detected / a11y-* / visual-regression-*; classified MINOR per the file's documented bump rule ("Adding OR removing a marker class → MINOR") — this SUPERSEDES the Story 17.2 epic AC's parenthetical "(PATCH bump)" wording, because there is no pre-existing auto-merge-* parent class to nest a sub_classification under, so the new top-level marker_class follows the MINOR rule the enumeration-check/reconciler enforces; precedent for new-top-level-class-as-MINOR: Story 24.1 / 19.3 / 19.5; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; emission lands in THIS story (auto_merge_gate.py), render lands in bundle_assembly.py — marker is story-level observability evidence, never flips ac_results / wrapper status / current_state)
+schema_version: "1.19"
 
 markers:
 
@@ -1168,4 +1169,29 @@ markers:
       `## Forward consumers` → "FR-P2-7 Phase-3 revisit"); this marker is the
       visible boundary of what the partial surface promises.
     pointer_context_fields: [story_id, session_id]
+    sub_classifications: []
+
+  # ---- Story 17.2 — Epic 17 auto-merge gate-condition observability ----------
+
+  - marker_class: auto-merge-gate-not-met
+    diagnostic_pointer: |
+      FR-P2-3 / Epic 17 Story 17.2 — at Stop-hook time (per-story scope) the
+      auto-merge gate-condition evaluator compared the maintainer-curated
+      reference-project metrics in `_bmad-output/metrics/adoption-metrics.yaml`
+      against the resolved `auto_merge.gate_conditions` (Story 17.1) and found at
+      least one configured gate UNMET: {failing_gates} (each names the gate, its
+      current reference value, and the required threshold). The evaluator runs at
+      EVERY Stop-hook invocation regardless of `auto_merge.enabled` (continuous
+      observability, the NFR-O8 precedent), so a maintainer sees whether the gate
+      would block BEFORE flipping `enabled: true`; when gate conditions are
+      blank/TBD (the shipped default) the evaluator returns `not-configured` and
+      emits NOTHING (no per-run noise on default installs). INFORMATIONAL,
+      sensor-not-advisor (mirrors `flakiness-threshold-exceeded` /
+      `sprint-escalation-rate-exceeded`): emitting it does NOT flip a wrapper
+      status, does NOT change `current_state`, and does NOT itself merge or block
+      — the merge decision and the `auto-merge-skipped` signal are Story 17.3's.
+      Remediation (the human decides): curate `adoption-metrics.yaml` so the
+      reference metrics meet the gate, or tune `auto_merge.gate_conditions` in
+      `_bmad/automation/config.yaml` if the thresholds do not fit this project.
+    pointer_context_fields: [failing_gates]
     sub_classifications: []

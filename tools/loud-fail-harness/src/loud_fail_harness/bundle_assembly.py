@@ -136,6 +136,18 @@ from loud_fail_harness.exceptions import (
     PromptIdCorrelationMissing,
 )
 from loud_fail_harness.marker_wiring import compute_alphabetical_marker_order
+from loud_fail_harness.auto_merge_config import (
+    AutoMergeConfigError,
+    read_auto_merge_config_from_config_file,
+)
+from loud_fail_harness.auto_merge_gate import (
+    AUTO_MERGE_GATE_NOT_MET_MARKER,
+    DEFAULT_ADOPTION_METRICS_PATH,
+    AutoMergeGateError,
+    AutoMergeGateNotMetEmission,
+    resolve_and_evaluate_auto_merge_gate,
+    surface_auto_merge_gate_not_met,
+)
 from loud_fail_harness.qa_a11y_audit import (
     A11Y_BASELINE_STALE_MARKER,
     A11Y_DELTA_EXCEEDED_MARKER,
@@ -795,6 +807,61 @@ def _render_qa_flakiness_subsection(
         )
         lines.append(_render_marker(FLAKINESS_THRESHOLD_EXCEEDED_MARKER))
 
+    return "\n".join(lines)
+
+
+def _render_auto_merge_gate_not_met_subsection(
+    emission: AutoMergeGateNotMetEmission | None,
+    *,
+    gate_config_error: str | None = None,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-17.2 (FR-P2-3) ``### Auto-merge gate not met`` H3
+    sub-section when the auto-merge gate-condition evaluator surfaced an emission
+    (a configured gate was unmet at Stop-hook time); return the empty string
+    otherwise (silent — there is no emission on ``green`` / ``not-configured``
+    decisions, the latter being the shipped default).
+
+    When ``gate_config_error`` is set (adoption-metrics absent or malformed),
+    renders a ``### Auto-merge gate — configuration error`` sub-section instead
+    so the bundle still captures the problem rather than silently omitting the
+    gate section.
+
+    Mirrors :func:`_render_qa_flakiness_subsection`'s emit/render split: the
+    evaluator (:mod:`loud_fail_harness.auto_merge_gate`) EMITS; the assembler
+    RENDERS the diagnostic prose + the co-located ``<!-- bmad-automation:marker
+    auto-merge-gate-not-met -->`` comment so the orchestrator-domain marker is
+    greppable in the bundle exactly as every sibling observability marker is.
+
+    Defense-in-depth re-validation per Pattern 5:
+    :func:`validate_marker_emission` fires once; registry rejection raises
+    :exc:`UnknownMarkerClass`.
+    """
+    if emission is None and gate_config_error is None:
+        return ""
+    if gate_config_error is not None:
+        lines = [
+            "### Auto-merge gate — configuration error",
+            "",
+            f"The FR-P2-3 auto-merge gate evaluator could not run: {gate_config_error}",
+            "",
+            "Fix `adoption-metrics.yaml` or the auto-merge config and re-run.",
+        ]
+        return "\n".join(lines)
+    assert emission is not None
+    validate_marker_emission(marker_registry, AUTO_MERGE_GATE_NOT_MET_MARKER)
+    lines = [
+        "### Auto-merge gate not met",
+        "",
+        "The FR-P2-3 auto-merge gate-condition evaluator (Story 17.2) found at",
+        "least one configured gate unmet at Stop-hook time. INFORMATIONAL",
+        "(sensor-not-advisor) — does NOT merge, advance state, or flip any wrapper",
+        "status; auto-merge is gated by data, not intention, and Story 17.3 owns",
+        "the merge decision.",
+        "",
+        emission.diagnostic_pointer,
+        _render_marker(AUTO_MERGE_GATE_NOT_MET_MARKER),
+    ]
     return "\n".join(lines)
 
 
@@ -1954,6 +2021,8 @@ def assemble_bundle(
     envelope_schema: dict[str, Any] | None = None,
     otel_pipeline: OtelPipelineProtocol | None = None,
     repo_root: pathlib.Path | None = None,
+    auto_merge_gate_emission: AutoMergeGateNotMetEmission | None = None,
+    auto_merge_gate_error: str | None = None,
 ) -> AssembleBundleResult:
     """Assemble the walking-skeleton merge-ready PR bundle.
 
@@ -2156,6 +2225,18 @@ def assemble_bundle(
         body_parts.append("")
         body_parts.append(a11y_envelope_scoped)
         body_parts.append("")
+    # Story 17.2 (FR-P2-3): the orchestrator-domain auto-merge-gate-not-met
+    # marker renders at the canonical bundle-bottom location (it is not a per-AC
+    # QA finding); empty string when no gate fired (green / not-configured).
+    auto_merge_gate_body = _render_auto_merge_gate_not_met_subsection(
+        auto_merge_gate_emission,
+        gate_config_error=auto_merge_gate_error,
+        marker_registry=registry,
+    )
+    if auto_merge_gate_body:
+        body_parts.append("")
+        body_parts.append(auto_merge_gate_body)
+        body_parts.append("")
     bundle_body = "\n".join(body_parts)
 
     # Step 6: Atomic write.
@@ -2194,12 +2275,54 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     # pass the project's cwd so evidence_refs[].path resolves against
     # the user's project, not the harness install location.
     parser.add_argument("--repo-root", required=False, type=pathlib.Path, default=None)
+    # Story 17.2 (FR-P2-3): the per-story auto-merge gate-condition evaluator
+    # runs at EVERY Stop-hook invocation. Both default to the cwd-relative paths
+    # the hook's other artifacts use (the hook bash is unchanged — these optional
+    # args carry their defaults when absent; tests override them).
+    parser.add_argument(
+        "--auto-merge-config-path",
+        required=False,
+        type=pathlib.Path,
+        default=pathlib.Path("_bmad/automation/config.yaml"),
+    )
+    parser.add_argument(
+        "--adoption-metrics-path",
+        required=False,
+        type=pathlib.Path,
+        default=DEFAULT_ADOPTION_METRICS_PATH,
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
+    # Story 17.2 (FR-P2-3): evaluate the gate at every Stop-hook invocation
+    # (continuous observability). AutoMergeConfigError (malformed automation
+    # config) exits 1 — that file is unconditional infrastructure. AutoMergeGateError
+    # (missing/malformed adoption-metrics when gates are configured) degrades
+    # gracefully: the error surfaces as a subsection in the bundle so the Phase-1
+    # output is never suppressed by a Phase-2 config problem.
+    registry = load_marker_class_registry()
+    auto_merge_gate_emission: AutoMergeGateNotMetEmission | None = None
+    auto_merge_gate_error: str | None = None
+    try:
+        auto_merge_config = read_auto_merge_config_from_config_file(
+            args.auto_merge_config_path
+        )
+        gate_decision = resolve_and_evaluate_auto_merge_gate(
+            auto_merge_config, metrics_path=args.adoption_metrics_path
+        )
+        if gate_decision.status == "gate-not-met":
+            auto_merge_gate_emission = surface_auto_merge_gate_not_met(
+                gate_decision, registry
+            )
+    except AutoMergeConfigError as exc:
+        sys.stderr.write(f"{type(exc).__name__}: {exc}\n")
+        return 1
+    except AutoMergeGateError as exc:
+        sys.stderr.write(f"{type(exc).__name__}: {exc}\n")
+        auto_merge_gate_error = str(exc)
     try:
         result = assemble_bundle(
             story_id=args.story_id,
@@ -2208,6 +2331,9 @@ def main(argv: list[str] | None = None) -> int:
             logs_root=args.logs_root,
             bundle_root=args.bundle_root,
             repo_root=args.repo_root,
+            marker_registry=registry,
+            auto_merge_gate_emission=auto_merge_gate_emission,
+            auto_merge_gate_error=auto_merge_gate_error,
         )
     except (
         SpecialistDispatchLogNotFound,
