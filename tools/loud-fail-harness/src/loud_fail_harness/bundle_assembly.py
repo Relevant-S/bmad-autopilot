@@ -137,16 +137,25 @@ from loud_fail_harness.exceptions import (
 )
 from loud_fail_harness.marker_wiring import compute_alphabetical_marker_order
 from loud_fail_harness.auto_merge_config import (
+    AutoMergeConfig,
     AutoMergeConfigError,
     read_auto_merge_config_from_config_file,
 )
 from loud_fail_harness.auto_merge_gate import (
     AUTO_MERGE_GATE_NOT_MET_MARKER,
     DEFAULT_ADOPTION_METRICS_PATH,
+    AutoMergeGateDecision,
     AutoMergeGateError,
     AutoMergeGateNotMetEmission,
     resolve_and_evaluate_auto_merge_gate,
     surface_auto_merge_gate_not_met,
+)
+from loud_fail_harness.auto_merge_execution import (
+    AUTO_MERGE_SKIPPED_MARKER,
+    AutoMergeSkippedEmission,
+    attempt_auto_merge,
+    skipped_gate_not_met,
+    surface_auto_merge_skipped,
 )
 from loud_fail_harness.qa_a11y_audit import (
     A11Y_BASELINE_STALE_MARKER,
@@ -331,6 +340,22 @@ def _load_run_state(run_state_path: pathlib.Path) -> RunState:
             "mapping at top level"
         )
     return RunState.model_validate(dict(raw))
+
+
+def _load_run_state_for_merge_decision(
+    run_state_path: pathlib.Path,
+) -> RunState | None:
+    """Best-effort run-state read for the Story-17.3 merge-readiness decision in
+    :func:`main`. Returns ``None`` on any read/parse failure rather than raising —
+    the AUTHORITATIVE load happens inside :func:`assemble_bundle`, which loud-fails
+    on a malformed/absent run-state; a ``None`` here just means "merge-readiness
+    is undeterminable → do NOT merge", never silently swallowing the real error
+    (the bundle assembler still surfaces it).
+    """
+    try:
+        return _load_run_state(run_state_path)
+    except Exception:  # noqa: BLE001 — see docstring; assemble_bundle is authoritative
+        return None
 
 
 def _read_envelope_from_dispatch_log(
@@ -861,6 +886,47 @@ def _render_auto_merge_gate_not_met_subsection(
         "",
         emission.diagnostic_pointer,
         _render_marker(AUTO_MERGE_GATE_NOT_MET_MARKER),
+    ]
+    return "\n".join(lines)
+
+
+def _render_auto_merge_skipped_subsection(
+    emission: AutoMergeSkippedEmission | None,
+    *,
+    marker_registry: MarkerClassRegistry,
+) -> str:
+    """Render the Story-17.3 (FR-P2-3) ``### Auto-merge skipped`` H3 sub-section
+    when the auto-merge execution actuator was armed but the merge did not
+    complete; return the empty string otherwise (silent — there is no emission on
+    a successful merge, on a non-merge-ready bundle, or on the ``enabled: false``
+    shipped default).
+
+    Mirrors :func:`_render_auto_merge_gate_not_met_subsection`'s emit/render
+    split: the actuator (:mod:`loud_fail_harness.auto_merge_execution`) EMITS; the
+    assembler RENDERS the diagnostic prose + the co-located ``<!--
+    bmad-automation:marker auto-merge-skipped -->`` comment so the
+    orchestrator-domain marker is greppable in the bundle exactly as every sibling
+    observability marker is.
+
+    Defense-in-depth re-validation per Pattern 5:
+    :func:`validate_marker_emission` fires once; registry rejection raises
+    :exc:`UnknownMarkerClass`.
+    """
+    if emission is None:
+        return ""
+    validate_marker_emission(marker_registry, AUTO_MERGE_SKIPPED_MARKER)
+    lines = [
+        "### Auto-merge skipped",
+        "",
+        "The FR-P2-3 auto-merge execution actuator (Story 17.3) was armed",
+        "(`auto_merge.enabled: true`) on a merge-ready bundle but the merge did",
+        f"NOT complete (reason: `{emission.skip_reason}`). The PR remains in draft",
+        "for human handling — failure is loud, never silent (NFR-R6).",
+        "INFORMATIONAL (sensor-not-advisor) — does NOT change run state, flip any",
+        "wrapper status, or retry the merge.",
+        "",
+        emission.diagnostic_pointer,
+        _render_marker(AUTO_MERGE_SKIPPED_MARKER),
     ]
     return "\n".join(lines)
 
@@ -2023,6 +2089,7 @@ def assemble_bundle(
     repo_root: pathlib.Path | None = None,
     auto_merge_gate_emission: AutoMergeGateNotMetEmission | None = None,
     auto_merge_gate_error: str | None = None,
+    auto_merge_skipped_emission: AutoMergeSkippedEmission | None = None,
 ) -> AssembleBundleResult:
     """Assemble the walking-skeleton merge-ready PR bundle.
 
@@ -2237,6 +2304,18 @@ def assemble_bundle(
         body_parts.append("")
         body_parts.append(auto_merge_gate_body)
         body_parts.append("")
+    # Story 17.3 (FR-P2-3): the orchestrator-domain auto-merge-skipped marker
+    # renders at the canonical bundle-bottom location (it is not a per-AC QA
+    # finding); empty string when the merge succeeded, the bundle was not
+    # merge-ready, or auto-merge was not armed (the shipped default).
+    auto_merge_skipped_body = _render_auto_merge_skipped_subsection(
+        auto_merge_skipped_emission,
+        marker_registry=registry,
+    )
+    if auto_merge_skipped_body:
+        body_parts.append("")
+        body_parts.append(auto_merge_skipped_body)
+        body_parts.append("")
     bundle_body = "\n".join(body_parts)
 
     # Step 6: Atomic write.
@@ -2306,6 +2385,8 @@ def main(argv: list[str] | None = None) -> int:
     registry = load_marker_class_registry()
     auto_merge_gate_emission: AutoMergeGateNotMetEmission | None = None
     auto_merge_gate_error: str | None = None
+    auto_merge_config: AutoMergeConfig | None = None
+    gate_decision: AutoMergeGateDecision | None = None
     try:
         auto_merge_config = read_auto_merge_config_from_config_file(
             args.auto_merge_config_path
@@ -2323,6 +2404,41 @@ def main(argv: list[str] | None = None) -> int:
     except AutoMergeGateError as exc:
         sys.stderr.write(f"{type(exc).__name__}: {exc}\n")
         auto_merge_gate_error = str(exc)
+
+    # Story 17.3 (FR-P2-3): the auto-merge execution decision. The actuator is
+    # the system's FIRST actuator and FIRST remote-mutating surface — the
+    # *decision* (the AC-2 conjunction) is orchestrator-domain flow policy that
+    # lives HERE, not in the sensor-free actuator module. Fire the merge ONLY on
+    # `enabled AND gate green AND merge-ready (current_state == "done")`; surface
+    # every non-merge outcome (when armed + merge-ready) as `auto-merge-skipped`.
+    # When `enabled: false` (the shipped default) auto-merge is not engaged: no
+    # merge attempt, NO marker. A gate-config error (gate_decision is None) means
+    # the gate is undeterminable → do NOT merge (the config-error subsection
+    # already surfaces the problem loudly).
+    auto_merge_skipped_emission: AutoMergeSkippedEmission | None = None
+    if (
+        auto_merge_config is not None
+        and auto_merge_config.enabled
+        and gate_decision is not None
+    ):
+        merge_run_state = _load_run_state_for_merge_decision(args.run_state_path)
+        if (
+            merge_run_state is not None
+            and merge_run_state.story_id == args.story_id
+            and merge_run_state.current_state == "done"
+        ):
+            if gate_decision.status == "green":
+                outcome = attempt_auto_merge(
+                    branch_name=merge_run_state.branch_name,
+                    repo_root=args.repo_root or pathlib.Path.cwd(),
+                )
+            else:
+                outcome = skipped_gate_not_met(merge_run_state.branch_name)
+            if outcome.status == "skipped":
+                auto_merge_skipped_emission = surface_auto_merge_skipped(
+                    outcome, registry
+                )
+
     try:
         result = assemble_bundle(
             story_id=args.story_id,
@@ -2334,6 +2450,7 @@ def main(argv: list[str] | None = None) -> int:
             marker_registry=registry,
             auto_merge_gate_emission=auto_merge_gate_emission,
             auto_merge_gate_error=auto_merge_gate_error,
+            auto_merge_skipped_emission=auto_merge_skipped_emission,
         )
     except (
         SpecialistDispatchLogNotFound,

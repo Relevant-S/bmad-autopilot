@@ -935,7 +935,15 @@ def test_enumeration_check_picks_up_dependencies_yaml() -> None:
     # / orchestrator-evidence orphans above). The marker joins the orphan bucket →
     # orphan-count increment 34 → 35 is the load-bearing witness that the Story 17.2
     # taxonomy edit landed.
-    assert "Summary: 14 passing reference(s), 0 missing reference(s), 35 orphan marker class(es)" in text
+    #
+    # Post-Story-17.3 review: ONE more auto-merge observability marker
+    # (`auto-merge-skipped`) newly enumerated via MINOR bump 1.19 → 1.20; zero
+    # `dependencies.yaml` / `escalation-bundles/*.yaml` / `orchestrator-event.yaml`
+    # reference (emitted at the Stop-hook bundle-assembly substrate path by
+    # `auto_merge_execution.surface_auto_merge_skipped`). It joins the orphan bucket
+    # → orphan-count increment 35 → 36 is the witness that the Story 17.3 taxonomy
+    # edit landed.
+    assert "Summary: 14 passing reference(s), 0 missing reference(s), 36 orphan marker class(es)" in text
     assert "deferred to story 1.6" not in text
     assert "deferred to story 4.10" not in text
 

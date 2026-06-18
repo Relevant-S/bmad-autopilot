@@ -4660,3 +4660,137 @@ verdicts:
       bundle_assembly.main()); this surface has no code path that evaluates the
       auto-merge gate.
     audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: bundle-assembler
+    verdict: emitted
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/auto_merge_execution.py:312
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: cost-telemetry-pipeline
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: hook-session-start
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: hook-stop
+    verdict: not-applicable
+    rationale: |-
+      The Stop hook (hooks/stop.sh) only DISPATCHES to the bundle-assembly
+      substrate (FR61 — all logic lives in the substrate); the merge is executed
+      and the marker emitted inside that Python substrate (bundle-assembler
+      surface), not in the bash hook body. NO 4th hook is added for 17.3.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: hook-subagent-stop
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: orchestrator-dispatch-wrapper
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: orchestrator-lifecycle-transitions
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: orchestrator-run-state-helper
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: orchestrator-state-machine
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: reconciliation-gate-fixture
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: reconciliation-gate-runtime
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: specialist-wrapper-dev
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: specialist-wrapper-qa
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"
+  - marker_class: auto-merge-skipped
+    surface_name: specialist-wrapper-review-bmad
+    verdict: not-applicable
+    rationale: |-
+      Orchestrator-domain auto-merge execution observability marker (Story 17.3 /
+      FR-P2-3) emitted ONLY at the Stop-hook bundle-assembly substrate path
+      (auto_merge_execution.surface_auto_merge_skipped, invoked from
+      bundle_assembly.main() when an armed auto-merge does not complete); this
+      surface has no code path that executes the auto-merge.
+    audit_date: "2026-06-17"

@@ -428,7 +428,8 @@
 # schema PATCH bump for Story 20.3 flakiness-threshold-exceeded new top-level QA-evidence class (closed-set 40 → 41; FR-P2-8; pointer_context_fields [ac_id]; orphan — QA-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / plan-drift-detected / a11y-* / visual-regression-*; classified PATCH per the Story 20.3 AC + epics-phase-2.md line 70, citing the Story 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.16 → 1.17 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; threshold marker is story-level evidence, never flips ac_results)
 # schema PATCH bump for Story 21.2 background-primitive-unstable new top-level class (closed-set 41 → 42; FR-P2-7; pointer_context_fields [story_id, session_id]; sub_classifications []; orphan — runtime-evidence marker with NO orchestrator-event / dependency counterpart, tolerated exactly as plan-rederivation-drift-detected / flakiness-threshold-exceeded / a11y-* / visual-regression-*; classified PATCH per the Story 21.2 AC + the Story 21.1 spike routing rule ("Marker class enumerated per PATCH bump regardless of path") + epics-phase-2.md line 70, citing the Story 20.3 / 20.1 / 14.3 top-level-as-PATCH-by-epic-contract precedent — the numeric result 1.17 → 1.18 is identical under either label; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; marker is story-level runtime evidence, never flips ac_results / wrapper status / run lifecycle state)
 # schema MINOR bump for Story 17.2 auto-merge-gate-not-met new top-level class (closed-set 42 → 43; FR-P2-3; pointer_context_fields [failing_gates]; sub_classifications []; orphan — orchestrator-domain INFORMATIONAL observability marker with NO orchestrator-event / dependency counterpart, tolerated exactly as flakiness-threshold-exceeded / sprint-escalation-rate-exceeded / plan-rederivation-drift-detected / a11y-* / visual-regression-*; classified MINOR per the file's documented bump rule ("Adding OR removing a marker class → MINOR") — this SUPERSEDES the Story 17.2 epic AC's parenthetical "(PATCH bump)" wording, because there is no pre-existing auto-merge-* parent class to nest a sub_classification under, so the new top-level marker_class follows the MINOR rule the enumeration-check/reconciler enforces; precedent for new-top-level-class-as-MINOR: Story 24.1 / 19.3 / 19.5; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; emission lands in THIS story (auto_merge_gate.py), render lands in bundle_assembly.py — marker is story-level observability evidence, never flips ac_results / wrapper status / current_state)
-schema_version: "1.19"
+# schema MINOR bump for Story 17.3 auto-merge-skipped new top-level class (closed-set 43 → 44; FR-P2-3; pointer_context_fields [skip_reason, gh_detail]; sub_classifications [gate-not-met, merge-conflict, gh-unavailable, merge-failed]; orphan — orchestrator-domain INFORMATIONAL observability marker with NO orchestrator-event / dependency counterpart, tolerated exactly as auto-merge-gate-not-met / flakiness-threshold-exceeded / sprint-escalation-rate-exceeded; classified MINOR per the file's documented bump rule ("Adding OR removing a marker class → MINOR") and the exact 17.2 precedent at this file's :430 entry — a new top-level marker_class follows the MINOR rule regardless of the epic AC wording, and the skip-reason sub_classifications ship WITH the new class in the SAME MINOR bump, not as a separate PATCH; precedent for new-top-level-class-as-MINOR: Story 17.2 / 24.1 / 19.3 / 19.5; orchestrator-event.yaml stays at "1.2", co-versioned ≠ co-bumped; emission + merge actuator land in THIS story (auto_merge_execution.py), render lands in bundle_assembly.py — marker is story-level observability evidence fired only when an ARMED auto-merge did not complete, never flips ac_results / wrapper status / current_state)
+schema_version: "1.20"
 
 markers:
 
@@ -1195,3 +1196,37 @@ markers:
       `_bmad/automation/config.yaml` if the thresholds do not fit this project.
     pointer_context_fields: [failing_gates]
     sub_classifications: []
+
+  # ---- Story 17.3 — Epic 17 auto-merge execution actuator --------------------
+
+  - marker_class: auto-merge-skipped
+    diagnostic_pointer: |
+      FR-P2-3 / Epic 17 Story 17.3 — at Stop-hook time (per-story scope) the
+      auto-merge execution actuator was ARMED (`auto_merge.enabled: true`, Story
+      17.1) on a merge-ready bundle (`current_state == "done"`) but the merge did
+      NOT complete, for the reason carried in {skip_reason}: `gate-not-met` (the
+      17.2 gate was not green, so `gh pr merge` was never attempted),
+      `merge-conflict` (gh reported the PR could not be cleanly merged),
+      `gh-unavailable` (the gh CLI is absent / not on PATH), or `merge-failed`
+      (any other non-zero gh exit — no open PR, the PR is still in draft, branch
+      protection / required checks pending, or an auth/network failure). For
+      execution failures {gh_detail} carries the captured gh exit code + stderr.
+      The actuator runs `gh pr merge --squash <per-story-branch>` — a GitHub-side
+      PR merge on the story's own branch; `main`/trunk is NEVER a direct write
+      target and there is NO `git push` / `--force` / `--rebase` /
+      `--delete-branch` (NFR-S3 / NFR-R3). When `auto_merge.enabled` is false
+      (the shipped default) auto-merge is simply not engaged and this marker is
+      NOT emitted (no per-run noise on default installs), exactly as
+      `auto-merge-gate-not-met` stays silent on the unconfigured default.
+      INFORMATIONAL, sensor-not-advisor (mirrors `auto-merge-gate-not-met` /
+      `flakiness-threshold-exceeded`): emitting it does NOT flip a wrapper
+      status, does NOT change `current_state` (the story is already `done`), and
+      does NOT itself retry the merge. Remediation (the human decides): the PR
+      remains in draft for human handling — resolve the conflict / install `gh` /
+      mark the PR ready / curate the gate, then merge by hand or re-run.
+    pointer_context_fields: [skip_reason, gh_detail]
+    sub_classifications:
+      - gate-not-met
+      - merge-conflict
+      - gh-unavailable
+      - merge-failed

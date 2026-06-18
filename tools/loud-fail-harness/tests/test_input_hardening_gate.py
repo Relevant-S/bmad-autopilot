@@ -359,8 +359,8 @@ def test_boundary_marker_taxonomy_unchanged() -> None:
     raw = yaml.safe_load(
         (repo_root / "schemas" / "marker-taxonomy.yaml").read_text(encoding="utf-8")
     )
-    assert raw["schema_version"] == "1.19"
-    assert len(raw["markers"]) == 43
+    assert raw["schema_version"] == "1.20"
+    assert len(raw["markers"]) == 44
 
 
 def test_gate_emits_no_runtime_marker() -> None:

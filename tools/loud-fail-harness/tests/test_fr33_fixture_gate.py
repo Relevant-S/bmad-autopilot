@@ -545,7 +545,7 @@ def test_pr_introduces_reconciler_regression(
 
     rc, out, _ = _capture_main([])
     assert rc == 1
-    assert "43 reconciliation-mismatch finding(s)" in out
+    assert "44 reconciliation-mismatch finding(s)" in out
     # Spot-check that several canonical fixtures appear
     for fixture_stem in (
         "heuristic-skipped",
@@ -855,7 +855,7 @@ def test_canonical_corpus_validates() -> None:
     took it 37 → 41; story 21.2 added 1 marker + 1 fixture (41 → 42); story 17.2 added 1 marker + 1 fixture (42 → 43))."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "Summary: 43 passing fixture(s)" in out
+    assert "Summary: 44 passing fixture(s)" in out
     assert "0 reconciliation-mismatch finding(s)" in out
     assert "0 harness-bug finding(s)" in out
     assert "0 dangling-event-class finding(s)" in out

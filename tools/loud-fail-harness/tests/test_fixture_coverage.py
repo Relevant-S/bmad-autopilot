@@ -647,7 +647,7 @@ def test_canonical_corpus_validates() -> None:
     fixture (background-primitive-unstable), taking the count from 41 → 42; story 17.2 added 1 marker + 1 fixture (auto-merge-gate-not-met) (42 → 43))."""
     rc, out, err = _capture_main([])
     assert rc == 0, f"stdout: {out}\nstderr: {err}"
-    assert "43 passing marker class(es)" in out
+    assert "44 passing marker class(es)" in out
     assert "0 uncovered marker class(es)" in out
     assert "0 dangling fixture(s)" in out
     assert "0 shape-violation finding(s)" in out
