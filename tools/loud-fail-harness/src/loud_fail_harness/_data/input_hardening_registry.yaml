@@ -186,6 +186,8 @@ internal_only:
   - flow_branch_coverage_gate.GateResult
   - flow_branch_coverage_gate.OutcomeRecord
   - flow_branch_coverage_gate.ParsedCase
+  - forward_pointer_drift_gate.LintFinding
+  - forward_pointer_drift_gate.LintResult
   - fr33_fixture_gate.GateResult
   - fr33_fixture_gate.Reference
   - fr33_fixture_gate.ReplayFinding

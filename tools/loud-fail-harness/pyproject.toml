@@ -229,6 +229,25 @@ done-story-review-ledger-gate = "loud_fail_harness.done_story_review_ledger_gate
 # LAST because all prior [project.scripts] entries pre-date this story; the
 # position does NOT reflect CI execution order.
 qa-runbook-heuristics-validator = "loud_fail_harness.qa_runbook_heuristics_validator:main"
+# forward-pointer-drift-gate (Story 22.4; H6 conditional landing) is a CI GATE
+# in shape (LintFinding/LintResult/main exit 0/1/2, mirroring no-destructive-
+# resume-lint), but is exercised in inner CI via pytest over fixtures rather
+# than a dedicated ci.yml step — the governed surface is the OUTER workspace's
+# deferred-work.md carry surface × sprint-status.yaml `done` ground truth, which
+# are NOT present in the inner-repo CI working-directory (tools/loud-fail-harness).
+# Same posture as done-story-review-ledger-gate (pyproject.toml lines 202-218) and
+# story-doc-validator (lines 38-46): no canonical filesystem surface to scan inside
+# the harness, so its real teeth are a Dev/SM-invoked `uv run forward-pointer-drift-
+# gate --carry-surface … --sprint-status …`. Fails when a still-pending
+# forward-pointer binds a target story that has reached `done` (the flip never
+# performed). The H6 5+-flip trigger fired (Phase-2 survey: 6 flips, maintainer-
+# ratified `triggered` 2026-06-18). Sibling library + lint, NOT a 6th substrate
+# component (ADR-003 FIVE-component lock holds — precedent: naming-lint /
+# pluggability-gate / no-destructive-resume-lint / done-story-review-ledger-gate),
+# and emits NO runtime marker (build-time gate). Listed LAST because all prior
+# [project.scripts] entries pre-date this story; the position in this table does
+# NOT reflect CI execution order.
+forward-pointer-drift-gate = "loud_fail_harness.forward_pointer_drift_gate:main"
 # flakiness-log-validator (Story 20.2; FR-P2-8) is a library-as-CLI-aid
 # exercised via pytest over the examples/qa-flakiness-logs/ fixture corpus, NOT
 # a discrete ci.yml step — same posture + rationale as story-doc-validator
