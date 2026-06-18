@@ -241,3 +241,12 @@
 #   # record counts as a transient fail. Default 1 (any action-level retry qualifies).
 #   threshold_transient_fail_count: 1
 # ---
+
+# ---
+# run_against_self — opt-in flag declaring that this project's reference runs are
+# executed against the Automator's own development workspace rather than against a
+# genuine external maintainer-owned project (ADR-013). Absence means the default
+# `false` — no finding is emitted (FR42 user-owned file). When present, must be a bool.
+# Worked example (opt in by setting `true`):
+# run_against_self: true
+# ---

@@ -22,6 +22,12 @@ Pure-API shape rules:
     [x] findings deterministic across invocations               → test_findings_deterministic
     [x] direct-API non-mapping top level → root finding          → test_validate_top_level_non_mapping
 
+run_against_self knob (ADR-013 / H11 path (a) opt-in):
+    [x] absence of run_against_self is NOT a finding (default false) → test_absence_of_run_against_self_is_clean
+    [x] explicit run_against_self: true validates                → test_run_against_self_true_clean
+    [x] explicit run_against_self: false validates               → test_run_against_self_false_clean
+    [x] non-bool run_against_self rejected                       → test_run_against_self_non_bool_rejected
+
 Input-hardening (Story 24.2 discipline):
     [x] HeuristicOptOutEntry hardens story_id (newline raises)   → test_opt_out_entry_hardens_story_id
     [x] HeuristicOptOutEntry hardens ac_key (whitespace raises)  → test_opt_out_entry_hardens_ac_key
@@ -317,6 +323,34 @@ def test_validate_top_level_non_mapping() -> None:
     assert len(findings) == 1
     assert findings[0].pointer == "<root>"
     assert "top-level must be a YAML mapping" in findings[0].message
+
+
+# --------------------------------------------------------------------------- #
+# run_against_self knob (ADR-013 / H11 path (a) opt-in)                        #
+# --------------------------------------------------------------------------- #
+
+
+def test_absence_of_run_against_self_is_clean() -> None:
+    # FR42: absence means the default `false`, never a finding (ADR-013).
+    assert validate_qa_runbook_heuristics({"heuristics": {"web": {}}}, "f") == []
+
+
+def test_run_against_self_true_clean() -> None:
+    assert validate_qa_runbook_heuristics({"run_against_self": True}, "f") == []
+
+
+def test_run_against_self_false_clean() -> None:
+    assert validate_qa_runbook_heuristics({"run_against_self": False}, "f") == []
+
+
+def test_run_against_self_non_bool_rejected() -> None:
+    # A YAML string "true" parses to a str, not a bool — must be rejected so a
+    # mistyped value cannot silently read as the opt-in default.
+    findings = validate_qa_runbook_heuristics({"run_against_self": "true"}, "f")
+    assert any(
+        f.pointer == "/run_against_self" and "must be a bool" in f.message
+        for f in findings
+    ), findings
 
 
 # --------------------------------------------------------------------------- #

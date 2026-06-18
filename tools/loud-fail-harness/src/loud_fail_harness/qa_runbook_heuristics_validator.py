@@ -112,6 +112,10 @@ _FLAKINESS_REMEDIATION: str = (
     "(per Story 20.3 / FR-P2-8; both flakiness threshold knobs are int >= 1)"
 )
 
+_RUN_AGAINST_SELF_REMEDIATION: str = (
+    "(per ADR-013 / H11; run_against_self is a bool, default false)"
+)
+
 
 def _frozen_names_rendered() -> str:
     return ", ".join(sorted(FROZEN_HEURISTIC_NAMES))
@@ -267,6 +271,24 @@ def _validate_flakiness_block(
             )
 
 
+def _validate_run_against_self(
+    value: object, out: list[ValidationFinding]
+) -> None:
+    """Type-check the optional top-level `run_against_self` knob (ADR-013 / H11
+    path (a) opt-in). WHEN present it must be a bool; absence means the default
+    `false` (FR42 user-owned file — absence is never a finding, mirroring the
+    `flakiness:` block). Emits a :class:`ValidationFinding` (never raises) on a
+    non-bool value."""
+    if not isinstance(value, bool):
+        out.append(
+            _make_finding(
+                "/run_against_self",
+                f"'run_against_self' must be a bool; got {_type_name(value)}",
+                _RUN_AGAINST_SELF_REMEDIATION,
+            )
+        )
+
+
 def _validate_opt_out_list(
     opt_out: object, base_path: list[object], out: list[ValidationFinding]
 ) -> None:
@@ -354,7 +376,8 @@ def validate_qa_runbook_heuristics(
     `qa-runbook.yaml` keys, the non-opt-out fields of
     ``behavioral_plan_overrides``) are left untouched — this validator asserts the
     ``heuristics:`` block + per-AC ``heuristic_opt_out`` + the Story 20.3
-    ``flakiness:`` threshold knobs (each int >= 1 when present).
+    ``flakiness:`` threshold knobs (each int >= 1 when present) + the ADR-013
+    top-level ``run_against_self`` knob (bool when present).
 
     ``file_path`` is accepted for API symmetry with :func:`format_findings`.
     """
@@ -377,6 +400,8 @@ def validate_qa_runbook_heuristics(
         _validate_overrides(raw["behavioral_plan_overrides"], out)
     if "flakiness" in raw:
         _validate_flakiness_block(raw["flakiness"], out)
+    if "run_against_self" in raw:
+        _validate_run_against_self(raw["run_against_self"], out)
 
     out.sort(key=lambda f: (f.pointer, f.message))
     return out
