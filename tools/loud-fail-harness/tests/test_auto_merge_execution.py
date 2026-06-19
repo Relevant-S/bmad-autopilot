@@ -16,6 +16,7 @@ from loud_fail_harness.auto_merge_execution import (
     AUTO_MERGE_SKIPPED_MARKER,
     AutoMergeOutcome,
     AutoMergeSkippedEmission,
+    _classify_failure,
     attempt_auto_merge,
     skipped_gate_not_met,
     surface_auto_merge_skipped,
@@ -131,6 +132,62 @@ def test_unsupported_strategy_raises() -> None:
             gh_runner=_RecordingRunner(_completed(0)),
             strategy="merge",  # type: ignore[arg-type]
         )
+
+
+# --------------------------------------------------------------------------- #
+# Story 22.6 AC-7 — the four Story-17.3 actuator failure-classification edges  #
+# (each guarded or accept-as-is; see Dev Agent Record + deferred-work.md)      #
+# --------------------------------------------------------------------------- #
+
+
+def test_classify_failure_substrings_pinned() -> None:
+    # AC-7(i) — accept-as-is: _classify_failure's stderr substring match is
+    # locale/gh-version fragile, but a misclassification only flips
+    # merge-conflict <-> merge-failed and BOTH fire auto-merge-skipped loudly.
+    # This test PINS the current substrings so a silent change is caught.
+    for stderr in (
+        "X Pull request is not mergeable: merge conflict",
+        "GraphQL: the merge is not mergeable",
+        "the branch cannot be cleanly merged onto the base",
+    ):
+        assert _classify_failure(_completed(1, stderr=stderr)) == "merge-conflict"
+    assert _classify_failure(_completed(1, stderr="authentication required")) == "merge-failed"
+    assert _classify_failure(_completed(1, stderr="")) == "merge-failed"
+
+
+def test_empty_branch_name_skips_without_invoking_gh() -> None:
+    # AC-7(ii) — guard: empty/whitespace branch_name short-circuits BEFORE gh,
+    # mapped to the existing merge-failed SkipReason (no taxonomy bump).
+    runner = _RecordingRunner(_completed(0))
+    out = attempt_auto_merge(branch_name="   ", repo_root="/repo", gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "merge-failed"
+    assert runner.calls == []
+    assert out.gh_stderr is not None and "empty/whitespace branch_name" in out.gh_stderr
+
+
+def test_missing_cwd_distinguished_from_missing_gh(tmp_path: pathlib.Path) -> None:
+    # AC-7(iv) — guard: a missing cwd (repo_root) is distinguished from a missing
+    # gh CLI via the exception filename → honest merge-failed diagnostic.
+    missing = tmp_path / "nope"
+    runner = _RecordingRunner(
+        FileNotFoundError(2, "No such file or directory", str(missing))
+    )
+    out = attempt_auto_merge(branch_name=_BRANCH, repo_root=missing, gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "merge-failed"
+    assert out.gh_stderr is not None and "does not exist" in out.gh_stderr
+
+
+def test_missing_gh_still_classifies_gh_unavailable() -> None:
+    # AC-7(iv) — the discriminator must NOT misfire for a genuine missing gh:
+    # the exception filename is the executable, not repo_root.
+    runner = _RecordingRunner(
+        FileNotFoundError(2, "No such file or directory", "gh")
+    )
+    out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "gh-unavailable"
 
 
 # --------------------------------------------------------------------------- #
@@ -509,3 +566,32 @@ def test_main_gate_config_error_no_merge_no_marker(
     assert sentinel.calls == []
     body = (bundle_root / _STORY_ID / f"{_RUN_ID}.md").read_text(encoding="utf-8")
     assert AUTO_MERGE_SKIPPED_MARKER not in body
+
+
+def test_main_armed_story_id_mismatch_is_loud_not_silent(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # AC-7(iii) — guard: an armed (enabled) auto-merge whose run-state story_id
+    # does not match the requested --story-id must NOT silently drop the
+    # armed-merge intent. The run loud-fails (exit 1 via the assembler's
+    # authoritative RunStateStoryIdMismatch) and the arming site emits a loud
+    # AutoMergeArmingStoryIdMismatch diagnostic; the merge actuator is NOT called.
+    rs_path, logs_root, bundle_root = _seed_bundle_inputs(tmp_path)
+    runner = _RecordingRunner(_completed(0))
+    _patch_attempt(monkeypatch, runner)
+    argv = [
+        "--story-id", "other-story-99",
+        "--run-id", _RUN_ID,
+        "--run-state-path", str(rs_path),
+        "--logs-root", str(logs_root),
+        "--bundle-root", str(bundle_root),
+        "--repo-root", str(tmp_path),
+        "--auto-merge-config-path", str(_write_config(tmp_path, enabled=True)),
+        "--adoption-metrics-path", str(_write_metrics(tmp_path, months=12)),
+    ]
+    rc = bundle_main(argv)
+    assert rc == 1
+    assert runner.calls == []
+    assert "AutoMergeArmingStoryIdMismatch" in capsys.readouterr().err

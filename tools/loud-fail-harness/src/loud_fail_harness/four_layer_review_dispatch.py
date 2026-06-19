@@ -148,7 +148,7 @@ THIS story introduces:
 The marker class carries the failed-layer
 identifier as a structured payload field per Story 3.3's
 :class:`MarkerEmissionRecord` shape — NOT as a new sub-classification
-enum value. The 27-class top-level closed-set is preserved.
+enum value. The top-level closed-set is preserved (no new marker class).
 
 Cross-references
 ================

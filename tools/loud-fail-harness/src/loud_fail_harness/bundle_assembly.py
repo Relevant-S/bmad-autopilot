@@ -2422,11 +2422,32 @@ def main(argv: list[str] | None = None) -> int:
         and gate_decision is not None
     ):
         merge_run_state = _load_run_state_for_merge_decision(args.run_state_path)
-        if (
-            merge_run_state is not None
-            and merge_run_state.story_id == args.story_id
+        if merge_run_state is None:
+            sys.stderr.write(
+                "AutoMergeArmingRunStateUnavailable: auto-merge is armed "
+                f"(auto_merge.enabled) but the run-state at "
+                f"{str(args.run_state_path)!r} could not be loaded; the armed-"
+                "merge intent is surfaced loudly here (the bundle assembler fails "
+                "the run on the same unreadable run-state).\n"
+            )
+        elif (
+            merge_run_state.story_id != args.story_id
             and merge_run_state.current_state == "done"
         ):
+            # Story 22.6 AC-7(iii): an armed (enabled) auto-merge whose run-state
+            # story_id does not match the requested story_id must NOT silently
+            # drop the armed-merge intent. Only loud-fail when current_state is
+            # "done" — a mismatch on an in-flight run is not yet actionable and
+            # would be a false alarm.
+            sys.stderr.write(
+                "AutoMergeArmingStoryIdMismatch: auto-merge is armed "
+                f"(auto_merge.enabled) but run-state story_id="
+                f"{merge_run_state.story_id!r} != requested story_id="
+                f"{args.story_id!r}; the armed-merge intent is dropped and "
+                "surfaced loudly (the bundle assembler fails the run on the same "
+                "mismatch).\n"
+            )
+        elif merge_run_state.current_state == "done":
             if gate_decision.status == "green":
                 outcome = attempt_auto_merge(
                     branch_name=merge_run_state.branch_name,

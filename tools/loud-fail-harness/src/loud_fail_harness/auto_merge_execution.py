@@ -228,10 +228,46 @@ def attempt_auto_merge(
             f"unsupported merge strategy {strategy!r}; 17.3 supports only 'squash'"
         )
 
+    if not branch_name.strip():
+        # Story 22.6 AC-7(ii): refuse to invoke `gh pr merge --squash ""` with an
+        # empty/whitespace branch_name (a malformed merge target). A failed merge
+        # is data, not an exception (module docstring), so this surfaces as a
+        # loud `auto-merge-skipped` rather than raising — mapped to the existing
+        # `merge-failed` SkipReason (no marker-taxonomy bump; the gh_detail names
+        # the precondition). `branch_name` from run-state is runtime data, so a
+        # skipped outcome (not the ValueError raised for an unsupported strategy,
+        # which is a caller-API misuse) is the consistent loud-fail surface.
+        return AutoMergeOutcome(
+            status="skipped",
+            branch_name=branch_name,
+            skip_reason="merge-failed",
+            gh_stderr=(
+                "refusing to invoke `gh pr merge` with an empty/whitespace "
+                "branch_name (precondition guard, Story 22.6 AC-7(ii))"
+            ),
+        )
+
     gh_args = ["pr", "merge", flag, branch_name]
     try:
         completed = gh_runner(gh_args, repo_root)
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        # Story 22.6 AC-7(iv): a missing `cwd` (repo_root) raises the SAME
+        # FileNotFoundError as a missing `gh` CLI. Distinguish via the exception
+        # filename — subprocess sets it to the cwd path on a missing working
+        # directory and to the executable name on a missing binary — so the
+        # diagnostic is honest. The injected-runner stubs raise
+        # FileNotFoundError("gh") (filename=None) → the gh-unavailable default.
+        if exc.filename is not None and pathlib.Path(str(exc.filename)).resolve() == pathlib.Path(str(repo_root)).resolve():
+            return AutoMergeOutcome(
+                status="skipped",
+                branch_name=branch_name,
+                skip_reason="merge-failed",
+                gh_stderr=(
+                    f"repo_root {str(repo_root)!r} does not exist; cannot set the "
+                    "gh working directory (NOT a missing gh CLI; precondition "
+                    "guard, Story 22.6 AC-7(iv))"
+                ),
+            )
         return AutoMergeOutcome(
             status="skipped",
             branch_name=branch_name,

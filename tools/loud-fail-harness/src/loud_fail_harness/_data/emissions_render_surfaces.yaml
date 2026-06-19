@@ -1,0 +1,44 @@
+# Emissions → bundle-render-path registry — Story 22.6 G2 (Epic 20 retro Action #1).
+#
+# The CLOSED field→render-surface map enforced by `emissions-render-path-gate`.
+# Every typed `*_emissions[]` field declared under `properties:` in
+# `schemas/envelope.schema.yaml` MUST appear here EXACTLY ONCE, mapped to the
+# `bundle_assembly.py` render function(s) that consume it. The gate enforces both
+# directions:
+#   - every schema `*_emissions` field is a key here (no unrendered emissions
+#     field shipped silently — the real Epic-20/Story-21.0 risk: a new typed
+#     emissions array added to the envelope with NO bundle render path, dropped
+#     from the PR bundle without a trace);
+#   - every key here is a real schema field (no registry rot), and each named
+#     render function is `def`-defined AND invoked in `bundle_assembly.py`, and
+#     the field literal is accessed (`qa_envelope.get("<field>")`) there.
+#
+# This GENERALIZES Story 21.0's per-class greppable pins (which pinned individual
+# marker classes) into a field-driven structural check. Mirrors
+# `_data/marker_coverage_surfaces.yaml` as a package-bundled data file (loaded via
+# importlib.resources, cwd-independent).
+#
+# scope: per-ac    — rendered inside `_render_per_ac_section()` (per-AC dispatch).
+#        envelope   — rendered inside `assemble_bundle()` (envelope-scoped, bundle
+#                     bottom, no `ac_id`).
+#        mixed      — both (the a11y two-function split: an AC-scoped subsection
+#                     plus an envelope-scoped bundle-bottom marker render).
+
+emissions_render_surfaces:
+  heuristic_skipped_emissions:
+    render_functions: [_render_qa_heuristic_findings_subsection]
+    scope: per-ac
+  a11y_emissions:
+    # The one irregularity the registry must encode: a11y renders via TWO
+    # functions — an AC-scoped subsection and an envelope-scoped bundle-bottom
+    # marker render (no `ac_id`).
+    render_functions:
+      - _render_qa_a11y_subsection
+      - _render_qa_a11y_envelope_scoped_marker
+    scope: mixed
+  visual_regression_emissions:
+    render_functions: [_render_qa_visual_subsection]
+    scope: per-ac
+  flakiness_emissions:
+    render_functions: [_render_qa_flakiness_subsection]
+    scope: per-ac

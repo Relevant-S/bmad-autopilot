@@ -260,6 +260,35 @@ forward-pointer-drift-gate = "loud_fail_harness.forward_pointer_drift_gate:main"
 # does NOT grow. Listed LAST because all prior [project.scripts] entries
 # pre-date this story; the position does NOT reflect CI execution order.
 flakiness-log-validator = "loud_fail_harness.qa_flakiness_log:main"
+# emissions-render-path-gate (Story 22.6; G2 — Epic 20 retro Action #1) is a CI
+# GATE with a canonical inner-repo filesystem surface (schemas/envelope.schema.yaml
+# + bundle_assembly.py + the bundled _data/emissions_render_surfaces.yaml registry),
+# so — unlike the outer-workspace gates (forward-pointer-drift-gate /
+# done-story-review-ledger-gate, which run via pytest only) — it runs as a real
+# ci.yml step. Asserts every typed `*_emissions[]` envelope field has a render path
+# in bundle_assembly.py (both directions; field→render-surface registry). Generalizes
+# Story 21.0's per-class greppable pins. Sibling library + lint, NOT a 6th substrate
+# component (ADR-003 FIVE-component lock holds — precedent: naming-lint /
+# pluggability-gate / input-hardening-gate), and emits NO runtime marker (build-time
+# gate; closed-set stays 44, schema_version "1.20"). Listed LAST because all prior
+# [project.scripts] entries pre-date this story; the position in this table does NOT
+# reflect CI execution order — the CI step runs in the emission-gate grouping (after
+# bundle-assembly-failure-emission-gate) in .github/workflows/ci.yml.
+emissions-render-path-gate = "loud_fail_harness.emissions_render_path_gate:main"
+# stale-prose-gate (Story 22.6; G1 — Epic 19 Action #2 / Epic 20 Action #2, 3rd
+# recurrence) is a CI GATE with a canonical inner-repo filesystem surface
+# (src/loud_fail_harness/**/*.py docstrings/comments + designated docs/*.md), so it
+# runs as a real ci.yml step. Derives the live canonical marker-taxonomy
+# `schema_version` + top-level closed-set class count from schemas/marker-taxonomy.yaml
+# at runtime (NOT hardcoded) and fails when an anchored present-tense prose assertion
+# of the taxonomy version/count contradicts the live value. Honors a
+# `# stale-prose-ok: <reason>` suppression pragma for legitimate historical/changelog
+# references (the LINT.IfChange / NO_IFTTT discipline). Sibling library + lint, NOT a
+# 6th substrate component (ADR-003 FIVE-component lock holds), and emits NO runtime
+# marker (build-time gate). Listed LAST; the position does NOT reflect CI execution
+# order — the CI step runs near naming-lint (the schema-consistency grouping) in
+# .github/workflows/ci.yml.
+stale-prose-gate = "loud_fail_harness.stale_prose_gate:main"
 
 [dependency-groups]
 dev = [

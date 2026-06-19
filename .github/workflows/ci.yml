@@ -515,3 +515,53 @@ jobs:
         # tests/fixtures/flow-branch-coverage/ + schemas/marker-taxonomy.yaml
         # from disk via find_repo_root.
         run: uv run flow-branch-coverage-gate
+
+      - name: Emissions render-path gate (story 22.6; G2 — Epic 20 retro Action #1)
+        # Asserts every typed `*_emissions[]` field under `properties:` in
+        # schemas/envelope.schema.yaml has a render path in bundle_assembly.py,
+        # via the closed field→render-surface registry
+        # _data/emissions_render_surfaces.yaml. Enforces BOTH directions: every
+        # schema field is registered (catching the real risk — a new emissions
+        # array shipped with NO bundle render path, silently dropped from the PR
+        # bundle), and every registry field is a live schema field whose render
+        # function(s) are def-defined AND invoked in bundle_assembly.py.
+        # Generalizes Story 21.0's per-class greppable pins into a field-driven
+        # structural check.
+        # Exit-code semantics:
+        #   0 — clean (every emissions field has a render path; no registry rot).
+        #   1 — at least one render-path violation (unregistered schema field,
+        #       registry rot, or a missing/dead render function).
+        #   2 — harness-level error (schema/registry/bundle source unreadable or
+        #       malformed).
+        # Ordering rationale: this gate belongs to the emission-gate grouping
+        # (review-layer-failure / bundle-assembly-failure emission gates) but is
+        # placed here, after flow-branch-coverage-gate, so its envelope-schema ×
+        # bundle_assembly.py churn is reflected on top of an otherwise-clean
+        # harness suite — defense-in-depth ordering, NOT redundancy.
+        # No positional arguments — the script discovers the envelope schema +
+        # bundle_assembly.py from disk via find_repo_root and the registry via
+        # importlib.resources.
+        run: uv run emissions-render-path-gate
+
+      - name: Stale-prose gate (story 22.6; G1 — Epic 19/20 Action #2, 3rd recurrence)
+        # Derives the live canonical marker-taxonomy `schema_version` + top-level
+        # closed-set class count from schemas/marker-taxonomy.yaml at runtime (NOT
+        # hardcoded) and fails when an ANCHORED present-tense prose assertion of the
+        # taxonomy version/count (in src/loud_fail_harness/**/*.py docstrings +
+        # comments, plus designated docs/*.md) contradicts the live canonical value.
+        # Codifies the stale-prose recurrence the Epic 19 → 20 → 21 retros caught by
+        # human review three times. Honors a `# stale-prose-ok: <reason>` suppression
+        # pragma (and `<!-- stale-prose-ok: <reason> -->` in markdown) for legitimate
+        # historical/changelog references — the LINT.IfChange / NO_IFTTT discipline.
+        # Exit-code semantics:
+        #   0 — clean (no prose contradicts the live canonical value).
+        #   1 — at least one stale-prose finding.
+        #   2 — harness-level error (a scanned file unreadable/non-UTF-8, or the
+        #       authoritative marker-taxonomy.yaml missing/unparseable).
+        # Ordering rationale: a schema-consistency check keyed on
+        # schemas/marker-taxonomy.yaml (the surface naming-lint / enumeration-check
+        # certify); placed last so prose churn is reflected on top of an otherwise-
+        # clean suite — defense-in-depth ordering, NOT redundancy.
+        # No positional arguments — the script discovers the harness src tree +
+        # designated docs + schemas/marker-taxonomy.yaml from disk via find_repo_root.
+        run: uv run stale-prose-gate

@@ -4663,7 +4663,7 @@ verdicts:
   - marker_class: auto-merge-skipped
     surface_name: bundle-assembler
     verdict: emitted
-    code_path: tools/loud-fail-harness/src/loud_fail_harness/auto_merge_execution.py:312
+    code_path: tools/loud-fail-harness/src/loud_fail_harness/auto_merge_execution.py:357
     audit_date: "2026-06-17"
   - marker_class: auto-merge-skipped
     surface_name: cost-telemetry-pipeline

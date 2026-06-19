@@ -160,6 +160,8 @@ internal_only:
   - dependencies_validator.ValidationFinding
   - done_story_review_ledger_gate.LintFinding
   - done_story_review_ledger_gate.LintResult
+  - emissions_render_path_gate.Finding
+  - emissions_render_path_gate.GateResult
   - enumeration_check.CheckResult
   - enumeration_check.Reference
   - env_provisioning.EnvSetupFailureDiagnostic
@@ -334,6 +336,8 @@ internal_only:
   - sprint_status_artifact_validator.ArtifactValidationResult
   - sprint_status_command.SprintStatusOutcome
   - sprint_status_command.SprintStatusRequest
+  - stale_prose_gate.Finding
+  - stale_prose_gate.GateResult
   - status_command.StatusOutcome
   - status_command.StatusRequest
   - status_command.StoryInspection
