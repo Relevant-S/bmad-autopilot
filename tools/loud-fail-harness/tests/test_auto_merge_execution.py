@@ -45,17 +45,42 @@ def _canonical_registry() -> MarkerClassRegistry:
 
 class _RecordingRunner:
     """Pattern-6 stub gh_runner: records each call and returns a synthesized
-    :class:`subprocess.CompletedProcess` (or raises a pre-seeded exception)."""
+    :class:`subprocess.CompletedProcess` (or raises a pre-seeded exception).
+
+    A single ``result`` is returned for every call (Story 22.7: the two-call
+    ready→merge mechanism means a single failure result fails the FIRST call —
+    the readiness step). A ``list`` ``result`` is consumed PER call (index 0 =
+    ``gh pr ready``, index 1 = ``gh pr merge``), so a merge-step-only failure is
+    seeded as ``[_completed(0), <failure>]``; the last element is reused if the
+    runner is called more times than the list length.
+    """
 
     def __init__(self, result: Any) -> None:
-        self._result = result
+        self._results: list[Any] | None = result if isinstance(result, list) else None
+        self._single = None if isinstance(result, list) else result
         self.calls: list[tuple[list[str], Any]] = []
 
     def __call__(self, args: Any, cwd: Any) -> "subprocess.CompletedProcess[str]":
         self.calls.append((list(args), cwd))
-        if isinstance(self._result, BaseException):
-            raise self._result
-        return self._result
+        if self._results is not None:
+            idx = len(self.calls) - 1
+            result = self._results[idx] if idx < len(self._results) else self._results[-1]
+        else:
+            result = self._single
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+
+def _ready_then(merge_result: Any) -> _RecordingRunner:
+    """Runner whose `gh pr ready` (call 0) succeeds and whose `gh pr merge`
+    (call 1) returns/raises ``merge_result`` — for exercising merge-STEP
+    classification now that readiness precedes the merge (Story 22.7)."""
+    return _RecordingRunner([_completed(0), merge_result])
+
+
+_READY = ["pr", "ready", _BRANCH]
+_MERGE = ["pr", "merge", "--squash", _BRANCH]
 
 
 def _completed(returncode: int, stderr: str = "") -> "subprocess.CompletedProcess[str]":
@@ -69,28 +94,29 @@ def _completed(returncode: int, stderr: str = "") -> "subprocess.CompletedProces
 # --------------------------------------------------------------------------- #
 
 
-def test_success_returns_merged_and_runs_squash_on_branch() -> None:
+def test_success_returns_merged_and_runs_ready_then_squash_on_branch() -> None:
+    # Story 22.7: ready→merge two-call sequence on the happy path.
     runner = _RecordingRunner(_completed(0))
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
     assert out == AutoMergeOutcome(status="merged", branch_name=_BRANCH)
-    assert runner.calls == [(["pr", "merge", "--squash", _BRANCH], "/repo")]
+    assert runner.calls == [(_READY, "/repo"), (_MERGE, "/repo")]
 
 
 def test_no_push_force_or_main_in_invocation() -> None:
     runner = _RecordingRunner(_completed(0))
     attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
-    cmd = runner.calls[0][0]
-    joined = " ".join(cmd)
-    assert "push" not in joined
-    assert "--force" not in joined
-    assert "--rebase" not in joined
-    assert "--delete-branch" not in joined
-    assert "main" not in cmd
-    assert "master" not in cmd
+    for cmd, _cwd in runner.calls:
+        joined = " ".join(cmd)
+        assert "push" not in joined
+        assert "--force" not in joined
+        assert "--rebase" not in joined
+        assert "--delete-branch" not in joined
+        assert "main" not in cmd
+        assert "master" not in cmd
 
 
 def test_conflict_stderr_classifies_merge_conflict() -> None:
-    runner = _RecordingRunner(
+    runner = _ready_then(
         _completed(1, stderr="X Pull request is not mergeable: merge conflict")
     )
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
@@ -98,10 +124,11 @@ def test_conflict_stderr_classifies_merge_conflict() -> None:
     assert out.skip_reason == "merge-conflict"
     assert out.gh_returncode == 1
     assert out.gh_stderr is not None and "conflict" in out.gh_stderr.lower()
+    assert runner.calls == [(_READY, "/repo"), (_MERGE, "/repo")]
 
 
 def test_gh_absent_classifies_gh_unavailable() -> None:
-    runner = _RecordingRunner(FileNotFoundError("gh"))
+    runner = _ready_then(FileNotFoundError("gh"))
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
     assert out.status == "skipped"
     assert out.skip_reason == "gh-unavailable"
@@ -109,7 +136,7 @@ def test_gh_absent_classifies_gh_unavailable() -> None:
 
 
 def test_generic_nonzero_classifies_merge_failed() -> None:
-    runner = _RecordingRunner(_completed(4, stderr="authentication required"))
+    runner = _ready_then(_completed(4, stderr="authentication required"))
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
     assert out.status == "skipped"
     assert out.skip_reason == "merge-failed"
@@ -117,11 +144,59 @@ def test_generic_nonzero_classifies_merge_failed() -> None:
 
 
 def test_timeout_classifies_merge_failed() -> None:
-    runner = _RecordingRunner(subprocess.TimeoutExpired(cmd="gh", timeout=60))
+    runner = _ready_then(subprocess.TimeoutExpired(cmd="gh", timeout=60))
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
     assert out.status == "skipped"
     assert out.skip_reason == "merge-failed"
     assert out.gh_stderr is not None and "timed out" in out.gh_stderr
+
+
+# --------------------------------------------------------------------------- #
+# AC-1/AC-2 — Story 22.7 readiness step (gh pr ready precedes gh pr merge)     #
+# --------------------------------------------------------------------------- #
+
+
+def test_ready_nonzero_skips_ready_failed_and_does_not_merge() -> None:
+    runner = _RecordingRunner(_completed(1, stderr="could not mark PR ready"))
+    out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "ready-failed"
+    assert out.gh_returncode == 1
+    assert out.gh_stderr is not None and "could not mark PR ready" in out.gh_stderr
+    assert runner.calls == [(_READY, "/repo")]  # merge NOT attempted
+
+
+def test_ready_gh_absent_skips_ready_failed_and_does_not_merge() -> None:
+    runner = _RecordingRunner(FileNotFoundError("gh"))
+    out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "ready-failed"
+    assert out.gh_returncode is None
+    assert out.gh_stderr is not None and "not found on PATH" in out.gh_stderr
+    assert runner.calls == [(_READY, "/repo")]
+
+
+def test_ready_timeout_skips_ready_failed_and_does_not_merge() -> None:
+    runner = _RecordingRunner(subprocess.TimeoutExpired(cmd="gh", timeout=60))
+    out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "ready-failed"
+    assert out.gh_stderr is not None and "timed out" in out.gh_stderr
+    assert runner.calls == [(_READY, "/repo")]
+
+
+def test_ready_missing_cwd_skips_ready_failed_and_does_not_merge(
+    tmp_path: pathlib.Path,
+) -> None:
+    missing = tmp_path / "nope"
+    runner = _RecordingRunner(
+        FileNotFoundError(2, "No such file or directory", str(missing))
+    )
+    out = attempt_auto_merge(branch_name=_BRANCH, repo_root=missing, gh_runner=runner)
+    assert out.status == "skipped"
+    assert out.skip_reason == "ready-failed"
+    assert out.gh_stderr is not None and "does not exist" in out.gh_stderr
+    assert runner.calls == [(["pr", "ready", _BRANCH], missing)]
 
 
 def test_unsupported_strategy_raises() -> None:
@@ -167,10 +242,11 @@ def test_empty_branch_name_skips_without_invoking_gh() -> None:
 
 
 def test_missing_cwd_distinguished_from_missing_gh(tmp_path: pathlib.Path) -> None:
-    # AC-7(iv) — guard: a missing cwd (repo_root) is distinguished from a missing
-    # gh CLI via the exception filename → honest merge-failed diagnostic.
+    # AC-7(iv) — guard: at the MERGE step a missing cwd (repo_root) is
+    # distinguished from a missing gh CLI via the exception filename → honest
+    # merge-failed diagnostic (ready succeeds first, Story 22.7).
     missing = tmp_path / "nope"
-    runner = _RecordingRunner(
+    runner = _ready_then(
         FileNotFoundError(2, "No such file or directory", str(missing))
     )
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root=missing, gh_runner=runner)
@@ -180,9 +256,10 @@ def test_missing_cwd_distinguished_from_missing_gh(tmp_path: pathlib.Path) -> No
 
 
 def test_missing_gh_still_classifies_gh_unavailable() -> None:
-    # AC-7(iv) — the discriminator must NOT misfire for a genuine missing gh:
-    # the exception filename is the executable, not repo_root.
-    runner = _RecordingRunner(
+    # AC-7(iv) — at the MERGE step the discriminator must NOT misfire for a
+    # genuine missing gh: the exception filename is the executable, not repo_root
+    # (ready succeeds first, Story 22.7).
+    runner = _ready_then(
         FileNotFoundError(2, "No such file or directory", "gh")
     )
     out = attempt_auto_merge(branch_name=_BRANCH, repo_root="/repo", gh_runner=runner)
@@ -242,6 +319,36 @@ def test_surface_emission_carries_gh_detail_on_execution_failure() -> None:
     assert emission.gh_detail is not None
     assert "exit=4" in emission.gh_detail
     assert "authentication required" in emission.gh_detail
+
+
+def test_surface_emission_for_ready_failed_names_readiness_step() -> None:
+    # Story 22.7: a ready-failed emission renders the readiness-step remediation
+    # prose (distinct from a merge-step failure) and carries the gh detail.
+    out = AutoMergeOutcome(
+        status="skipped",
+        branch_name=_BRANCH,
+        skip_reason="ready-failed",
+        gh_returncode=1,
+        gh_stderr="could not mark PR ready",
+    )
+    emission = surface_auto_merge_skipped(out, _canonical_registry())
+    assert emission.skip_reason == "ready-failed"
+    assert emission.gh_detail is not None and "exit=1" in emission.gh_detail
+    assert "ready-failed" in emission.diagnostic_pointer
+    assert "readiness step" in emission.diagnostic_pointer
+
+
+def test_ready_failed_outcome_roundtrips_invariants() -> None:
+    # ready-failed reuses the existing skipped shape — no new outcome invariant;
+    # it may carry gh detail (unlike gate-not-met).
+    out = AutoMergeOutcome(
+        status="skipped",
+        branch_name=_BRANCH,
+        skip_reason="ready-failed",
+        gh_stderr="gh executable not found on PATH",
+    )
+    assert out.skip_reason == "ready-failed"
+    assert out.gh_returncode is None
 
 
 def test_surface_rejects_merged_outcome() -> None:
@@ -452,7 +559,11 @@ def test_main_enabled_green_done_merges_no_skip_marker(
         )
     )
     assert rc == 0
-    assert runner.calls == [(["pr", "merge", "--squash", _BRANCH], tmp_path)]
+    # Story 22.7: the armed happy path is now the two-call ready→merge sequence.
+    assert runner.calls == [
+        (["pr", "ready", _BRANCH], tmp_path),
+        (["pr", "merge", "--squash", _BRANCH], tmp_path),
+    ]
     body = (bundle_root / _STORY_ID / f"{_RUN_ID}.md").read_text(encoding="utf-8")
     assert "### Auto-merge skipped" not in body
     assert AUTO_MERGE_SKIPPED_MARKER not in body
@@ -461,10 +572,11 @@ def test_main_enabled_green_done_merges_no_skip_marker(
 def test_main_enabled_green_done_merge_fails_emits_skip(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # AC-5: armed + green + merge-ready but gh fails → auto-merge-skipped rendered,
-    # PR left in draft, exit 0 (the skip is loud-fail DATA, not a bundle failure).
+    # AC-5: armed + green + merge-ready, readiness succeeds but the merge fails →
+    # auto-merge-skipped rendered, PR left in draft, exit 0 (the skip is loud-fail
+    # DATA, not a bundle failure).
     rs_path, logs_root, bundle_root = _seed_bundle_inputs(tmp_path)
-    runner = _RecordingRunner(_completed(1, stderr="not mergeable: merge conflict"))
+    runner = _ready_then(_completed(1, stderr="not mergeable: merge conflict"))
     _patch_attempt(monkeypatch, runner)
     rc = bundle_main(
         _argv(
@@ -474,10 +586,38 @@ def test_main_enabled_green_done_merge_fails_emits_skip(
         )
     )
     assert rc == 0
+    assert runner.calls == [
+        (["pr", "ready", _BRANCH], tmp_path),
+        (["pr", "merge", "--squash", _BRANCH], tmp_path),
+    ]
     body = (bundle_root / _STORY_ID / f"{_RUN_ID}.md").read_text(encoding="utf-8")
     assert "### Auto-merge skipped" in body
     assert f"<!-- bmad-automation:marker {AUTO_MERGE_SKIPPED_MARKER} -->" in body
     assert "merge-conflict" in body
+
+
+def test_main_enabled_green_done_ready_fails_emits_skip_no_merge(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # AC-1/AC-2: armed + green + merge-ready but `gh pr ready` fails → the merge is
+    # NOT attempted, auto-merge-skipped:ready-failed rendered, PR left in draft,
+    # exit 0. The readiness failure is loud-fail DATA, never a silent drop.
+    rs_path, logs_root, bundle_root = _seed_bundle_inputs(tmp_path)
+    runner = _RecordingRunner(_completed(1, stderr="could not mark PR ready: draft"))
+    _patch_attempt(monkeypatch, runner)
+    rc = bundle_main(
+        _argv(
+            tmp_path, rs_path, logs_root, bundle_root,
+            _write_config(tmp_path, enabled=True),
+            _write_metrics(tmp_path, months=12),
+        )
+    )
+    assert rc == 0
+    assert runner.calls == [(["pr", "ready", _BRANCH], tmp_path)]  # no merge call
+    body = (bundle_root / _STORY_ID / f"{_RUN_ID}.md").read_text(encoding="utf-8")
+    assert "### Auto-merge skipped" in body
+    assert f"<!-- bmad-automation:marker {AUTO_MERGE_SKIPPED_MARKER} -->" in body
+    assert "ready-failed" in body
 
 
 def test_main_enabled_gate_not_met_done_emits_skip_gate_not_met(

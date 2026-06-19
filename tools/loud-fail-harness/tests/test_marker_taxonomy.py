@@ -57,7 +57,7 @@ def test_taxonomy_schema_version_is_1_14(taxonomy_data: dict) -> None:
     """
     # Story 20.1 (FR-P2-9) bumps 1.15 → 1.16 (PATCH) for the new top-level
     # plan-rederivation-drift-detected class (closed-set 39 → 40).
-    assert taxonomy_data.get("schema_version") == "1.20"
+    assert taxonomy_data.get("schema_version") == "1.21"
 
 
 def test_a11y_marker_classes_enumerated(taxonomy_data: dict) -> None:
@@ -102,7 +102,7 @@ def test_visual_regression_marker_classes_enumerated(taxonomy_data: dict) -> Non
     emission lands in THIS story — no flip-the-switch split — and there is NO
     third ``-mode-unstable`` class (pixel-diff is deterministic).
     """
-    assert taxonomy_data["schema_version"] == "1.20"
+    assert taxonomy_data["schema_version"] == "1.21"
     by_class = {entry["marker_class"]: entry for entry in taxonomy_data["markers"]}
     for marker_class in (
         "visual-regression-delta-exceeded",

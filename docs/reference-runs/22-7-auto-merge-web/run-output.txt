@@ -1,0 +1,34 @@
+=== Story 22.7 AC-7 genuine auto-merge round-trip witness ===
+gh version:
+gh version 2.82.1 (2025-10-22)
+gh auth (account only):
+  ✓ Logged in to github.com account dribniuk (keyring)
+  - Active account: true
+=== create throwaway remote + push main ===
+https://github.com/dribniuk/bmad-autopilot-automerge-witness-20260619-235922
+To https://github.com/dribniuk/bmad-autopilot-automerge-witness-20260619-235922.git
+ * [new branch]      HEAD -> main
+branch 'main' set up to track 'origin/main'.
+=== create per-story branch with one commit, push, open DRAFT PR ===
+remote: 
+remote: Create a pull request for 'bmad-automation/story/sample-auto-001' on GitHub by visiting:        
+remote:      https://github.com/dribniuk/bmad-autopilot-automerge-witness-20260619-235922/pull/new/bmad-automation/story/sample-auto-001        
+remote: 
+https://github.com/dribniuk/bmad-autopilot-automerge-witness-20260619-235922/pull/1
+=== PRE-STATE: PR is draft (this is what makes a bare gh pr merge fail on a real project) ===
+{"isDraft":true,"mergeStateStatus":"UNKNOWN","number":1,"state":"OPEN"}
+=== ACTUATOR CALL 1 (Story 22.7): gh pr ready bmad-automation/story/sample-auto-001 ===
+✓ Pull request dribniuk/bmad-autopilot-automerge-witness-20260619-235922#1 is marked as "ready for review"
+=== POST-READY: PR is no longer draft ===
+{"isDraft":false,"mergeStateStatus":"CLEAN","number":1,"state":"OPEN"}
+=== ACTUATOR CALL 2 (Story 17.3): gh pr merge --squash bmad-automation/story/sample-auto-001 ===
+=== POST-MERGE: PR merged; the real squashed commit on main ===
+{"mergeCommit":{"oid":"4a3310e875ea2e29a79fc61f71a3f0dbd47419f6"},"mergedAt":"2026-06-19T21:59:34Z","number":1,"state":"MERGED"}
+main log after merge:
+4a3310e story: sample-auto-001 change (#1)
+3e0839b init main
+=== DONE — a real commit landed on main via gh pr ready -> gh pr merge --squash ===
+=== teardown: deleting throwaway repo ===
+HTTP 403: Must have admin rights to Repository. (https://api.github.com/repos/dribniuk/bmad-autopilot-automerge-witness-20260619-235922)
+This API operation needs the "delete_repo" scope. To request it, run:  gh auth refresh -h github.com -s delete_repo
+(manual cleanup may be needed: gh repo delete bmad-autopilot-automerge-witness-20260619-235922 --yes)

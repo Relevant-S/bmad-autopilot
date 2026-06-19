@@ -469,7 +469,7 @@ def test_taxonomy_declares_schema_version_1_14(taxonomy_data: dict) -> None:
     # level-class rule + epics-phase-2.md line 70 + the Story 24.1 precedent;
     # ADR-011 / FR-P2-6; no runtime emitter — Story 19.4 wires emission).
     # Story 20.1 bumps 1.15 → 1.16 (PATCH: plan-rederivation-drift-detected; FR-P2-9).
-    assert taxonomy_data.get("schema_version") == "1.20"
+    assert taxonomy_data.get("schema_version") == "1.21"
 
 
 def test_taxonomy_has_no_duplicate_marker_classes(taxonomy_data: dict) -> None:

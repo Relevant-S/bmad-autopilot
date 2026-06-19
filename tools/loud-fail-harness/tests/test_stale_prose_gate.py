@@ -62,7 +62,7 @@ def _evaluate(text: str, *, version: str = "1.20", count: int = 44) -> list:
 
 def test_canonical_values_real_taxonomy() -> None:
     version, count = canonical_values(_TAXONOMY)
-    assert version == "1.20"
+    assert version == "1.21"
     assert count == 44
 
 
@@ -73,7 +73,7 @@ def test_baseline_real_tree_is_clean() -> None:
         doc_paths=[_REPO_ROOT / "docs" / "implementation-patterns.md"],
     )
     assert result.findings == (), [f.diagnostic for f in result.findings]
-    assert result.canonical_schema_version == "1.20"
+    assert result.canonical_schema_version == "1.21"
     assert result.canonical_closed_set_count == 44
 
 
