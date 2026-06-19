@@ -32,7 +32,7 @@ from unittest import mock
 import pytest
 import yaml as _pyyaml
 
-from loud_fail_harness import tea_boundary_orientation
+from loud_fail_harness import _shared, tea_boundary_orientation
 from loud_fail_harness._shared import find_repo_root
 from loud_fail_harness.config_qa_runbook_stub import (
     StubScaffoldRequest,
@@ -380,7 +380,7 @@ def test_write_emit_tracking_field_atomic_write_uses_tmp_then_replace(
     body = f"retry_budget: 2\n{EMIT_TRACKING_FIELD}: false\n"
     _write_config(tmp_path, body=body)
     with mock.patch.object(
-        tea_boundary_orientation,
+        _shared,
         "os",
         wraps=os,
     ) as os_spy:

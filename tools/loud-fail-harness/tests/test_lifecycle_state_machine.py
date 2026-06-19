@@ -683,6 +683,7 @@ def test_module_all_exports() -> None:
         "commit_transition",
         "record_halt",
         "LIFECYCLE_TRANSITIONS",
+        "NEXT_SPECIALIST_BY_STATE",
         "TERMINAL_STATES",
         "TransitionDecision",
         "EnvelopeOutcome",

@@ -115,14 +115,14 @@ living in the config that Story 7.6 already overwrites.
 from __future__ import annotations
 
 import logging
-import os
 import pathlib
 import re
-import secrets
 from typing import Any, Final, Literal
 
 import yaml as _pyyaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from loud_fail_harness._shared import atomic_write_text as _atomic_write_text
 
 __all__ = [
     "EMIT_TRACKING_FIELD",
@@ -407,32 +407,6 @@ def _resolve_repo_root_for_orientation() -> pathlib.Path:
         "tea_boundary_orientation: could not locate repo root "
         f"(no .github ancestor) starting from {here}"
     )
-
-
-def _atomic_write_text(path: pathlib.Path, body: str) -> None:
-    """Pattern 4 atomic write — temp-file + ``os.replace``.
-
-    Mirrors :func:`loud_fail_harness.init_non_destructive_guard._atomic_write_text`
-    byte-for-byte. Story 7.8 is the THIRD caller of this pattern;
-    Story 7.2's "third-caller" promotion threshold per
-    ``install_path.py:447-460`` is now reached, but Story 7.8 remains
-    a local mirror per the dev's-call to keep this story's surface
-    narrow — the promotion to ``_shared.py`` is a separate refactor.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(
-        f"{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
-    )
-    try:
-        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(body)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(temp_path, path)
-    except BaseException:
-        temp_path.unlink(missing_ok=True)
-        raise
 
 
 def _ensure_trailing_newline(text: str) -> str:

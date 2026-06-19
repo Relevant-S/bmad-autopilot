@@ -214,7 +214,7 @@ def test_record_install_method_atomicity(
     """Simulated mid-write crash: `os.replace` raises OSError. The original
     config is preserved intact; the temp file is unlinked; no partial
     config replaces the original."""
-    from loud_fail_harness import install_path as _install_path
+    from loud_fail_harness import _shared
 
     config_path = tmp_path / "config.yaml"
     original_body = "install_method: plugin\nretry_budget: 5\n"
@@ -223,7 +223,7 @@ def test_record_install_method_atomicity(
     def boom(src: str, dst: str) -> None:
         raise OSError("simulated mid-rename failure")
 
-    monkeypatch.setattr(_install_path.os, "replace", boom)
+    monkeypatch.setattr(_shared.os, "replace", boom)
 
     with pytest.raises(OSError, match="simulated mid-rename failure"):
         record_install_method(InstallMethod("git-clone-symlink"), config_path)

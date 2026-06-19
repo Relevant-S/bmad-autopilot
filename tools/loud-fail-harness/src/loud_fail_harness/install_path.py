@@ -71,16 +71,15 @@ from __future__ import annotations
 
 import io
 import logging
-import os
 import pathlib
 import re
-import secrets
 import warnings
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 from ruamel.yaml import YAML
 
+from ._shared import atomic_write_text as _atomic_write_text
 from .exceptions import ContractViolation
 
 __all__ = [
@@ -441,37 +440,6 @@ def resolve_install_method(
 # ---------------------------------------------------------------------------
 # Install-method recording (AC-4) — Pattern 4 atomic write.
 # ---------------------------------------------------------------------------
-
-
-def _atomic_write_text(path: pathlib.Path, body: str) -> None:
-    """Pattern 4 atomic write — write to ``<path>.tmp.<pid>.<token>`` and
-    ``os.replace`` into ``path``.
-
-    Mirrors the pattern documented in
-    :func:`loud_fail_harness.run_state.advance_run_state`:
-    ``os.open`` (``O_WRONLY | O_CREAT | O_EXCL``) → write → fsync → close
-    → ``os.replace``. The temp file is unlinked on any failure between
-    create and replace so the on-disk state is never partial.
-
-    The helper is local to this module (rather than promoted to
-    ``_shared.py``) because Story 7.2's scope is bounded; future Epic-7
-    consumers may extract a shared helper at the third-caller mark per
-    the convention established by ``_shared.py``'s landing in Story 1.5.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(
-        f"{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
-    )
-    try:
-        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(body)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(temp_path, path)
-    except BaseException:
-        temp_path.unlink(missing_ok=True)
-        raise
 
 
 def _yaml_round_trip() -> YAML:

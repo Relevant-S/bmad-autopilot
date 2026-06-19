@@ -84,11 +84,9 @@ NOT a runtime marker emission surface:
 from __future__ import annotations
 
 import argparse
-import os
 import pathlib
 import platform
 import re
-import secrets
 import subprocess
 import sys
 import tempfile
@@ -98,7 +96,10 @@ from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
-from loud_fail_harness._shared import find_repo_root
+from loud_fail_harness._shared import (
+    atomic_write_text as _atomic_write_text,
+    find_repo_root,
+)
 
 __all__ = [
     "ARTIFACT_RELATIVE_PATH",
@@ -897,31 +898,6 @@ def build_artifact_seed(
 # --------------------------------------------------------------------------- #
 # Persistence helpers (AC-3)                                                   #
 # --------------------------------------------------------------------------- #
-
-
-def _atomic_write_text(path: pathlib.Path, body: str) -> None:
-    """Pattern 4 atomic write — temp-file + ``os.replace``.
-
-    Mirrors :func:`loud_fail_harness.tea_boundary_orientation._atomic_write_text`
-    byte-for-byte. Story 7.9 is the FOURTH caller of this pattern;
-    promotion to ``_shared.py`` is a separate refactor (Story 7.6's
-    third-caller-promotion threshold note) — keeping this story's
-    surface narrow per the dev's call.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(
-        f"{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
-    )
-    try:
-        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(body)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(temp_path, path)
-    except BaseException:
-        temp_path.unlink(missing_ok=True)
-        raise
 
 
 def _validate_anchor_invariant(

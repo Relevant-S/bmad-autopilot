@@ -815,8 +815,8 @@ def test_evaluate_reattach_invokes_can_dispatch_on_non_terminal_run_state(
     request = ReattachRequest(project_root=tmp_project)
     outcome, _ = evaluate_reattach(request)
     assert outcome.action == "reattach-clean"
-    # The next-specialist for in-progress is "review-bmad" per the
-    # local _NEXT_SPECIALIST_BY_STATE map.
+    # The next-specialist for in-progress is "review-bmad" per the shared
+    # lifecycle_state_machine.NEXT_SPECIALIST_BY_STATE map.
     assert len(captured) == 1
     spec_arg, story_arg, _rs_arg = captured[0]
     assert spec_arg == "review-bmad"

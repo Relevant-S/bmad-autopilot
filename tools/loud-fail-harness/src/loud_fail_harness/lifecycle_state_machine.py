@@ -238,7 +238,7 @@ import datetime
 import pathlib
 import secrets
 from collections.abc import Callable
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -297,6 +297,43 @@ LIFECYCLE_TRANSITIONS: dict[CurrentState, CurrentState] = {
 #: Story 2.7's Stop hook consumes this predicate to choose merge-ready
 #: vs escalation bundle.
 TERMINAL_STATES: frozenset[CurrentState] = frozenset({"done", "escalated"})
+
+
+#: Closed lifecycle-state → next-specialist map. Keys MUST equal
+#: ``LIFECYCLE_TRANSITIONS.keys() | TERMINAL_STATES`` — enforced by the
+#: module-import-time assertion below and re-checked by
+#: ``test_next_specialist_map_keys_equal_lifecycle_union`` so adding a new
+#: lifecycle state without updating this map fails loud (Story 2.4's
+#: lifecycle-extension protocol). Consolidated here in Story 22.5 (the H1
+#: cleanup-window promotion) from two byte-identical private copies in
+#: ``session_start_reattach`` and ``resume_command`` — the third-consumer
+#: threshold the ``session_start_reattach`` TODO named.
+#:
+#: Mapping rationale (resume/reattach re-enter at the named dispatch boundary):
+#:   * ``ready-for-dev → "dev"`` — dev is the first specialist.
+#:   * ``in-progress → "review-bmad"`` — dev has run; review is next.
+#:   * ``review → "qa"`` — review has run; QA is next.
+#:   * ``qa → "qa"`` — QA is in-flight (dispatched but not advanced); re-dispatch.
+#:   * ``done`` / ``escalated → None`` — terminal; no dispatch needed.
+NEXT_SPECIALIST_BY_STATE: Final[
+    dict[CurrentState, Literal["dev", "review-bmad", "qa"] | None]
+] = {
+    "ready-for-dev": "dev",
+    "in-progress": "review-bmad",
+    "review": "qa",
+    "qa": "qa",
+    "done": None,
+    "escalated": None,
+}
+
+#: Module-import-time structural-equality invariant per AC-4 (the cross-module
+#: consistency witness preserved from the former ``resume_command`` copy).
+assert set(NEXT_SPECIALIST_BY_STATE.keys()) == (
+    set(LIFECYCLE_TRANSITIONS.keys()) | TERMINAL_STATES
+), (
+    "NEXT_SPECIALIST_BY_STATE keys MUST equal "
+    "LIFECYCLE_TRANSITIONS.keys() | TERMINAL_STATES per AC-4"
+)
 
 
 #: Type alias for the orchestrator-event log appender callback. A
@@ -837,6 +874,7 @@ __all__ = [
     "commit_transition",
     "record_halt",
     "LIFECYCLE_TRANSITIONS",
+    "NEXT_SPECIALIST_BY_STATE",
     "TERMINAL_STATES",
     "TransitionDecision",
     "EnvelopeOutcome",

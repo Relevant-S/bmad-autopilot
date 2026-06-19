@@ -82,10 +82,8 @@ The module is the SIXTH Epic-7 runtime-code introduction (after Stories
 from __future__ import annotations
 
 import logging
-import os
 import pathlib
 import re
-import secrets
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -98,6 +96,7 @@ from .config_qa_runbook_stub import (
     resolve_config_path,
     resolve_qa_runbook_path,
 )
+from ._shared import atomic_write_text as _atomic_write_text
 from .exceptions import ContractViolation
 from .marker_wiring import record_marker_with_context
 from .run_state import RunState
@@ -325,33 +324,6 @@ class GuardConfigCorrupted(ContractViolation):
 # --------------------------------------------------------------------------- #
 # Private helpers (Pattern 4 + Story 7.2 mirror; ruamel.yaml round-trip).      #
 # --------------------------------------------------------------------------- #
-
-
-def _atomic_write_text(path: pathlib.Path, body: str) -> None:
-    """Pattern 4 atomic write — temp-file + ``os.replace``.
-
-    Mirrors :func:`loud_fail_harness.install_path._atomic_write_text`
-    byte-for-byte. Story 7.6 is the SECOND caller of this pattern;
-    Story 7.2's docstring at ``install_path.py:447-460`` documents a
-    "third-caller" promotion threshold to ``_shared.py``. The mirror
-    is the dev's-call here per Story 2.12 precedent (preferring
-    duplication over a one-caller-too-early extraction).
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_name(
-        f"{path.name}.tmp.{os.getpid()}.{secrets.token_hex(4)}"
-    )
-    try:
-        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(body)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(temp_path, path)
-    except BaseException:
-        temp_path.unlink(missing_ok=True)
-        raise
-
 
 
 def _utc_timestamp(now: datetime | None = None) -> str:

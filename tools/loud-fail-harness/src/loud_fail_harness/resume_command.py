@@ -114,7 +114,7 @@ import logging
 import pathlib
 import sys
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, ClassVar, Final, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -127,7 +127,10 @@ from .cross_state_recovery import (
     _load_run_state_from_disk,
     evaluate_recovery,
 )
-from .lifecycle_state_machine import LIFECYCLE_TRANSITIONS, TERMINAL_STATES
+from .lifecycle_state_machine import (
+    NEXT_SPECIALIST_BY_STATE as _NEXT_SPECIALIST_BY_STATE,
+    TERMINAL_STATES,
+)
 from .no_destructive_resume_guard import Verdict, can_dispatch
 from .orchestrator_run_entry import SprintStatusResolver, StoryDocResolver
 from .run_state import CurrentState, RunState
@@ -147,52 +150,6 @@ __all__ = [
 ]
 
 _logger = logging.getLogger(__name__)
-
-
-# --------------------------------------------------------------------------- #
-# Module-level constants                                                       #
-# --------------------------------------------------------------------------- #
-
-
-#: Closed lifecycle-state-to-specialist map per AC-4. Keys MUST equal
-#: ``LIFECYCLE_TRANSITIONS.keys() | TERMINAL_STATES`` — the structural
-#: equality is asserted by the AC-9 test
-#: ``test_next_specialist_map_keys_equal_lifecycle_union`` so adding a new
-#: lifecycle state without updating this map fails the test loud (mirrors
-#: Story 2.4's lifecycle-extension protocol).
-#:
-#: Mapping rationale per the AC-4 table:
-#:   * ``ready-for-dev → "dev"`` — dev is the first specialist; resume
-#:     re-enters at the dev-dispatch boundary.
-#:   * ``in-progress → "review-bmad"`` — dev has run; review is next.
-#:   * ``review → "qa"`` — review has run; QA is next.
-#:   * ``qa → "qa"`` — QA is in-flight (dispatched but not advanced);
-#:     resume re-dispatches QA. The QA wrapper's own retry-routing per
-#:     Story 5.2 covers internal retries; resume re-enters at the
-#:     QA-dispatch boundary.
-#:   * ``done → None`` — terminal; no dispatch needed.
-#:   * ``escalated → None`` — terminal; no dispatch needed.
-_NEXT_SPECIALIST_BY_STATE: Final[
-    dict[CurrentState, Literal["dev", "review-bmad", "qa"] | None]
-] = {
-    "ready-for-dev": "dev",
-    "in-progress": "review-bmad",
-    "review": "qa",
-    "qa": "qa",
-    "done": None,
-    "escalated": None,
-}
-
-#: Module-import-time structural-equality invariant per AC-4. Adding a
-#: new lifecycle state to ``LIFECYCLE_TRANSITIONS`` without updating
-#: ``_NEXT_SPECIALIST_BY_STATE`` fails THIS assertion at import time
-#: (mirrors Story 2.4's lifecycle-extension protocol).
-assert set(_NEXT_SPECIALIST_BY_STATE.keys()) == (
-    set(LIFECYCLE_TRANSITIONS.keys()) | TERMINAL_STATES
-), (
-    "_NEXT_SPECIALIST_BY_STATE keys MUST equal "
-    "LIFECYCLE_TRANSITIONS.keys() | TERMINAL_STATES per AC-4"
-)
 
 
 # --------------------------------------------------------------------------- #

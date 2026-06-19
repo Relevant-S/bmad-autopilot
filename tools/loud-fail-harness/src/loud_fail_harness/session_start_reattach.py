@@ -99,10 +99,13 @@ from referencing import Registry
 from referencing.jsonschema import DRAFT202012
 
 from ._shared import find_repo_root, load_schema
-from .lifecycle_state_machine import TERMINAL_STATES
+from .lifecycle_state_machine import (
+    NEXT_SPECIALIST_BY_STATE as _NEXT_SPECIALIST_BY_STATE,
+    TERMINAL_STATES,
+)
 from .marker_wiring import record_marker_with_context
 from .no_destructive_resume_guard import Verdict, can_dispatch
-from .run_state import CurrentState, RunState
+from .run_state import RunState
 from .story_file_lock import (
     DEFAULT_STALE_THRESHOLD_SECONDS,
     LockInspectionResult,
@@ -156,23 +159,6 @@ RECOVERY_STATE_CONFLICT_MARKER_CLASS: Final[
 WORKTREE_STALE_LOCK_MARKER_CLASS: Final[
     Literal["worktree-stale-lock"]
 ] = "worktree-stale-lock"
-
-
-# TODO: future story may promote _NEXT_SPECIALIST_BY_STATE to
-# lifecycle_state_machine when a third direct consumer arrives (per
-# Story 8.6 Detected-Variances rationale + epic-7-retro-2026-05-08.md
-# line 166 third-caller-threshold precedent). Until then, the duplication
-# vs ``resume_command._NEXT_SPECIALIST_BY_STATE`` is bounded and explicit.
-_NEXT_SPECIALIST_BY_STATE: Final[
-    dict[CurrentState, Literal["dev", "review-bmad", "qa"] | None]
-] = {
-    "ready-for-dev": "dev",
-    "in-progress": "review-bmad",
-    "review": "qa",
-    "qa": "qa",
-    "done": None,
-    "escalated": None,
-}
 
 
 def _current_schema_version() -> str:

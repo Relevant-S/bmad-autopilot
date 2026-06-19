@@ -345,7 +345,7 @@ def test_write_detected_project_type_atomic_no_partial_write(
     pre_write_bytes = config_path.read_bytes()
 
     with mock.patch(
-        "loud_fail_harness.project_type_detection.os.replace",
+        "loud_fail_harness._shared.os.replace",
         side_effect=OSError("simulated replace failure"),
     ):
         with pytest.raises(OSError, match="simulated replace failure"):
