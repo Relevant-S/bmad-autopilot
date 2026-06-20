@@ -252,6 +252,9 @@ internal_only:
   - phase_1_5_completion_evidence.CoverageReport
   - phase_1_5_completion_evidence.CoverageRow
   - phase_1_5_completion_evidence.LintFinding
+  - phase_2_completion_evidence.CoverageReport
+  - phase_2_completion_evidence.CoverageRow
+  - phase_2_completion_evidence.LintFinding
   - playwright_driver.AcResult
   - playwright_driver.MaskedSelectorPolicy
   - playwright_driver.NetworkRequest

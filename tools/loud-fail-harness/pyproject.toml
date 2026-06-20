@@ -92,6 +92,20 @@ mvp-completion-evidence = "loud_fail_harness.mvp_completion_evidence:main"
 # per Python identifier rules). Placed AFTER mvp-completion-evidence to
 # preserve the release-evidence locality grouping.
 phase-1-5-completion-evidence = "loud_fail_harness.phase_1_5_completion_evidence:main"
+# phase-2-completion-evidence (story 23.1; FR-P2-1…10 + Phase 2 NFR extensions +
+# Phase 2-touched MVP FRs + Pattern 5/6) is library-as-CLI-aid invoked from
+# .github/workflows/ci.yml as the Phase-2 release-readiness gate per Story 23.1
+# AC-8 — the gate that blocks Epic 23's `done` transition until Phase 2 gaps are
+# remediated. Sibling, not replacement of mvp-completion-evidence +
+# phase-1-5-completion-evidence — all three gates run side-by-side; this gate
+# enforces Phase-2-additive coverage (29 closed rows) with the extended
+# four-value status vocabulary (delivered|partial|not-shipped|deferred-to-phase-3),
+# while the Phase 1 gate enforces MVP coverage (102 closed rows) and the Phase 1.5
+# gate enforces Phase-1.5-additive coverage (11 closed rows). Mirrors
+# phase-1-5-completion-evidence byte-for-byte in shape (kebab name uses dashes;
+# module path uses underscores per Python identifier rules). Placed AFTER
+# phase-1-5-completion-evidence to preserve the release-evidence locality grouping.
+phase-2-completion-evidence = "loud_fail_harness.phase_2_completion_evidence:main"
 # onboarding-benchmark (story 7.9; FR44 + NFR-P3) is library-as-CLI-aid invoked
 # from .github/workflows/release-benchmark.yml on release branches and tags
 # ONLY (NOT a per-PR CI gate per AC-5: release-cadence cost-vs-coverage

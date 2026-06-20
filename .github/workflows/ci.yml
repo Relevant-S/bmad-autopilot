@@ -437,6 +437,25 @@ jobs:
         # so the gate is `cwd`-independent (mirrors Story 8.7 gate).
         run: uv run phase-1-5-completion-evidence
 
+      - name: Phase 2 completion evidence validator (story 23.1)
+        # Asserts docs/phase-2-completion-evidence.md has all twenty-nine
+        # rows (the closed Phase 2 enumeration per epics-phase-2.md:999)
+        # populated with non-empty cells per Story 23.1 AC-2; mirrors the
+        # Story 11.1 phase-1.5-completion-evidence gate at the prior step.
+        # Sibling, not replacement — the Phase 1 + Phase 1.5 gates continue
+        # to enforce their coverage; THIS gate enforces Phase-2-additive
+        # coverage with the extended four-value status vocabulary.
+        # Exits non-zero on:
+        # (a) a Phase 2 row missing from the artifact (closed-set violation);
+        # (b) an empty cell anywhere in the 145-cell matrix;
+        # (c) an invalid `Status` value (not in
+        #     delivered|partial|not-shipped|deferred-to-phase-3);
+        # (d) a `delivered` row with `Findings > 0` (integrity invariant);
+        # (e) anchor markers missing or out-of-order.
+        # The repo-root inference reuses loud_fail_harness._shared.find_repo_root
+        # so the gate is `cwd`-independent (mirrors Story 8.7 + 11.1 gates).
+        run: uv run phase-2-completion-evidence
+
       - name: Bundle-assembly-failure emission gate (story 6.9; FR59 + NFR-O5)
         # Story 6.9 AC-4: enforces the three-channel atomic-emission
         # code-structure invariant — surface_assembly_failure (at
